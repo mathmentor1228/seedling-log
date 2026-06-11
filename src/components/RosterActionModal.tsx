@@ -163,11 +163,9 @@ export function RosterActionModal({
   // MULTI-HW-CHECK-V1: Which hw's submission is currently shown in the image modal
   const [activeImageHw, setActiveImageHw] = useState<HomeworkAssignment | null>(null);
   
-  // Form states
-  const [homeworkCheckResult, setHomeworkCheckResult] = useState('');
-  const [homeworkCheckNotes, setHomeworkCheckNotes] = useState('');
-  // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
+  // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records (single per lesson)
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
+  const [isSavingCheckNote, setIsSavingCheckNote] = useState(false);
   // MULTI-HW-ASSIGN-V1: Multiple homework items
   const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
@@ -180,12 +178,10 @@ export function RosterActionModal({
     test_time: '',
     test_assistant: '',
   });
-  
+
   // Saving states
-  const [isSavingHomework, setIsSavingHomework] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);
   const [isSavingNewHomework, setIsSavingNewHomework] = useState(false);
-  const [isCarryingForward, setIsCarryingForward] = useState(false);
 
   // Fetch data when modal opens
   useEffect(() => {
