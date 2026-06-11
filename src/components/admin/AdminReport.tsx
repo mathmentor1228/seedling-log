@@ -741,6 +741,12 @@ export function AdminReport() {
           <AnalysisReportViewsSection />
         </TabsContent>
 
+        {/* Active Parents Tab - ACTIVE-PARENTS-VIEWERS-V1 */}
+        <TabsContent value="active-parents">
+          <ActiveParentsSection />
+        </TabsContent>
+
+
         {/* Ops Changelog Tab - OPS_CHANGELOG_V1 */}
         <TabsContent value="changelog">
           <OpsChangelogSection />
