@@ -314,69 +314,65 @@ export function RosterActionModal({
         }
       }
       
-      // 2. Fetch previous homework (most recent before this date)
-      const { data: prevHw, error: prevHwError } = await supabase
+      // MULTI-HW-CHECK-V1: Fetch ALL unchecked previous homework (before this date)
+      const { data: prevHws, error: prevHwError } = await supabase
         .from('homework_assignments')
         .select('*')
         .eq('student_id', context.student_id)
         .eq('subject', context.subject as SubjectType)
         .lt('assigned_date', context.date)
-        .order('assigned_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
+        .eq('check_status', 'unchecked')
+        .order('assigned_date', { ascending: false });
+
       if (prevHwError) {
         console.error('[fetchData] prev homework SELECT failed:', prevHwError.code, prevHwError.message);
       }
-      
-      if (prevHw) {
-        // Get checker name if checked
-        let checkerName = '';
-        if (prevHw.checked_by) {
-          const { data: profile, error: profileError } = await supabase
+
+      const hwList = prevHws || [];
+
+      if (hwList.length > 0) {
+        // Resolve checker names (mostly will be empty for unchecked rows, but keep parity)
+        const checkerIds = Array.from(new Set(hwList.map(h => h.checked_by).filter(Boolean))) as string[];
+        const checkerMap = new Map<string, string>();
+        if (checkerIds.length > 0) {
+          const { data: profiles } = await supabase
             .from('profiles')
-            .select('full_name, email')
-            .eq('id', prevHw.checked_by)
-            .maybeSingle();
-          if (profileError) {
-            console.error('[fetchData] profiles SELECT failed:', profileError.code, profileError.message);
-          }
-          checkerName = profile?.full_name || profile?.email || '';
+            .select('id, full_name, email')
+            .in('id', checkerIds);
+          (profiles || []).forEach(p => checkerMap.set(p.id, p.full_name || p.email || ''));
         }
-        
-        setPreviousHomework({
-          ...prevHw,
-          checker_name: checkerName,
-          // STUDENT-SUBMISSION-V1: Include inline submission fields from homework_assignments
-          submission_image_url: prevHw.submission_image_url,
-          submission_text: prevHw.submission_text,
-          submission_audio_url: prevHw.submission_audio_url,
-          submitted_at: prevHw.submitted_at,
-        } as HomeworkAssignment);
-        
-        // STUDENT-SUBMISSION-V1: Also fetch from homework_submissions table
-        const { data: submission, error: subError } = await supabase
+
+        // Fetch submissions for all these homeworks
+        const hwIds = hwList.map(h => h.id);
+        const { data: subs, error: subError } = await supabase
           .from('homework_submissions')
           .select('*')
-          .eq('homework_id', prevHw.id)
+          .in('homework_id', hwIds)
           .eq('student_id', context.student_id)
-          .order('submitted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
+          .order('submitted_at', { ascending: false });
+
         if (subError) {
           console.error('[fetchData] homework_submissions SELECT failed:', subError.code, subError.message);
         }
-        
-        if (submission) {
-          setStudentSubmission(submission as HomeworkSubmission);
-        }
-        
-        // Pre-fill check fields
-        if (prevHw.check_status === 'checked') {
-          setHomeworkCheckResult(prevHw.result || '');
-          setHomeworkCheckNotes(prevHw.notes || '');
-        }
+
+        // Take latest submission per homework_id
+        const subMap: Record<string, HomeworkSubmission> = {};
+        (subs || []).forEach(s => {
+          if (!subMap[s.homework_id]) subMap[s.homework_id] = s as HomeworkSubmission;
+        });
+        setSubmissionsByHwId(subMap);
+
+        setPreviousHomeworks(hwList.map(h => ({
+          ...h,
+          checker_name: h.checked_by ? checkerMap.get(h.checked_by) || '' : '',
+          submission_image_url: h.submission_image_url,
+          submission_text: h.submission_text,
+          submission_audio_url: h.submission_audio_url,
+          submitted_at: h.submitted_at,
+        })) as HomeworkAssignment[]);
+      } else {
+        setPreviousHomeworks([]);
+        setSubmissionsByHwId({});
       }
     } catch (error: any) {
       console.error('[fetchData] FATAL ERROR:', error);
