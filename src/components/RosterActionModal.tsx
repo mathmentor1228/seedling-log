@@ -191,13 +191,12 @@ export function RosterActionModal({
       // Reset state when modal closes
       // ASSISTANT-HW-NO-CARRYOVER-V1: Explicitly reset homework_check_note to prevent carryover
       setLessonRecord(null);
-      setPreviousHomework(null);
-      setStudentSubmission(null); // STUDENT-SUBMISSION-V1: Reset submission
-      setShowImageModal(false); // STUDENT-SUBMISSION-V1: Reset modal
+      setPreviousHomeworks([]);
+      setSubmissionsByHwId({});
+      setActiveImageHw(null);
+      setShowImageModal(false);
       setLoadError(null);
-      setHomeworkCheckResult('');
-      setHomeworkCheckNotes('');
-      setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
+      setHomeworkCheckNote('');
       setNewHomeworkItems([{ content: '' }]);
       setTestFormData({
         test_name: '',
