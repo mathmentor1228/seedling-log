@@ -400,231 +400,148 @@ export function RosterActionModal({
     }
   };
 
-  // TEACHER-HW-ALERT-V2 + HOMEWORK-STATUS-PERSIST-V1: Save homework check including homework_status to lesson_records
-  // POINT-AWARD-V1: Award points when homework is marked as completed
-  async function handleSaveHomeworkCheck() {
-    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
-    
-    setIsSavingHomework(true);
+  // MULTI-HW-CHECK-V1: Per-card save (parameterized; supports multiple unchecked HWs)
+  async function handleSaveHomeworkCheck(
+    hw: HomeworkAssignment,
+    result: string,
+    notes: string,
+    alertNote: string,
+  ) {
+    if (!hw || !result || !user || !context) return;
+
+    setSavingHwId(hw.id);
     try {
-      // HOMEWORK-STATUS-PERSIST-V1: Calculate the homework_status to persist
-      const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
-      
-      // POINT-AWARD-V1: Check if points were already awarded for this homework
+      const homeworkStatusToSave = mapHomeworkResultToStatus(result);
+
+      // Check if points were already awarded for this homework
       let pointsAlreadyAwarded = false;
-      if (homeworkCheckResult === 'completed') {
+      if (result === 'completed') {
         const { data: existingPoints, error: pointsCheckError } = await supabase
           .from('student_point_history')
           .select('id')
           .eq('student_id', context.student_id)
-          .eq('related_homework_id', previousHomework.id)
+          .eq('related_homework_id', hw.id)
           .maybeSingle();
-        
-        if (pointsCheckError) {
-          console.error('[POINT-AWARD-V1] Error checking existing points:', pointsCheckError);
-        }
-        
+        if (pointsCheckError) console.error('[POINT-AWARD-V1]', pointsCheckError);
         pointsAlreadyAwarded = !!existingPoints;
       }
-      
-      // Use RPC for assistants
+
       if (isAssistant) {
         const { error } = await supabase.rpc('update_homework_check', {
-          _homework_id: previousHomework.id,
+          _homework_id: hw.id,
           _check_status: 'checked',
-          _result: homeworkCheckResult,
-          _notes: homeworkCheckNotes.trim() || null,
+          _result: result,
+          _notes: notes.trim() || null,
         });
         if (error) throw error;
-        
-        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
-        if (lessonRecord?.id) {
-          const updatePayload: Record<string, any> = {
-            homework_status: homeworkStatusToSave,
-          };
-          if (homeworkCheckNote.trim()) {
-            updatePayload.homework_check_note = homeworkCheckNote.trim();
-          }
-          
-          // Debug log for admin
-          console.log('[HOMEWORK-STATUS-PERSIST-V1] Saving to lesson_records:', {
-            recordId: lessonRecord.id,
-            sent: updatePayload,
-          });
-          
-          const { data: updatedRecord, error: noteError } = await supabase
-            .from('lesson_records')
-            .update(updatePayload)
-            .eq('id', lessonRecord.id)
-            .select('homework_status')
-            .maybeSingle();
-          
-          if (noteError) {
-            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
-          } else {
-            console.log('[HOMEWORK-STATUS-PERSIST-V1] Saved to DB:', {
-              recordId: lessonRecord.id,
-              saved: updatedRecord?.homework_status,
-            });
-          }
-        }
       } else {
         const { error } = await supabase
           .from('homework_assignments')
           .update({
             check_status: 'checked',
-            result: homeworkCheckResult,
-            notes: homeworkCheckNotes.trim() || null,
+            result: result,
+            notes: notes.trim() || null,
             checked_by: user.id,
             checked_at: new Date().toISOString(),
           })
-          .eq('id', previousHomework.id);
+          .eq('id', hw.id);
         if (error) throw error;
-        
-        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
-        if (lessonRecord?.id) {
-          const updatePayload: Record<string, any> = {
-            homework_status: homeworkStatusToSave,
-          };
-          if (homeworkCheckNote.trim()) {
-            updatePayload.homework_check_note = homeworkCheckNote.trim();
-          }
-          
-          const { data: updatedRecord, error: noteError } = await supabase
-            .from('lesson_records')
-            .update(updatePayload)
-            .eq('id', lessonRecord.id)
-            .select('homework_status')
-            .maybeSingle();
-          
-          if (noteError) {
-            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
-          }
-        }
       }
-      
-      // POINT-AWARD-V3: Award/deduct points based on homework result
-      // Photo submitted + check: +10pts, Submit-only or check-only: +5pts, Not done: -5pts
-      let pointsAwarded = false;
+
+      // Persist homework_status + homework_check_note onto today's lesson_record
+      if (lessonRecord?.id) {
+        const updatePayload: Record<string, any> = {
+          homework_status: homeworkStatusToSave,
+        };
+        if (alertNote.trim()) {
+          updatePayload.homework_check_note = alertNote.trim();
+        }
+        const { error: noteError } = await supabase
+          .from('lesson_records')
+          .update(updatePayload)
+          .eq('id', lessonRecord.id);
+        if (noteError) console.error('[HOMEWORK-STATUS-PERSIST-V1]', noteError);
+      }
+
+      // Points
       let awardedPoints = 0;
       if (!pointsAlreadyAwarded) {
-        if (homeworkCheckResult === 'completed') {
-          const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
+        if (result === 'completed') {
+          const hasPhotoSubmission = !!(hw.submission_image_url && hw.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
+        } else if (result === 'not_done' || result === 'lost' || result === 'low_effort') {
           awardedPoints = -5;
         }
       }
-      
+      let pointsAwarded = false;
       if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
         let reason = '';
         if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
         else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
         else if (awardedPoints === -5) reason = '숙제 미이행 감점';
-        
+
         const { error: pointHistoryError } = await supabase
           .from('student_point_history')
           .insert({
             student_id: context.student_id,
             points: awardedPoints,
             reason,
-            related_homework_id: previousHomework.id,
+            related_homework_id: hw.id,
             created_by: user.id,
           });
-        
-        if (pointHistoryError) {
-          console.error('[POINT-AWARD-V3] Error inserting point history:', pointHistoryError);
-        } else {
+        if (!pointHistoryError) {
           const { data: student } = await supabase
             .from('students')
             .select('total_points')
             .eq('id', context.student_id)
             .single();
-          
           const { error: updatePointsError } = await supabase
             .from('students')
             .update({ total_points: (student?.total_points || 0) + awardedPoints })
             .eq('id', context.student_id);
-          
-          if (updatePointsError) {
-            console.error('[POINT-AWARD-V3] Error updating student points:', updatePointsError);
-          } else {
-            pointsAwarded = true;
-          }
+          if (!updatePointsError) pointsAwarded = true;
         }
       }
-      
-      // WRITE-PERSIST-FIX-V1: Refetch to verify and update UI from DB
-      const { data: savedRecord } = await supabase
-        .from('lesson_records')
-        .select('homework_status, homework_check_note')
-        .eq('id', lessonRecord!.id)
-        .single();
-      
-      // WRITE-PERSIST-FIX-V1: Debug log for admin
-      console.log('[HW_WRITE_DEBUG] After save from DB:', {
-        recordId: lessonRecord!.id,
-        sent: homeworkStatusToSave,
-        saved: savedRecord?.homework_status,
-      });
-      
-      // HOMEWORK-STATUS-PERSIST-V1: Show saved status in toast
+
       const statusLabel = {
-        'completed': '완료',
-        'partial': '일부완료',
-        'not_done': '미이행',
-        'none_assigned': '없음',
-      }[savedRecord?.homework_status || homeworkStatusToSave] || (savedRecord?.homework_status || homeworkStatusToSave);
-      
-      // POINT-AWARD-V3: Include point award/deduction message in toast
+        completed: '완료',
+        partial: '일부완료',
+        not_done: '미이행',
+        none_assigned: '없음',
+      }[homeworkStatusToSave] || homeworkStatusToSave;
+
       if (pointsAwarded) {
         const pointLabel = awardedPoints > 0 ? `+${awardedPoints}점 지급` : `${awardedPoints}점 감점`;
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} / 포인트 ${pointLabel}`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel} / 포인트 ${pointLabel}` });
       } else if (pointsAlreadyAwarded) {
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 처리됨)`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 처리됨)` });
       } else {
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel}`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel}` });
       }
-      
-      // Refresh data from DB (single source of truth)
+
       await fetchData();
       onSaved?.();
     } catch (error: any) {
       console.error('Error saving homework check:', error);
-      toast({
-        title: '오류',
-        description: error.message || '숙제 확인 저장에 실패했습니다',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: error.message || '숙제 확인 저장에 실패했습니다', variant: 'destructive' });
     } finally {
-      setIsSavingHomework(false);
+      setSavingHwId(null);
     }
   }
 
-  // CARRY-FORWARD-REASON-V1: Carry forward homework to next session with reason
-  async function handleCarryForward() {
-    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
-    
-    setIsCarryingForward(true);
+  async function handleCarryForward(hw: HomeworkAssignment, result: string) {
+    if (!hw || !result || !user || !context) return;
+
+    setCarryingHwId(hw.id);
     try {
-      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homeworkCheckResult)?.label || homeworkCheckResult;
+      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === result)?.label || result;
       const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
-      const contentWithReason = `[${reasonLabel}] ${previousHomework.content}`;
-      
+      const contentWithReason = `[${reasonLabel}] ${hw.content}`;
+
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const nextDate = format(tomorrow, 'yyyy-MM-dd');
-      
-      // Create new homework for next session with reason tag
+
       await supabase.from('homework_assignments').insert({
         student_id: context.student_id,
         subject: context.subject as SubjectType,
@@ -633,38 +550,34 @@ export function RosterActionModal({
         homework_type: 'regular',
         created_by: user.id,
       });
-      
-      // Mark current as checked with carry-forward note
+
       if (isAssistant) {
         await supabase.rpc('update_homework_check', {
-          _homework_id: previousHomework.id,
+          _homework_id: hw.id,
           _check_status: 'checked',
-          _result: homeworkCheckResult,
+          _result: result,
           _notes: carryNote,
         });
       } else {
         await supabase.from('homework_assignments').update({
           check_status: 'checked',
-          result: homeworkCheckResult,
+          result: result,
           notes: carryNote,
           checked_by: user.id,
           checked_at: new Date().toISOString(),
-        }).eq('id', previousHomework.id);
+        }).eq('id', hw.id);
       }
-      
-      toast({
-        title: '다음시간으로 이월됨',
-        description: `사유: ${reasonLabel} / ${previousHomework.content}`,
-      });
-      
+
+      toast({ title: '다음시간으로 이월됨', description: `사유: ${reasonLabel} / ${hw.content}` });
       await fetchData();
       onSaved?.();
     } catch (err: any) {
       toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
     } finally {
-      setIsCarryingForward(false);
+      setCarryingHwId(null);
     }
   }
+
 
   // Save test fields - WRITE-PERSIST-FIX-V1: Include test_content and add debug
   async function handleSaveTestFields() {
