@@ -586,16 +586,16 @@ export function TeacherAttendanceView() {
         ? existingLesson.lesson_range
         : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n');
 
-      const lessonPayload = { attendance_status: lessonAttendanceStatus, lesson_range: mergedRange, submitted: false };
+      const lessonPayload = { attendance_status: lessonAttendanceStatus, lesson_range: mergedRange, understanding_score: null, homework_status: 'none_assigned', submitted: true, submitted_at: nowIso };
       if (existingLesson) {
-        await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+        await supabase.from('lesson_records').update(lessonPayload as any).eq('id', existingLesson.id);
       } else {
         await supabase.from('lesson_records').insert({
           teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
           subject: activeSlot.subject as any, lesson_date: today,
           lesson_range: lessonRangeText, understanding_score: null,
           homework_status: 'none_assigned', learning_issues: [],
-          attendance_status: lessonAttendanceStatus, submitted: false,
+          attendance_status: lessonAttendanceStatus, submitted: true, submitted_at: nowIso,
         } as any);
       }
 
