@@ -3236,9 +3236,13 @@ export type Database = {
           body: string | null
           created_at: string
           done_at: string | null
+          due_at: string | null
           from_user_id: string
           id: string
+          kind: string
           link_url: string | null
+          parent_id: string | null
+          priority: string
           read_at: string | null
           status: string
           title: string
@@ -3249,9 +3253,13 @@ export type Database = {
           body?: string | null
           created_at?: string
           done_at?: string | null
+          due_at?: string | null
           from_user_id: string
           id?: string
+          kind?: string
           link_url?: string | null
+          parent_id?: string | null
+          priority?: string
           read_at?: string | null
           status?: string
           title: string
@@ -3262,16 +3270,28 @@ export type Database = {
           body?: string | null
           created_at?: string
           done_at?: string | null
+          due_at?: string | null
           from_user_id?: string
           id?: string
+          kind?: string
           link_url?: string | null
+          parent_id?: string | null
+          priority?: string
           read_at?: string | null
           status?: string
           title?: string
           to_user_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "private_messages_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "private_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
