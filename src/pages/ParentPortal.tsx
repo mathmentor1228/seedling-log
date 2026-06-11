@@ -68,7 +68,10 @@ export default function ParentPortal() {
   const reports = useMemo(() => {
     const rawReports = data?.reports || [];
     const weekMap = new Map<string, WeeklyReport>();
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     for (const r of rawReports) {
+      if (new Date(r.week_start) < twoWeeksAgo) continue;
       const existing = weekMap.get(r.week_start);
       if (!existing || new Date(r.generated_at) > new Date(existing.generated_at)) {
         weekMap.set(r.week_start, r);
