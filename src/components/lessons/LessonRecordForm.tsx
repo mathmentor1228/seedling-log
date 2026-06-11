@@ -2756,6 +2756,7 @@ export function LessonRecordForm({
                 <SelectItem value="__none__">선택 안함</SelectItem>
                 <SelectItem value="은서조교">은서조교</SelectItem>
                 <SelectItem value="유빈조교">유빈조교</SelectItem>
+                <SelectItem value="최수린조교">최수린조교</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -156,6 +156,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
               <SelectItem value="은서조교">은서조교</SelectItem>
               <SelectItem value="다인조교">다인조교</SelectItem>
               <SelectItem value="유빈조교">유빈조교</SelectItem>
+              <SelectItem value="최수린조교">최수린조교</SelectItem>
             </SelectContent>
           </Select>
         ) : (
