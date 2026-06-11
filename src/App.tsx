@@ -60,6 +60,8 @@ const LessonRecordPage = lazy(() => import("./pages/LessonRecordPage"));
 const BatchLessonEntryPage = lazy(() => import("./pages/BatchLessonEntryPage"));
 const QuickLessonEntryPage = lazy(() => import("./pages/QuickLessonEntryPage"));
 const SubjectMaterialPage = lazy(() => import("./pages/SubjectMaterialPage"));
+const PrivateChannelPage = lazy(() => import("./pages/PrivateChannelPage"));
+const WorkLogsPage = lazy(() => import("./pages/WorkLogsPage"));
 const StudentLogin = lazy(() => import("./pages/student/StudentLogin"));
 const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
 const StudentHomework = lazy(() => import("./pages/student/StudentHomework"));
@@ -191,6 +193,8 @@ const App = () => (
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="/study-sessions" element={<StudySessionPage />} />
+                <Route path="/private-channel" element={<PrivateChannelPage />} />
+                <Route path="/work-logs" element={<WorkLogsPage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

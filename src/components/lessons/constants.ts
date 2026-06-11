@@ -1,5 +1,5 @@
 // Shared constants for test/self-study/clinic system
-export const ASSISTANTS = ['은서조교', '유빈조교'] as const;
+export const ASSISTANTS = ['은서조교', '유빈조교', '최수린조교'] as const;
 
 export const ROOMS = [
   { value: 'general', label: '일반강의실' },
