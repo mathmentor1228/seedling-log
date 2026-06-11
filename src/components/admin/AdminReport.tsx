@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { OpsChangelogSection } from './OpsChangelogSection';
 import { AnalysisReportViewsSection } from './AnalysisReportViewsSection';
+import { ActiveParentsSection } from './ActiveParentsSection';
 import { 
   CalendarIcon, 
   ChevronLeft, 
