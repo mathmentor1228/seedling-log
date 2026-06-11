@@ -479,6 +479,10 @@ export function AdminReport() {
             <Eye className="h-4 w-4" />
             분석보고서 노출
           </TabsTrigger>
+          <TabsTrigger value="active-parents" className="gap-1">
+            <Users className="h-4 w-4" />
+            애독 학부모
+          </TabsTrigger>
           <TabsTrigger value="changelog" className="gap-1">
             <History className="h-4 w-4" />
             운영 변경 이력
