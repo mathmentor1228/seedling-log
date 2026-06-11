@@ -147,6 +147,8 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, allowedRoles: ['admin', 'assistant'] },
+        { label: '영어팀 채널', href: '/private-channel', icon: <MessageCircle className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'] },
       ],
     },
     {
