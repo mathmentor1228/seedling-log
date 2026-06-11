@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { OpsChangelogSection } from './OpsChangelogSection';
 import { AnalysisReportViewsSection } from './AnalysisReportViewsSection';
+import { ActiveParentsSection } from './ActiveParentsSection';
 import { 
   CalendarIcon, 
   ChevronLeft, 
@@ -478,6 +479,10 @@ export function AdminReport() {
             <Eye className="h-4 w-4" />
             분석보고서 노출
           </TabsTrigger>
+          <TabsTrigger value="active-parents" className="gap-1">
+            <Users className="h-4 w-4" />
+            애독 학부모
+          </TabsTrigger>
           <TabsTrigger value="changelog" className="gap-1">
             <History className="h-4 w-4" />
             운영 변경 이력
@@ -735,6 +740,12 @@ export function AdminReport() {
         <TabsContent value="analysis-views">
           <AnalysisReportViewsSection />
         </TabsContent>
+
+        {/* Active Parents Tab - ACTIVE-PARENTS-VIEWERS-V1 */}
+        <TabsContent value="active-parents">
+          <ActiveParentsSection />
+        </TabsContent>
+
 
         {/* Ops Changelog Tab - OPS_CHANGELOG_V1 */}
         <TabsContent value="changelog">
