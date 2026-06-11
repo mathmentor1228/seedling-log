@@ -122,10 +122,16 @@ function ChannelInner() {
   const [filterTag, setFilterTag] = useState<string>('all');
 
   const myEmail = (user?.email ?? '').toLowerCase();
+  const isPairMember = PAIR_EMAILS.includes(myEmail);
+  const isAdminViewer = !isPairMember; // 원장 등 관찰자
   const isTeacher = myEmail === TEACHER_EMAIL;
-  const partnerEmail = useMemo(() => PAIR_EMAILS.find((e) => e !== myEmail) ?? '', [myEmail]);
-  const myName = isTeacher ? '김민희 선생님' : '최수린 조교';
+  const partnerEmail = useMemo(() => {
+    if (isAdminViewer) return PAIR_EMAILS.find((e) => e !== TEACHER_EMAIL) ?? '';
+    return PAIR_EMAILS.find((e) => e !== myEmail) ?? '';
+  }, [myEmail, isAdminViewer]);
+  const myName = isAdminViewer ? '원장(읽기 전용)' : isTeacher ? '김민희 선생님' : '최수린 조교';
   const partnerName = isTeacher ? '최수린 조교' : '김민희 선생님';
+  const [teacherUser, setTeacherUser] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -139,6 +145,18 @@ function ChannelInner() {
     })();
   }, [partnerEmail]);
 
+  useEffect(() => {
+    (async () => {
+      if (!isAdminViewer) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', TEACHER_EMAIL)
+        .maybeSingle();
+      if (data) setTeacherUser(data as any);
+    })();
+  }, [isAdminViewer]);
+
   const loadTags = async () => {
     const { data } = await supabase
       .from('private_channel_tags')
@@ -148,20 +166,28 @@ function ChannelInner() {
   };
 
   const loadMsgs = async () => {
-    if (!user || !partner) return;
-    const { data, error } = await supabase
-      .from('private_messages')
-      .select('*')
-      .or(
+    if (!partner) return;
+    let query = supabase.from('private_messages').select('*');
+    if (isAdminViewer) {
+      if (!teacherUser) return;
+      const a = teacherUser.id, b = partner.id;
+      query = query.or(
+        `and(from_user_id.eq.${a},to_user_id.eq.${b}),and(from_user_id.eq.${b},to_user_id.eq.${a})`,
+      );
+    } else {
+      if (!user) return;
+      query = query.or(
         `and(from_user_id.eq.${user.id},to_user_id.eq.${partner.id}),and(from_user_id.eq.${partner.id},to_user_id.eq.${user.id})`,
-      )
-      .order('created_at', { ascending: false });
+      );
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (error) return toast({ title: '불러오기 실패', description: error.message, variant: 'destructive' });
     setMsgs((data ?? []) as any);
   };
 
   useEffect(() => { void loadTags(); }, []);
-  useEffect(() => { void loadMsgs(); }, [user?.id, partner?.id]);
+  useEffect(() => { void loadMsgs(); }, [user?.id, partner?.id, teacherUser?.id]);
+
 
   useEffect(() => {
     if (!user || !partner) return;
