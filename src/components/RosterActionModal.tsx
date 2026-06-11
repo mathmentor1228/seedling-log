@@ -155,16 +155,17 @@ export function RosterActionModal({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [lessonRecord, setLessonRecord] = useState<LessonRecord | null>(null);
-  const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
-  // STUDENT-SUBMISSION-V1: Student submission data from homework_submissions table
-  const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
+  // MULTI-HW-CHECK-V1: All unchecked previous homeworks (was: single)
+  const [previousHomeworks, setPreviousHomeworks] = useState<HomeworkAssignment[]>([]);
+  // STUDENT-SUBMISSION-V1: Student submissions keyed by homework_id
+  const [submissionsByHwId, setSubmissionsByHwId] = useState<Record<string, HomeworkSubmission>>({});
   const [showImageModal, setShowImageModal] = useState(false);
+  // MULTI-HW-CHECK-V1: Which hw's submission is currently shown in the image modal
+  const [activeImageHw, setActiveImageHw] = useState<HomeworkAssignment | null>(null);
   
-  // Form states
-  const [homeworkCheckResult, setHomeworkCheckResult] = useState('');
-  const [homeworkCheckNotes, setHomeworkCheckNotes] = useState('');
-  // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
+  // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records (single per lesson)
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
+  const [isSavingCheckNote, setIsSavingCheckNote] = useState(false);
   // MULTI-HW-ASSIGN-V1: Multiple homework items
   const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
@@ -177,12 +178,13 @@ export function RosterActionModal({
     test_time: '',
     test_assistant: '',
   });
-  
+
   // Saving states
-  const [isSavingHomework, setIsSavingHomework] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);
   const [isSavingNewHomework, setIsSavingNewHomework] = useState(false);
-  const [isCarryingForward, setIsCarryingForward] = useState(false);
+  // MULTI-HW-CHECK-V1: which HW is currently being saved/carried-forward
+  const [savingHwId, setSavingHwId] = useState<string | null>(null);
+  const [carryingHwId, setCarryingHwId] = useState<string | null>(null);
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -192,13 +194,12 @@ export function RosterActionModal({
       // Reset state when modal closes
       // ASSISTANT-HW-NO-CARRYOVER-V1: Explicitly reset homework_check_note to prevent carryover
       setLessonRecord(null);
-      setPreviousHomework(null);
-      setStudentSubmission(null); // STUDENT-SUBMISSION-V1: Reset submission
-      setShowImageModal(false); // STUDENT-SUBMISSION-V1: Reset modal
+      setPreviousHomeworks([]);
+      setSubmissionsByHwId({});
+      setActiveImageHw(null);
+      setShowImageModal(false);
       setLoadError(null);
-      setHomeworkCheckResult('');
-      setHomeworkCheckNotes('');
-      setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
+      setHomeworkCheckNote('');
       setNewHomeworkItems([{ content: '' }]);
       setTestFormData({
         test_name: '',
@@ -316,69 +317,65 @@ export function RosterActionModal({
         }
       }
       
-      // 2. Fetch previous homework (most recent before this date)
-      const { data: prevHw, error: prevHwError } = await supabase
+      // MULTI-HW-CHECK-V1: Fetch ALL unchecked previous homework (before this date)
+      const { data: prevHws, error: prevHwError } = await supabase
         .from('homework_assignments')
         .select('*')
         .eq('student_id', context.student_id)
         .eq('subject', context.subject as SubjectType)
         .lt('assigned_date', context.date)
-        .order('assigned_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
+        .eq('check_status', 'unchecked')
+        .order('assigned_date', { ascending: false });
+
       if (prevHwError) {
         console.error('[fetchData] prev homework SELECT failed:', prevHwError.code, prevHwError.message);
       }
-      
-      if (prevHw) {
-        // Get checker name if checked
-        let checkerName = '';
-        if (prevHw.checked_by) {
-          const { data: profile, error: profileError } = await supabase
+
+      const hwList = prevHws || [];
+
+      if (hwList.length > 0) {
+        // Resolve checker names (mostly will be empty for unchecked rows, but keep parity)
+        const checkerIds = Array.from(new Set(hwList.map(h => h.checked_by).filter(Boolean))) as string[];
+        const checkerMap = new Map<string, string>();
+        if (checkerIds.length > 0) {
+          const { data: profiles } = await supabase
             .from('profiles')
-            .select('full_name, email')
-            .eq('id', prevHw.checked_by)
-            .maybeSingle();
-          if (profileError) {
-            console.error('[fetchData] profiles SELECT failed:', profileError.code, profileError.message);
-          }
-          checkerName = profile?.full_name || profile?.email || '';
+            .select('id, full_name, email')
+            .in('id', checkerIds);
+          (profiles || []).forEach(p => checkerMap.set(p.id, p.full_name || p.email || ''));
         }
-        
-        setPreviousHomework({
-          ...prevHw,
-          checker_name: checkerName,
-          // STUDENT-SUBMISSION-V1: Include inline submission fields from homework_assignments
-          submission_image_url: prevHw.submission_image_url,
-          submission_text: prevHw.submission_text,
-          submission_audio_url: prevHw.submission_audio_url,
-          submitted_at: prevHw.submitted_at,
-        } as HomeworkAssignment);
-        
-        // STUDENT-SUBMISSION-V1: Also fetch from homework_submissions table
-        const { data: submission, error: subError } = await supabase
+
+        // Fetch submissions for all these homeworks
+        const hwIds = hwList.map(h => h.id);
+        const { data: subs, error: subError } = await supabase
           .from('homework_submissions')
           .select('*')
-          .eq('homework_id', prevHw.id)
+          .in('homework_id', hwIds)
           .eq('student_id', context.student_id)
-          .order('submitted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
+          .order('submitted_at', { ascending: false });
+
         if (subError) {
           console.error('[fetchData] homework_submissions SELECT failed:', subError.code, subError.message);
         }
-        
-        if (submission) {
-          setStudentSubmission(submission as HomeworkSubmission);
-        }
-        
-        // Pre-fill check fields
-        if (prevHw.check_status === 'checked') {
-          setHomeworkCheckResult(prevHw.result || '');
-          setHomeworkCheckNotes(prevHw.notes || '');
-        }
+
+        // Take latest submission per homework_id
+        const subMap: Record<string, HomeworkSubmission> = {};
+        (subs || []).forEach(s => {
+          if (!subMap[s.homework_id]) subMap[s.homework_id] = s as HomeworkSubmission;
+        });
+        setSubmissionsByHwId(subMap);
+
+        setPreviousHomeworks(hwList.map(h => ({
+          ...h,
+          checker_name: h.checked_by ? checkerMap.get(h.checked_by) || '' : '',
+          submission_image_url: h.submission_image_url,
+          submission_text: h.submission_text,
+          submission_audio_url: h.submission_audio_url,
+          submitted_at: h.submitted_at,
+        })) as HomeworkAssignment[]);
+      } else {
+        setPreviousHomeworks([]);
+        setSubmissionsByHwId({});
       }
     } catch (error: any) {
       console.error('[fetchData] FATAL ERROR:', error);
@@ -406,231 +403,148 @@ export function RosterActionModal({
     }
   };
 
-  // TEACHER-HW-ALERT-V2 + HOMEWORK-STATUS-PERSIST-V1: Save homework check including homework_status to lesson_records
-  // POINT-AWARD-V1: Award points when homework is marked as completed
-  async function handleSaveHomeworkCheck() {
-    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
-    
-    setIsSavingHomework(true);
+  // MULTI-HW-CHECK-V1: Per-card save (parameterized; supports multiple unchecked HWs)
+  async function handleSaveHomeworkCheck(
+    hw: HomeworkAssignment,
+    result: string,
+    notes: string,
+    alertNote: string,
+  ) {
+    if (!hw || !result || !user || !context) return;
+
+    setSavingHwId(hw.id);
     try {
-      // HOMEWORK-STATUS-PERSIST-V1: Calculate the homework_status to persist
-      const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
-      
-      // POINT-AWARD-V1: Check if points were already awarded for this homework
+      const homeworkStatusToSave = mapHomeworkResultToStatus(result);
+
+      // Check if points were already awarded for this homework
       let pointsAlreadyAwarded = false;
-      if (homeworkCheckResult === 'completed') {
+      if (result === 'completed') {
         const { data: existingPoints, error: pointsCheckError } = await supabase
           .from('student_point_history')
           .select('id')
           .eq('student_id', context.student_id)
-          .eq('related_homework_id', previousHomework.id)
+          .eq('related_homework_id', hw.id)
           .maybeSingle();
-        
-        if (pointsCheckError) {
-          console.error('[POINT-AWARD-V1] Error checking existing points:', pointsCheckError);
-        }
-        
+        if (pointsCheckError) console.error('[POINT-AWARD-V1]', pointsCheckError);
         pointsAlreadyAwarded = !!existingPoints;
       }
-      
-      // Use RPC for assistants
+
       if (isAssistant) {
         const { error } = await supabase.rpc('update_homework_check', {
-          _homework_id: previousHomework.id,
+          _homework_id: hw.id,
           _check_status: 'checked',
-          _result: homeworkCheckResult,
-          _notes: homeworkCheckNotes.trim() || null,
+          _result: result,
+          _notes: notes.trim() || null,
         });
         if (error) throw error;
-        
-        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
-        if (lessonRecord?.id) {
-          const updatePayload: Record<string, any> = {
-            homework_status: homeworkStatusToSave,
-          };
-          if (homeworkCheckNote.trim()) {
-            updatePayload.homework_check_note = homeworkCheckNote.trim();
-          }
-          
-          // Debug log for admin
-          console.log('[HOMEWORK-STATUS-PERSIST-V1] Saving to lesson_records:', {
-            recordId: lessonRecord.id,
-            sent: updatePayload,
-          });
-          
-          const { data: updatedRecord, error: noteError } = await supabase
-            .from('lesson_records')
-            .update(updatePayload)
-            .eq('id', lessonRecord.id)
-            .select('homework_status')
-            .maybeSingle();
-          
-          if (noteError) {
-            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
-          } else {
-            console.log('[HOMEWORK-STATUS-PERSIST-V1] Saved to DB:', {
-              recordId: lessonRecord.id,
-              saved: updatedRecord?.homework_status,
-            });
-          }
-        }
       } else {
         const { error } = await supabase
           .from('homework_assignments')
           .update({
             check_status: 'checked',
-            result: homeworkCheckResult,
-            notes: homeworkCheckNotes.trim() || null,
+            result: result,
+            notes: notes.trim() || null,
             checked_by: user.id,
             checked_at: new Date().toISOString(),
           })
-          .eq('id', previousHomework.id);
+          .eq('id', hw.id);
         if (error) throw error;
-        
-        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
-        if (lessonRecord?.id) {
-          const updatePayload: Record<string, any> = {
-            homework_status: homeworkStatusToSave,
-          };
-          if (homeworkCheckNote.trim()) {
-            updatePayload.homework_check_note = homeworkCheckNote.trim();
-          }
-          
-          const { data: updatedRecord, error: noteError } = await supabase
-            .from('lesson_records')
-            .update(updatePayload)
-            .eq('id', lessonRecord.id)
-            .select('homework_status')
-            .maybeSingle();
-          
-          if (noteError) {
-            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
-          }
-        }
       }
-      
-      // POINT-AWARD-V3: Award/deduct points based on homework result
-      // Photo submitted + check: +10pts, Submit-only or check-only: +5pts, Not done: -5pts
-      let pointsAwarded = false;
+
+      // Persist homework_status + homework_check_note onto today's lesson_record
+      if (lessonRecord?.id) {
+        const updatePayload: Record<string, any> = {
+          homework_status: homeworkStatusToSave,
+        };
+        if (alertNote.trim()) {
+          updatePayload.homework_check_note = alertNote.trim();
+        }
+        const { error: noteError } = await supabase
+          .from('lesson_records')
+          .update(updatePayload)
+          .eq('id', lessonRecord.id);
+        if (noteError) console.error('[HOMEWORK-STATUS-PERSIST-V1]', noteError);
+      }
+
+      // Points
       let awardedPoints = 0;
       if (!pointsAlreadyAwarded) {
-        if (homeworkCheckResult === 'completed') {
-          const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
+        if (result === 'completed') {
+          const hasPhotoSubmission = !!(hw.submission_image_url && hw.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
+        } else if (result === 'not_done' || result === 'lost' || result === 'low_effort') {
           awardedPoints = -5;
         }
       }
-      
+      let pointsAwarded = false;
       if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
         let reason = '';
         if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
         else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
         else if (awardedPoints === -5) reason = '숙제 미이행 감점';
-        
+
         const { error: pointHistoryError } = await supabase
           .from('student_point_history')
           .insert({
             student_id: context.student_id,
             points: awardedPoints,
             reason,
-            related_homework_id: previousHomework.id,
+            related_homework_id: hw.id,
             created_by: user.id,
           });
-        
-        if (pointHistoryError) {
-          console.error('[POINT-AWARD-V3] Error inserting point history:', pointHistoryError);
-        } else {
+        if (!pointHistoryError) {
           const { data: student } = await supabase
             .from('students')
             .select('total_points')
             .eq('id', context.student_id)
             .single();
-          
           const { error: updatePointsError } = await supabase
             .from('students')
             .update({ total_points: (student?.total_points || 0) + awardedPoints })
             .eq('id', context.student_id);
-          
-          if (updatePointsError) {
-            console.error('[POINT-AWARD-V3] Error updating student points:', updatePointsError);
-          } else {
-            pointsAwarded = true;
-          }
+          if (!updatePointsError) pointsAwarded = true;
         }
       }
-      
-      // WRITE-PERSIST-FIX-V1: Refetch to verify and update UI from DB
-      const { data: savedRecord } = await supabase
-        .from('lesson_records')
-        .select('homework_status, homework_check_note')
-        .eq('id', lessonRecord!.id)
-        .single();
-      
-      // WRITE-PERSIST-FIX-V1: Debug log for admin
-      console.log('[HW_WRITE_DEBUG] After save from DB:', {
-        recordId: lessonRecord!.id,
-        sent: homeworkStatusToSave,
-        saved: savedRecord?.homework_status,
-      });
-      
-      // HOMEWORK-STATUS-PERSIST-V1: Show saved status in toast
+
       const statusLabel = {
-        'completed': '완료',
-        'partial': '일부완료',
-        'not_done': '미이행',
-        'none_assigned': '없음',
-      }[savedRecord?.homework_status || homeworkStatusToSave] || (savedRecord?.homework_status || homeworkStatusToSave);
-      
-      // POINT-AWARD-V3: Include point award/deduction message in toast
+        completed: '완료',
+        partial: '일부완료',
+        not_done: '미이행',
+        none_assigned: '없음',
+      }[homeworkStatusToSave] || homeworkStatusToSave;
+
       if (pointsAwarded) {
         const pointLabel = awardedPoints > 0 ? `+${awardedPoints}점 지급` : `${awardedPoints}점 감점`;
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} / 포인트 ${pointLabel}`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel} / 포인트 ${pointLabel}` });
       } else if (pointsAlreadyAwarded) {
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 처리됨)`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 처리됨)` });
       } else {
-        toast({
-          title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel}`,
-        });
+        toast({ title: '확인 완료', description: `숙제상태 저장됨: ${statusLabel}` });
       }
-      
-      // Refresh data from DB (single source of truth)
+
       await fetchData();
       onSaved?.();
     } catch (error: any) {
       console.error('Error saving homework check:', error);
-      toast({
-        title: '오류',
-        description: error.message || '숙제 확인 저장에 실패했습니다',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: error.message || '숙제 확인 저장에 실패했습니다', variant: 'destructive' });
     } finally {
-      setIsSavingHomework(false);
+      setSavingHwId(null);
     }
   }
 
-  // CARRY-FORWARD-REASON-V1: Carry forward homework to next session with reason
-  async function handleCarryForward() {
-    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
-    
-    setIsCarryingForward(true);
+  async function handleCarryForward(hw: HomeworkAssignment, result: string) {
+    if (!hw || !result || !user || !context) return;
+
+    setCarryingHwId(hw.id);
     try {
-      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homeworkCheckResult)?.label || homeworkCheckResult;
+      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === result)?.label || result;
       const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
-      const contentWithReason = `[${reasonLabel}] ${previousHomework.content}`;
-      
+      const contentWithReason = `[${reasonLabel}] ${hw.content}`;
+
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const nextDate = format(tomorrow, 'yyyy-MM-dd');
-      
-      // Create new homework for next session with reason tag
+
       await supabase.from('homework_assignments').insert({
         student_id: context.student_id,
         subject: context.subject as SubjectType,
@@ -639,38 +553,34 @@ export function RosterActionModal({
         homework_type: 'regular',
         created_by: user.id,
       });
-      
-      // Mark current as checked with carry-forward note
+
       if (isAssistant) {
         await supabase.rpc('update_homework_check', {
-          _homework_id: previousHomework.id,
+          _homework_id: hw.id,
           _check_status: 'checked',
-          _result: homeworkCheckResult,
+          _result: result,
           _notes: carryNote,
         });
       } else {
         await supabase.from('homework_assignments').update({
           check_status: 'checked',
-          result: homeworkCheckResult,
+          result: result,
           notes: carryNote,
           checked_by: user.id,
           checked_at: new Date().toISOString(),
-        }).eq('id', previousHomework.id);
+        }).eq('id', hw.id);
       }
-      
-      toast({
-        title: '다음시간으로 이월됨',
-        description: `사유: ${reasonLabel} / ${previousHomework.content}`,
-      });
-      
+
+      toast({ title: '다음시간으로 이월됨', description: `사유: ${reasonLabel} / ${hw.content}` });
       await fetchData();
       onSaved?.();
     } catch (err: any) {
       toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
     } finally {
-      setIsCarryingForward(false);
+      setCarryingHwId(null);
     }
   }
+
 
   // Save test fields - WRITE-PERSIST-FIX-V1: Include test_content and add debug
   async function handleSaveTestFields() {
@@ -883,179 +793,7 @@ export function RosterActionModal({
             
             {/* Previous Homework Check Tab */}
             <TabsContent value="homework" className="space-y-4 mt-4">
-              {previousHomework ? (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      <span>지난 숙제 ({previousHomework.assigned_date})</span>
-                      {previousHomework.check_status === 'checked' && (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          확인됨
-                        </Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* CARRY-FORWARD-REASON-V1: Show reason badge + content */}
-                    <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
-                      <div className="flex-1">
-                        {(() => {
-                          const reasonMatch = previousHomework.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
-                          if (reasonMatch) {
-                            const reason = reasonMatch[1];
-                            const cleanContent = previousHomework.content.replace(reasonMatch[0], '');
-                            const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
-                            return (
-                              <div className="space-y-1">
-                                <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
-                                <p>{cleanContent}</p>
-                              </div>
-                            );
-                          }
-                          return <span>{previousHomework.content}</span>;
-                        })()}
-                      </div>
-                      {/* Show mic icon if student submitted audio */}
-                      {previousHomework.submission_audio_url && (
-                        <button
-                          type="button"
-                          onClick={() => setShowImageModal(true)}
-                          className="flex-shrink-0 relative group cursor-pointer"
-                          title="학생 음성 제출 듣기"
-                        >
-                          <div className="w-12 h-12 rounded-lg border-2 border-purple-400/50 overflow-hidden bg-purple-50 dark:bg-purple-950/30 hover:border-purple-500 transition-colors flex items-center justify-center">
-                            <Mic className="w-5 h-5 text-purple-500" />
-                          </div>
-                        </button>
-                      )}
-                      {/* Show camera icon if student submitted image */}
-                      {(studentSubmission?.image_url || previousHomework.submission_image_url) && (() => {
-                        const rawUrl = studentSubmission?.image_url || previousHomework.submission_image_url || '';
-                        const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
-                        const firstUrl = imageUrls[0] || '';
-                        return (
-                        <button
-                          type="button"
-                          onClick={() => setShowImageModal(true)}
-                          className="flex-shrink-0 relative group cursor-pointer"
-                          title="학생 제출 사진 보기"
-                        >
-                          <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
-                            <img 
-                              src={firstUrl} 
-                              alt="제출 이미지" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                          {imageUrls.length > 1 && (
-                            <div className="absolute -bottom-1 -left-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
-                              {imageUrls.length}
-                            </div>
-                          )}
-                          <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
-                            <Camera className="w-3 h-3" />
-                          </div>
-                        </button>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* STUDENT-SUBMISSION-V1: Show submission note if exists */}
-                    {(studentSubmission?.submission_note || previousHomework.submission_text) && (
-                      <div className="p-2 bg-primary/5 rounded-lg text-sm border border-primary/20">
-                        <p className="text-xs text-muted-foreground mb-1">📝 학생 메모:</p>
-                        <p>{studentSubmission?.submission_note || previousHomework.submission_text}</p>
-                      </div>
-                    )}
-                    
-                    {previousHomework.check_status === 'checked' ? (
-                      <div className="text-sm text-muted-foreground">
-                        <p>확인자: {previousHomework.checker_name || '알 수 없음'}</p>
-                        <p>결과: {HOMEWORK_RESULT_OPTIONS.find(o => o.value === previousHomework.result)?.label || '-'}</p>
-                        {previousHomework.notes && <p>메모: {previousHomework.notes}</p>}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-2">
-                          <Label>확인 결과</Label>
-                          <div className="flex gap-2 flex-wrap">
-                            {HOMEWORK_RESULT_OPTIONS.map((option) => {
-                              const Icon = option.icon;
-                              return (
-                                <Button
-                                  key={option.value}
-                                  type="button"
-                                  variant={homeworkCheckResult === option.value ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => setHomeworkCheckResult(option.value)}
-                                  className={homeworkCheckResult === option.value ? '' : option.color}
-                                >
-                                  <Icon className="w-4 h-4 mr-1" />
-                                  {option.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>확인 메모 (선택)</Label>
-                          <Textarea
-                            value={homeworkCheckNotes}
-                            onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                            placeholder="확인 메모 (학생에게 알림용)..."
-                            rows={2}
-                          />
-                        </div>
-                        
-                        {/* TEACHER-HW-ALERT-V2: homework_check_note for teacher alert */}
-                        <div className="space-y-2 p-3 border border-amber-500/30 bg-amber-500/5 rounded-lg">
-                          <Label className="text-amber-700">🔔 선생님 별도 확인 요청 메모</Label>
-                          <Textarea
-                            value={homeworkCheckNote}
-                            onChange={(e) => setHomeworkCheckNote(e.target.value)}
-                            placeholder="선생님께서 별도로 확인해야 할 사항이 있으면 적어주세요 (대시보드에 알림 표시됨)"
-                            rows={2}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            TEACHER-HW-ALERT-V2
-                          </span>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={handleSaveHomeworkCheck}
-                            disabled={!homeworkCheckResult || isSavingHomework}
-                          >
-                            {isSavingHomework ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <Save className="w-4 h-4 mr-2" />
-                            )}
-                            확인 저장
-                          </Button>
-                          {/* CARRY-FORWARD-REASON-V1: Show carry-forward button for non-completion results */}
-                          {homeworkCheckResult && homeworkCheckResult !== 'completed' && (
-                            <Button
-                              variant="outline"
-                              onClick={handleCarryForward}
-                              disabled={isCarryingForward}
-                              className="gap-1"
-                            >
-                              {isCarryingForward ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                              다음시간 검사예정
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
+              {previousHomeworks.length === 0 ? (
                 <Card>
                   <CardContent className="py-8">
                     <p className="text-center text-muted-foreground">
@@ -1063,6 +801,25 @@ export function RosterActionModal({
                     </p>
                   </CardContent>
                 </Card>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    미확인 숙제 {previousHomeworks.length}건 — 가장 최근 순서
+                  </div>
+                  {previousHomeworks.map(hw => (
+                    <PreviousHomeworkCard
+                      key={hw.id}
+                      hw={hw}
+                      submission={submissionsByHwId[hw.id] || null}
+                      defaultAlertNote={homeworkCheckNote}
+                      savingHwId={savingHwId}
+                      carryingHwId={carryingHwId}
+                      onOpenImage={(h) => { setActiveImageHw(h); setShowImageModal(true); }}
+                      onSave={handleSaveHomeworkCheck}
+                      onCarry={handleCarryForward}
+                    />
+                  ))}
+                </div>
               )}
             </TabsContent>
             
@@ -1279,12 +1036,12 @@ export function RosterActionModal({
           <DialogTitle className="text-base">📎 학생 제출물</DialogTitle>
         </DialogHeader>
         {(() => {
-          const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
+          const submission = activeImageHw ? submissionsByHwId[activeImageHw.id] : null;
+          const rawUrl = submission?.image_url || activeImageHw?.submission_image_url || '';
           const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
-          const audioUrl = previousHomework?.submission_audio_url;
+          const audioUrl = activeImageHw?.submission_audio_url;
           return (
             <div className="space-y-3">
-              {/* Audio player */}
               {audioUrl && (
                 <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
                   <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
@@ -1302,9 +1059,9 @@ export function RosterActionModal({
                 <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
-                      <img 
-                        src={url} 
-                        alt={`제출 이미지 ${idx + 1}`} 
+                      <img
+                        src={url}
+                        alt={`제출 이미지 ${idx + 1}`}
                         className="w-full max-h-[50vh] object-contain rounded-lg border"
                         onError={(e) => {
                           const target = e.currentTarget;
@@ -1322,9 +1079,9 @@ export function RosterActionModal({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
-                      <img 
-                        src={url} 
-                        alt={`제출 이미지 ${idx + 1}`} 
+                      <img
+                        src={url}
+                        alt={`제출 이미지 ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           const target = e.currentTarget;
@@ -1339,16 +1096,16 @@ export function RosterActionModal({
                   ))}
                 </div>
               ) : null}
-              {(studentSubmission || previousHomework?.submitted_at) && (
+              {(submission || activeImageHw?.submitted_at) && (
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
                   <p className="font-medium">
-                    📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
-                      ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
+                    📷 제출 시간: {submission?.submitted_at || activeImageHw?.submitted_at
+                      ? format(new Date(submission?.submitted_at || activeImageHw?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
                       : '-'}
                   </p>
-                  {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
+                  {(submission?.submission_note || activeImageHw?.submission_text) && (
                     <p className="text-muted-foreground">
-                      📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
+                      📝 메모: {submission?.submission_note || activeImageHw?.submission_text}
                     </p>
                   )}
                 </div>
@@ -1359,5 +1116,182 @@ export function RosterActionModal({
       </DialogContent>
     </Dialog>
     </>
+  );
+}
+
+// MULTI-HW-CHECK-V1: Per-card UI for one unchecked previous homework
+interface PreviousHomeworkCardProps {
+  hw: HomeworkAssignment;
+  submission: HomeworkSubmission | null;
+  defaultAlertNote: string;
+  savingHwId: string | null;
+  carryingHwId: string | null;
+  onOpenImage: (hw: HomeworkAssignment) => void;
+  onSave: (hw: HomeworkAssignment, result: string, notes: string, alertNote: string) => Promise<void>;
+  onCarry: (hw: HomeworkAssignment, result: string) => Promise<void>;
+}
+
+function PreviousHomeworkCard({
+  hw,
+  submission,
+  defaultAlertNote,
+  savingHwId,
+  carryingHwId,
+  onOpenImage,
+  onSave,
+  onCarry,
+}: PreviousHomeworkCardProps) {
+  const [result, setResult] = useState('');
+  const [notes, setNotes] = useState('');
+  const [alertNote, setAlertNote] = useState(defaultAlertNote || '');
+
+  useEffect(() => { setAlertNote(defaultAlertNote || ''); }, [defaultAlertNote]);
+
+  const isSaving = savingHwId === hw.id;
+  const isCarrying = carryingHwId === hw.id;
+
+  const reasonMatch = hw.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
+  const reasonColors: Record<string, string> = {
+    '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+    '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+    '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+    '확인불가': 'bg-muted text-muted-foreground',
+  };
+
+  const rawImageUrl = submission?.image_url || hw.submission_image_url || '';
+  const imageUrls = rawImageUrl.split(',').map(u => u.trim()).filter(Boolean);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span>지난 숙제 ({hw.assigned_date})</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
+          <div className="flex-1">
+            {reasonMatch ? (
+              <div className="space-y-1">
+                <Badge variant="outline" className={`text-[10px] ${reasonColors[reasonMatch[1]] || 'bg-muted'}`}>
+                  ⚠️ 이월사유: {reasonMatch[1]}
+                </Badge>
+                <p>{hw.content.replace(reasonMatch[0], '')}</p>
+              </div>
+            ) : (
+              <span>{hw.content}</span>
+            )}
+          </div>
+          {hw.submission_audio_url && (
+            <button
+              type="button"
+              onClick={() => onOpenImage(hw)}
+              className="flex-shrink-0 relative group cursor-pointer"
+              title="학생 음성 제출 듣기"
+            >
+              <div className="w-12 h-12 rounded-lg border-2 border-purple-400/50 overflow-hidden bg-purple-50 dark:bg-purple-950/30 hover:border-purple-500 transition-colors flex items-center justify-center">
+                <Mic className="w-5 h-5 text-purple-500" />
+              </div>
+            </button>
+          )}
+          {(submission?.image_url || hw.submission_image_url) && (
+            <button
+              type="button"
+              onClick={() => onOpenImage(hw)}
+              className="flex-shrink-0 relative group cursor-pointer"
+              title="학생 제출 사진 보기"
+            >
+              <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
+                <img
+                  src={imageUrls[0] || ''}
+                  alt="제출 이미지"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+              {imageUrls.length > 1 && (
+                <div className="absolute -bottom-1 -left-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
+                  {imageUrls.length}
+                </div>
+              )}
+              <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
+                <Camera className="w-3 h-3" />
+              </div>
+            </button>
+          )}
+        </div>
+
+        {(submission?.submission_note || hw.submission_text) && (
+          <div className="p-2 bg-primary/5 rounded-lg text-sm border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">📝 학생 메모:</p>
+            <p>{submission?.submission_note || hw.submission_text}</p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label>확인 결과</Label>
+          <div className="flex gap-2 flex-wrap">
+            {HOMEWORK_RESULT_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              return (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={result === option.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setResult(option.value)}
+                  className={result === option.value ? '' : option.color}
+                >
+                  <Icon className="w-4 h-4 mr-1" />
+                  {option.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>확인 메모 (선택)</Label>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="확인 메모 (학생에게 알림용)..."
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2 p-3 border border-amber-500/30 bg-amber-500/5 rounded-lg">
+          <Label className="text-amber-700">🔔 선생님 별도 확인 요청 메모</Label>
+          <Textarea
+            value={alertNote}
+            onChange={(e) => setAlertNote(e.target.value)}
+            placeholder="선생님께서 별도로 확인해야 할 사항이 있으면 적어주세요 (대시보드에 알림 표시됨)"
+            rows={2}
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={() => onSave(hw, result, notes, alertNote)}
+            disabled={!result || isSaving}
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+            확인 저장
+          </Button>
+          {result && result !== 'completed' && (
+            <Button
+              variant="outline"
+              onClick={() => onCarry(hw, result)}
+              disabled={isCarrying}
+              className="gap-1"
+            >
+              {isCarrying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+              다음시간 검사예정
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
