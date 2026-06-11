@@ -3231,9 +3231,35 @@ export type Database = {
           },
         ]
       }
+      private_channel_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       private_messages: {
         Row: {
+          assignee: string | null
           body: string | null
+          category_tags: string[] | null
           created_at: string
           done_at: string | null
           due_at: string | null
@@ -3241,6 +3267,7 @@ export type Database = {
           id: string
           kind: string
           link_url: string | null
+          link_urls: string[] | null
           parent_id: string | null
           priority: string
           read_at: string | null
@@ -3250,7 +3277,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assignee?: string | null
           body?: string | null
+          category_tags?: string[] | null
           created_at?: string
           done_at?: string | null
           due_at?: string | null
@@ -3258,6 +3287,7 @@ export type Database = {
           id?: string
           kind?: string
           link_url?: string | null
+          link_urls?: string[] | null
           parent_id?: string | null
           priority?: string
           read_at?: string | null
@@ -3267,7 +3297,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assignee?: string | null
           body?: string | null
+          category_tags?: string[] | null
           created_at?: string
           done_at?: string | null
           due_at?: string | null
@@ -3275,6 +3307,7 @@ export type Database = {
           id?: string
           kind?: string
           link_url?: string | null
+          link_urls?: string[] | null
           parent_id?: string | null
           priority?: string
           read_at?: string | null
