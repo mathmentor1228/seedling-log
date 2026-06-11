@@ -313,7 +313,7 @@ export function AttendanceAlertWatcher() {
     // Also globally mute popups for the rest of the day so newly overdue
     // students don't immediately re-open the dialog.
     muteAllRef.current = eod.getTime();
-    saveMuteAll(eod.getTime());
+    saveMuteAll(eod.getTime(), user?.id);
   };
 
   const handleClose = () => {
