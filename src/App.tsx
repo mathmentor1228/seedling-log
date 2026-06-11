@@ -193,6 +193,8 @@ const App = () => (
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="/study-sessions" element={<StudySessionPage />} />
+                <Route path="/private-channel" element={<PrivateChannelPage />} />
+                <Route path="/work-logs" element={<WorkLogsPage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
