@@ -65,7 +65,7 @@ interface TestVisitModalProps {
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 const SUBJECTS: SubjectType[] = ['수학', '과학', '영어', '국어'];
-const ASSISTANTS = ['은서조교', '유빈조교'] as const;
+const ASSISTANTS = ['은서조교', '유빈조교', '최수린조교'] as const;
 
 // Generate time options from 16:00 to 21:00 in 30-min increments
 const TIME_OPTIONS: string[] = [];
