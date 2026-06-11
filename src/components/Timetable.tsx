@@ -345,7 +345,8 @@ export function Timetable() {
         .from('exam_prep_courses')
         .select('id, subject, teacher_id, title, school_name')
         .is('deleted_at', null);
-      const { data: courses } = await courseQuery;
+      const { data: coursesRaw } = await courseQuery;
+      const courses = subjectLock ? (coursesRaw || []).filter((c: any) => c.subject === subjectLock) : coursesRaw;
       if (!courses || courses.length === 0) { setExamPrepRows([]); return; }
 
       // Fetch teacher names for exam prep courses that might not be in teacherMap
