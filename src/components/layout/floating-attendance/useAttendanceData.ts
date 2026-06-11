@@ -87,6 +87,22 @@ export function useAttendanceData({ userId, role, selectedRoom }: UseAttendanceD
       });
     });
 
+    // ATT-FLOAT-EXCLUDE-WITHDRAWN-V1: drop 퇴원/휴원 students from the floating roster
+    const candidateIds = [...new Set(assignedStudents.map(s => s.studentId))];
+    if (candidateIds.length > 0) {
+      const { data: activeRows } = await supabase
+        .from('students')
+        .select('id')
+        .in('id', candidateIds)
+        .in('enrollment_status', ['재학', '재등원']);
+      const activeSet = new Set((activeRows ?? []).map(r => r.id));
+      for (let i = assignedStudents.length - 1; i >= 0; i--) {
+        if (!activeSet.has(assignedStudents[i].studentId)) {
+          assignedStudents.splice(i, 1);
+        }
+      }
+    }
+
     // All logs for today
     const { data: logs } = await supabase
       .from('attendance_logs')
