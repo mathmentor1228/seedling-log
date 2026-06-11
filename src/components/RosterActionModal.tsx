@@ -155,10 +155,13 @@ export function RosterActionModal({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [lessonRecord, setLessonRecord] = useState<LessonRecord | null>(null);
-  const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
-  // STUDENT-SUBMISSION-V1: Student submission data from homework_submissions table
-  const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
+  // MULTI-HW-CHECK-V1: All unchecked previous homeworks (was: single)
+  const [previousHomeworks, setPreviousHomeworks] = useState<HomeworkAssignment[]>([]);
+  // STUDENT-SUBMISSION-V1: Student submissions keyed by homework_id
+  const [submissionsByHwId, setSubmissionsByHwId] = useState<Record<string, HomeworkSubmission>>({});
   const [showImageModal, setShowImageModal] = useState(false);
+  // MULTI-HW-CHECK-V1: Which hw's submission is currently shown in the image modal
+  const [activeImageHw, setActiveImageHw] = useState<HomeworkAssignment | null>(null);
   
   // Form states
   const [homeworkCheckResult, setHomeworkCheckResult] = useState('');
