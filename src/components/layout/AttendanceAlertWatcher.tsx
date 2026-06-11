@@ -75,7 +75,7 @@ function parseSlotToMinutes(slot: string) {
 // Snooze: map of entryKey -> epoch ms until which the popup should not auto-open
 function loadDayMap(key: string): Map<string, number> {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw) as { date: string; items: Record<string, number> };
     const today = new Date().toISOString().split('T')[0];
@@ -87,7 +87,7 @@ function loadDayMap(key: string): Map<string, number> {
 }
 function saveDayMap(key: string, m: Map<string, number>) {
   const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem(
+  localStorage.setItem(
     key,
     JSON.stringify({ date: today, items: Object.fromEntries(m.entries()) })
   );
@@ -98,9 +98,11 @@ export function AttendanceAlertWatcher() {
   const [entries, setEntries] = useState<OverdueEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const SNOOZE_KEY = userKey(SNOOZE_KEY_BASE, user?.id);
+  const ESCALATED_KEY = userKey(ESCALATED_KEY_BASE, user?.id);
   const snoozeRef = useRef<Map<string, number>>(loadDayMap(SNOOZE_KEY));
   const escalatedRef = useRef<Map<string, number>>(loadDayMap(ESCALATED_KEY));
-  const muteAllRef = useRef<number>(loadMuteAll());
+  const muteAllRef = useRef<number>(loadMuteAll(user?.id));
 
   const setBusy = (key: string, v: boolean) => {
     setBusyKeys((prev) => {
