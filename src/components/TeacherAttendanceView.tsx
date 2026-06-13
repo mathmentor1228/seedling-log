@@ -146,7 +146,7 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const [schedRes, examRes, suppRes] = await Promise.all([
+      const [schedRes, sessRes, suppRes] = await Promise.all([
         supabase
           .from('class_schedules')
           .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
@@ -154,23 +154,22 @@ export function TeacherAttendanceView() {
           .eq('day_of_week', dow)
           .eq('is_active', true)
           .order('start_time'),
+        // EXAM-PREP-ATT-V2: 내신특강 = exam_prep_sessions → exam_prep_courses → exam_prep_enrollments
         supabase
-          .from('exam_prep_schedules')
-          .select('id, student_id, subject, start_time, end_time')
-          .eq('teacher_id', teacherId)
+          .from('exam_prep_sessions')
+          .select('id, course_id, schedule_date, start_time, end_time')
           .eq('schedule_date', today),
-        // 오늘 잡힌 보충수업 (class_id 없는 별도 lesson_records)
+        // 오늘 잡힌 보충수업 (lesson_types 에 '보충수업' 포함 — class_id 유무 무관)
         supabase
           .from('lesson_records')
           .select('id, student_id, subject, notes, lesson_types, class_id')
           .eq('teacher_id', teacherId)
           .eq('lesson_date', today)
-          .is('class_id', null)
           .contains('lesson_types', ['보충수업']),
       ]);
 
       const schedules = schedRes.data || [];
-      const examPrep = examRes.data || [];
+      const sessions = sessRes.data || [];
       const suppLessons = suppRes.data || [];
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
@@ -183,26 +182,49 @@ export function TeacherAttendanceView() {
         classroomName: s.classrooms?.name || null,
       }));
 
-      // Group exam prep schedules by start-end-subject into synthetic slots
-      const examGroups = new Map<string, { startTime: string; endTime: string; subject: string; studentIds: string[] }>();
-      examPrep.forEach((e: any) => {
-        const start = (e.start_time || '').slice(0, 5);
-        const end = (e.end_time || '').slice(0, 5);
-        const key = `${start}-${end}-${e.subject}`;
-        if (!examGroups.has(key)) examGroups.set(key, { startTime: start, endTime: end, subject: e.subject, studentIds: [] });
-        examGroups.get(key)!.studentIds.push(e.student_id);
-      });
-      const examSlots: ScheduleSlot[] = Array.from(examGroups.entries()).map(([k, g]) => ({
-        id: `examprep-${k}`,
-        classId: '',
-        className: '시험특강',
-        subject: g.subject,
-        startTime: g.startTime,
-        endTime: g.endTime,
-        classroomName: null,
-        isExamPrep: true,
-        examPrepStudentIds: g.studentIds,
-      }));
+      // Build exam prep slots: filter sessions by courses owned by this teacher, then attach enrolled students
+      let examSlots: ScheduleSlot[] = [];
+      if (sessions.length > 0) {
+        const courseIds = [...new Set(sessions.map((s: any) => s.course_id))];
+        const { data: courses } = await supabase
+          .from('exam_prep_courses')
+          .select('id, teacher_id, subject, title')
+          .in('id', courseIds)
+          .eq('teacher_id', teacherId)
+          .is('deleted_at', null);
+        const myCourseIds = (courses || []).map((c: any) => c.id);
+        const courseMap = new Map((courses || []).map((c: any) => [c.id, c]));
+        if (myCourseIds.length > 0) {
+          const { data: enrollments } = await supabase
+            .from('exam_prep_enrollments')
+            .select('course_id, student_id')
+            .in('course_id', myCourseIds)
+            .neq('status', 'cancelled');
+          const enrollMap = new Map<string, string[]>();
+          (enrollments || []).forEach((e: any) => {
+            const arr = enrollMap.get(e.course_id) || [];
+            if (!arr.includes(e.student_id)) arr.push(e.student_id);
+            enrollMap.set(e.course_id, arr);
+          });
+          examSlots = sessions
+            .filter((s: any) => myCourseIds.includes(s.course_id))
+            .map((s: any) => {
+              const c: any = courseMap.get(s.course_id);
+              return {
+                id: `examprep-${s.id}`,
+                classId: '',
+                className: c?.title ? `시험특강·${c.title}` : '시험특강',
+                subject: c?.subject || '',
+                startTime: (s.start_time || '').slice(0, 5),
+                endTime: (s.end_time || '').slice(0, 5),
+                classroomName: null,
+                isExamPrep: true,
+                examPrepStudentIds: enrollMap.get(s.course_id) || [],
+              } as ScheduleSlot;
+            })
+            .filter(s => (s.examPrepStudentIds || []).length > 0);
+        }
+      }
 
       // Group supplementary lessons by 시간 (parsed from notes "[보충 시간: HH:MM]") + subject
       const parseSuppTime = (notes: string | null): string => {
@@ -373,7 +395,8 @@ export function TeacherAttendanceView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_schedules' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_sessions' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_enrollments' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [teacherId, fetchStudents, fetchSchedule]);
