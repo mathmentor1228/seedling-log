@@ -395,7 +395,8 @@ export function TeacherAttendanceView() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_schedules' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_sessions' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_enrollments' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [teacherId, fetchStudents, fetchSchedule]);
