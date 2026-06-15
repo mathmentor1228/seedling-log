@@ -130,12 +130,16 @@ export function AttendanceAlertWatcher() {
     // This ensures the popup only shows children that belong to this teacher's actual timetable today.
     const teacherOnlyOwnSlots = role === 'teacher';
 
-    // Exclude withdrawn/inactive students from popup
+    // ATT-ALERT-NAME-LOOKUP-V1: room_assignments.student_names is sometimes out of sync
+    // with student_ids (different sort order), causing popups to show the WRONG name —
+    // including showing a withdrawn student's name when the actual id is an active student.
+    // Always resolve names from the students table by id, and filter out withdrawn here too.
     const { data: activeStudents } = await supabase
       .from('students')
-      .select('id')
+      .select('id, name')
       .in('enrollment_status', ['재학', '재등원']);
     const activeStudentIds = new Set((activeStudents ?? []).map((s) => s.id));
+    const nameById = new Map<string, string>((activeStudents ?? []).map((s) => [s.id, s.name]));
 
     const { data: assigned } = await supabase
       .from('room_assignments')
@@ -197,8 +201,7 @@ export function AttendanceAlertWatcher() {
       if (minutesLate > 240) return;
 
       const ids = (a.student_ids ?? []) as string[];
-      const names = (a.student_names ?? []) as string[];
-      ids.forEach((id, i) => {
+      ids.forEach((id) => {
         if (!activeStudentIds.has(id)) return;
         if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
         if (absentIds.has(id)) return;
@@ -210,7 +213,7 @@ export function AttendanceAlertWatcher() {
         overdue.push({
           key,
           studentId: id,
-          studentName: names[i] ?? '이름없음',
+          studentName: nameById.get(id) ?? '이름없음',
           roomLabel: ROOM_LABELS[a.room] ?? a.room,
           roomId: a.room,
           slotStart: slot.slice(0, 5),
