@@ -201,8 +201,7 @@ export function AttendanceAlertWatcher() {
       if (minutesLate > 240) return;
 
       const ids = (a.student_ids ?? []) as string[];
-      const names = (a.student_names ?? []) as string[];
-      ids.forEach((id, i) => {
+      ids.forEach((id) => {
         if (!activeStudentIds.has(id)) return;
         if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
         if (absentIds.has(id)) return;
@@ -214,7 +213,7 @@ export function AttendanceAlertWatcher() {
         overdue.push({
           key,
           studentId: id,
-          studentName: names[i] ?? '이름없음',
+          studentName: nameById.get(id) ?? '이름없음',
           roomLabel: ROOM_LABELS[a.room] ?? a.room,
           roomId: a.room,
           slotStart: slot.slice(0, 5),
