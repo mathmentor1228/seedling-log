@@ -118,14 +118,14 @@ export function TeacherScheduleTable({
 
         const { data: students, error: sError } = await supabase
           .from('students')
-          .select('id, name')
+          .select('id, name, grade, school_level, grade_year')
           .in('id', studentIds);
 
         if (sError) throw sError;
 
-        const studentMap: Record<string, string> = {};
+        const studentMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
         (students || []).forEach((s) => {
-          studentMap[s.id] = s.name;
+          studentMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year };
         });
 
         const grouped: Record<string, StudentInfo[]> = {};
