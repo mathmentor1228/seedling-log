@@ -598,7 +598,7 @@ export function Timetable() {
     setStudentsLoading(true);
     try {
       const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
-      let query = supabase.from('students').select('id, name', { count: 'exact' }).neq('enrollment_status', '퇴원');
+      let query = supabase.from('students').select('id, name, grade, school_level, grade_year', { count: 'exact' }).neq('enrollment_status', '퇴원');
       if (studentSearchQuery.trim()) {
         query = query.ilike('name', `%${studentSearchQuery.trim()}%`);
       }
