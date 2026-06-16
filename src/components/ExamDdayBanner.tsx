@@ -136,15 +136,27 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       ? eventList.filter((e) => e.title.includes(schoolFilter))
       : eventList;
 
-    // Merge + dedupe by (title + start date)
-    const merged: ExamEvent[] = [];
-    const seen = new Set<string>();
+    // Merge + dedupe by (school + start date). Same school+date = same exam regardless of label.
+    // Prefer the most descriptive title (containing 기말/중간/모의 over generic 정기고사).
+    const score = (title: string) => {
+      let s = 0;
+      if (/기말|중간|모의|학평|수능/.test(title)) s += 10;
+      if (/\d학기/.test(title)) s += 5;
+      if (!/정기고사/.test(title)) s += 1;
+      s += Math.min(title.length, 30) / 100;
+      return s;
+    };
+    const grouped = new Map<string, ExamEvent>();
     for (const e of [...filteredEvents, ...schoolList, ...archiveList]) {
-      const key = `${e.title}|${e.start_at.split('T')[0]}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(e);
+      const date = e.start_at.split('T')[0];
+      const school = (e.title.match(/^([^\s]+(?:고|중|초|대))/)?.[1]) || e.title.split(' ')[0];
+      const key = `${school}|${date}`;
+      const existing = grouped.get(key);
+      if (!existing || score(e.title) > score(existing.title)) {
+        grouped.set(key, e);
+      }
     }
+    const merged = Array.from(grouped.values());
 
     // Show nearest upcoming exams (more entries when no school filter for teacher view)
     merged.sort((a, b) => a.start_at.localeCompare(b.start_at));
