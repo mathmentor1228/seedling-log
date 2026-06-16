@@ -218,7 +218,7 @@ export function Timetable() {
         }
       }
 
-      let studentsByClass: Record<string, { id: string; name: string }[]> = {};
+      let studentsByClass: Record<string, { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[]> = {};
       if (classIds.size > 0) {
         const { data: classStudents } = await supabase
           .from('class_students')
@@ -229,19 +229,22 @@ export function Timetable() {
           const studentIds = [...new Set(classStudents.map((cs) => cs.student_id))];
           const { data: studentsData } = await supabase
             .from('students')
-            .select('id, name')
+            .select('id, name, grade, school_level, grade_year')
             .in('id', studentIds)
             .neq('enrollment_status', '퇴원');
 
-          const studentMap: Record<string, string> = {};
-          (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
+          const studentMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
+          (studentsData || []).forEach((s) => { studentMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year }; });
 
           classStudents.forEach((cs) => {
             if (!studentMap[cs.student_id]) return;
             if (!studentsByClass[cs.class_id]) studentsByClass[cs.class_id] = [];
             studentsByClass[cs.class_id].push({
               id: cs.student_id,
-              name: studentMap[cs.student_id],
+              name: studentMap[cs.student_id].name,
+              grade: studentMap[cs.student_id].grade,
+              school_level: studentMap[cs.student_id].school_level,
+              grade_year: studentMap[cs.student_id].grade_year,
             });
           });
 
