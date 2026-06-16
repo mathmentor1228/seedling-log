@@ -346,15 +346,21 @@ export function TeacherScheduleTable({
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
                         <>
-                          {visibleStudents.map((student) => (
-                            <Badge
-                              key={student.id}
-                              variant="outline"
-                              className="text-xs font-normal"
-                            >
-                              {student.name}
-                            </Badge>
-                          ))}
+                          {visibleStudents.map((student) => {
+                            const gradeLabel = formatStudentGrade(student);
+                            return (
+                              <Badge
+                                key={student.id}
+                                variant="outline"
+                                className="text-xs font-normal"
+                              >
+                                {student.name}
+                                {gradeLabel && (
+                                  <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                                )}
+                              </Badge>
+                            );
+                          })}
                           {overflowCount > 0 && (
                             <Popover>
                               <PopoverTrigger asChild>
