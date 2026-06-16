@@ -339,6 +339,11 @@ export function UnifiedCalendarView({ schedules }: Props) {
                               </div>
                               <div className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
                                 <span>{it.school_name}</span>
+                                {it.grade && (
+                                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                    {formatScheduleGrade(it.school_name, it.grade)}
+                                  </Badge>
+                                )}
                                 <span>·</span>
                                 <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SCHEDULE_TYPE_COLORS[it.schedule_type])}>
                                   {SCHEDULE_TYPE_LABELS[it.schedule_type] || it.schedule_type}
