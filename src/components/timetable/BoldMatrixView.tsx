@@ -1026,14 +1026,20 @@ function ContinuousTimeGrid({
                           <span className={cn('h-1.5 w-1.5 rounded-full', accent.bar)} />
                           {row.teacherName}
                         </span>
-                        {row.students.slice(0, height > 100 ? 6 : 3).map((st) => (
-                          <span
-                            key={st.id}
-                            className="whitespace-nowrap rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 ring-1 ring-border/50"
-                          >
-                            {st.name}
-                          </span>
-                        ))}
+                        {row.students.slice(0, height > 100 ? 6 : 3).map((st) => {
+                          const gradeLabel = formatStudentGrade(st);
+                          return (
+                            <span
+                              key={st.id}
+                              className="whitespace-nowrap rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 ring-1 ring-border/50"
+                            >
+                              {st.name}
+                              {gradeLabel && (
+                                <span className="text-[9px] text-muted-foreground ml-0.5">({gradeLabel})</span>
+                              )}
+                            </span>
+                          );
+                        })}
                         {row.students.length > (height > 100 ? 6 : 3) && (
                           <span className="px-1 font-mono text-[10px] font-bold text-primary">
                             +{row.students.length - (height > 100 ? 6 : 3)}
