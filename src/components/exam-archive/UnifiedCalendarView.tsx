@@ -37,6 +37,13 @@ function sortByCategory(a: Schedule, b: Schedule) {
 
 const SUBJECT_CATS: SubjectCategory[] = ['math', 'english', 'korean', 'science', 'other'];
 
+function formatScheduleGrade(schoolName: string | null, grade: number | null): string {
+  if (!grade) return '';
+  const last = (schoolName || '').slice(-1);
+  const prefix = last === '고' ? '고' : last === '중' ? '중' : last === '초' ? '초' : '';
+  return prefix ? `${prefix}${grade}` : `${grade}학년`;
+}
+
 
 interface Props {
   schedules: Schedule[];
