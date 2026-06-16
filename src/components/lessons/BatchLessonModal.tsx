@@ -27,12 +27,16 @@ import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRig
 
 // HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
 // per-item homework check UI looks/behaves the same as the individual lesson form.
+// HW-CHECK-OPTIONS-ALIGN-V2: keep the per-item check buttons identical to
+// RosterActionModal.HOMEWORK_RESULT_OPTIONS (dashboard 숙제 검사 모달) so the
+// teacher sees the same choices regardless of entry point.
 const HW_RESULT_BUTTON_OPTIONS = [
   { value: 'completed', label: '완료', icon: CheckCircle2 },
   { value: 'partial', label: '부분', icon: Clock },
   { value: 'not_done', label: '미완', icon: XCircle },
   { value: 'lost', label: '분실', icon: PackageX },
   { value: 'low_effort', label: '성의부족', icon: Frown },
+  { value: 'low_effort_completed', label: '성의부족+완료', icon: CheckCircle2 },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle },
 ];
 
