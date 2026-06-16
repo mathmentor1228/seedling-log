@@ -5,6 +5,20 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+interface StudentGradeInput {
+  grade?: string | null;
+  school_level?: string | null;
+  grade_year?: number | null;
+}
+
+export function formatStudentGrade(student?: StudentGradeInput | null): string | null {
+  if (!student) return null;
+  if (student.school_level && student.grade_year) {
+    return `${student.school_level}${student.grade_year}`;
+  }
+  return student.grade || null;
+}
+
 /**
  * Get today's date in KST (Korea Standard Time) as yyyy-MM-dd string.
  * Safe for any user's local timezone.

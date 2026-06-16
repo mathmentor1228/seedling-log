@@ -19,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Check, Users, ChevronDown, ChevronUp, Pencil, X, Save } from 'lucide-react';
 import { useAuth, isAdmin } from '@/lib/auth';
+import { formatStudentGrade } from '@/lib/utils';
 
 const DAYS_OF_WEEK = [
   { value: 0, label: '일' },
@@ -44,6 +45,9 @@ interface ScheduleRow {
 interface StudentInfo {
   id: string;
   name: string;
+  grade?: string | null;
+  school_level?: string | null;
+  grade_year?: number | null;
 }
 
 interface TeacherScheduleTableProps {
@@ -114,14 +118,14 @@ export function TeacherScheduleTable({
 
         const { data: students, error: sError } = await supabase
           .from('students')
-          .select('id, name')
+          .select('id, name, grade, school_level, grade_year')
           .in('id', studentIds);
 
         if (sError) throw sError;
 
-        const studentMap: Record<string, string> = {};
+        const studentMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
         (students || []).forEach((s) => {
-          studentMap[s.id] = s.name;
+          studentMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year };
         });
 
         const grouped: Record<string, StudentInfo[]> = {};
@@ -129,9 +133,13 @@ export function TeacherScheduleTable({
           if (!grouped[cs.class_id]) {
             grouped[cs.class_id] = [];
           }
+          const info = studentMap[cs.student_id];
           grouped[cs.class_id].push({
             id: cs.student_id,
-            name: studentMap[cs.student_id] || '이름없음',
+            name: info?.name || '이름없음',
+            grade: info?.grade,
+            school_level: info?.school_level,
+            grade_year: info?.grade_year,
           });
         });
 
@@ -338,15 +346,21 @@ export function TeacherScheduleTable({
                         <span className="text-xs text-muted-foreground">-</span>
                       ) : (
                         <>
-                          {visibleStudents.map((student) => (
-                            <Badge
-                              key={student.id}
-                              variant="outline"
-                              className="text-xs font-normal"
-                            >
-                              {student.name}
-                            </Badge>
-                          ))}
+                          {visibleStudents.map((student) => {
+                            const gradeLabel = formatStudentGrade(student);
+                            return (
+                              <Badge
+                                key={student.id}
+                                variant="outline"
+                                className="text-xs font-normal"
+                              >
+                                {student.name}
+                                {gradeLabel && (
+                                  <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                                )}
+                              </Badge>
+                            );
+                          })}
                           {overflowCount > 0 && (
                             <Popover>
                               <PopoverTrigger asChild>
@@ -366,15 +380,21 @@ export function TeacherScheduleTable({
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
-                                    {students.map((s) => (
-                                      <Badge
-                                        key={s.id}
-                                        variant="outline"
-                                        className="text-xs font-normal"
-                                      >
-                                        {s.name}
-                                      </Badge>
-                                    ))}
+                                    {students.map((s) => {
+                                      const gradeLabel = formatStudentGrade(s);
+                                      return (
+                                        <Badge
+                                          key={s.id}
+                                          variant="outline"
+                                          className="text-xs font-normal"
+                                        >
+                                          {s.name}
+                                          {gradeLabel && (
+                                            <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                                          )}
+                                        </Badge>
+                                      );
+                                    })}
                                   </div>
                                   <div className="flex gap-2 pt-2 border-t">
                                     <Button

@@ -15,7 +15,7 @@ import {
   X as XIcon,
   Plus,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentGrade } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -54,7 +54,7 @@ interface ScheduleRow {
   endTime: string;
   teacherId: string;
   teacherName: string;
-  students: { id: string; name: string }[];
+  students: { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[];
   groupNames?: string[];
   classroomId?: string | null;
   classroomName?: string;
@@ -526,17 +526,23 @@ export function BoldMatrixView({
                       배정된 학생이 없습니다
                     </div>
                   ) : (
-                    detailRow.students.map((st) => (
-                      <span
-                        key={st.id}
-                        className="group inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs ring-1 ring-border/50"
-                      >
-                        {st.name}
-                        <button className="rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100">
-                          <XIcon className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))
+                    detailRow.students.map((st) => {
+                      const gradeLabel = formatStudentGrade(st);
+                      return (
+                        <span
+                          key={st.id}
+                          className="group inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs ring-1 ring-border/50"
+                        >
+                          {st.name}
+                          {gradeLabel && (
+                            <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                          )}
+                          <button className="rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100">
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1020,14 +1026,20 @@ function ContinuousTimeGrid({
                           <span className={cn('h-1.5 w-1.5 rounded-full', accent.bar)} />
                           {row.teacherName}
                         </span>
-                        {row.students.slice(0, height > 100 ? 6 : 3).map((st) => (
-                          <span
-                            key={st.id}
-                            className="whitespace-nowrap rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 ring-1 ring-border/50"
-                          >
-                            {st.name}
-                          </span>
-                        ))}
+                        {row.students.slice(0, height > 100 ? 6 : 3).map((st) => {
+                          const gradeLabel = formatStudentGrade(st);
+                          return (
+                            <span
+                              key={st.id}
+                              className="whitespace-nowrap rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 ring-1 ring-border/50"
+                            >
+                              {st.name}
+                              {gradeLabel && (
+                                <span className="text-[9px] text-muted-foreground ml-0.5">({gradeLabel})</span>
+                              )}
+                            </span>
+                          );
+                        })}
                         {row.students.length > (height > 100 ? 6 : 3) && (
                           <span className="px-1 font-mono text-[10px] font-bold text-primary">
                             +{row.students.length - (height > 100 ? 6 : 3)}
