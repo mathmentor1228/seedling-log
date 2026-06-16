@@ -399,10 +399,10 @@ export function Timetable() {
       const slotStudentIds = relevantSlotStudents.map((ss: any) => ss.student_id);
       const enrolledStudentIds = enrollments.map((e: any) => e.student_id);
       const allStudentIds = [...new Set([...slotStudentIds, ...enrolledStudentIds])];
-      let studentNameMap: Record<string, string> = {};
+      let studentNameMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
       if (allStudentIds.length > 0) {
-        const { data: studData } = await supabase.from('students').select('id, name').in('id', allStudentIds).neq('enrollment_status', '퇴원');
-        (studData || []).forEach((s: any) => { studentNameMap[s.id] = s.name; });
+        const { data: studData } = await supabase.from('students').select('id, name, grade, school_level, grade_year').in('id', allStudentIds).neq('enrollment_status', '퇴원');
+        (studData || []).forEach((s: any) => { studentNameMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year }; });
       }
 
       // Build exam prep schedule rows grouped by date
