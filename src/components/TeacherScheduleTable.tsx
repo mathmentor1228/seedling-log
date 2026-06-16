@@ -19,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Check, Users, ChevronDown, ChevronUp, Pencil, X, Save } from 'lucide-react';
 import { useAuth, isAdmin } from '@/lib/auth';
+import { formatStudentGrade } from '@/lib/utils';
 
 const DAYS_OF_WEEK = [
   { value: 0, label: '일' },
