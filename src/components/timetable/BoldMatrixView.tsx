@@ -54,7 +54,7 @@ interface ScheduleRow {
   endTime: string;
   teacherId: string;
   teacherName: string;
-  students: { id: string; name: string }[];
+  students: { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[];
   groupNames?: string[];
   classroomId?: string | null;
   classroomName?: string;
