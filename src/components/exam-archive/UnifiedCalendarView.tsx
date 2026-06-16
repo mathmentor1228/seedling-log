@@ -405,6 +405,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         </div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
+                          {s.grade && ` · ${formatScheduleGrade(s.school_name, s.grade)}`}
                           {s.subject && ` · ${s.subject}`}
                           {s.end_date && s.end_date !== s.start_date && ` ~ ${format(parseISO(s.end_date), 'M월 d일', { locale: ko })}`}
                         </div>
