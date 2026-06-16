@@ -380,15 +380,21 @@ export function TeacherScheduleTable({
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
-                                    {students.map((s) => (
-                                      <Badge
-                                        key={s.id}
-                                        variant="outline"
-                                        className="text-xs font-normal"
-                                      >
-                                        {s.name}
-                                      </Badge>
-                                    ))}
+                                    {students.map((s) => {
+                                      const gradeLabel = formatStudentGrade(s);
+                                      return (
+                                        <Badge
+                                          key={s.id}
+                                          variant="outline"
+                                          className="text-xs font-normal"
+                                        >
+                                          {s.name}
+                                          {gradeLabel && (
+                                            <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                                          )}
+                                        </Badge>
+                                      );
+                                    })}
                                   </div>
                                   <div className="flex gap-2 pt-2 border-t">
                                     <Button
