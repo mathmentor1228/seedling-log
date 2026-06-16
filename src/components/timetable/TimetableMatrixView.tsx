@@ -330,7 +330,10 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                                 {/* Show student names in timeline mode */}
                                 {mode === 'timeline' && row.students.length > 0 && (
                                   <div className="text-[10px] text-muted-foreground pl-4 mt-0.5 leading-tight">
-                                    {row.students.slice(0, 4).map(s => s.name).join(', ')}
+                                    {row.students.slice(0, 4).map(s => {
+                                      const gradeLabel = formatStudentGrade(s);
+                                      return `${s.name}${gradeLabel ? `(${gradeLabel})` : ''}`;
+                                    }).join(', ')}
                                     {row.students.length > 4 && ` 외 ${row.students.length - 4}명`}
                                   </div>
                                 )}
