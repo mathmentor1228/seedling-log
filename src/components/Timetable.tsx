@@ -884,11 +884,17 @@ export function Timetable() {
       {row.students.length > 0 && (
         <div className="flex flex-wrap gap-1 items-center">
           <Users className="w-3 h-3 text-muted-foreground shrink-0" />
-          {row.students.map((s) => (
-            <span key={s.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">
-              {s.name}
-            </span>
-          ))}
+          {row.students.map((s) => {
+            const gradeLabel = formatStudentGrade(s);
+            return (
+              <span key={s.id} className="text-xs bg-muted px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                {s.name}
+                {gradeLabel && (
+                  <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                )}
+              </span>
+            );
+          })}
           <button
             onClick={(e) => { e.stopPropagation(); handleCopy(row.students.map((s) => s.name).join(', '), row.classId + row.dayOfWeek); }}
             className="ml-1 text-muted-foreground hover:text-foreground"
