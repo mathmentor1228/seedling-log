@@ -526,17 +526,23 @@ export function BoldMatrixView({
                       배정된 학생이 없습니다
                     </div>
                   ) : (
-                    detailRow.students.map((st) => (
-                      <span
-                        key={st.id}
-                        className="group inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs ring-1 ring-border/50"
-                      >
-                        {st.name}
-                        <button className="rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100">
-                          <XIcon className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))
+                    detailRow.students.map((st) => {
+                      const gradeLabel = formatStudentGrade(st);
+                      return (
+                        <span
+                          key={st.id}
+                          className="group inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs ring-1 ring-border/50"
+                        >
+                          {st.name}
+                          {gradeLabel && (
+                            <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                          )}
+                          <button className="rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100">
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
               </div>
