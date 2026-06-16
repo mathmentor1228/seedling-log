@@ -133,9 +133,13 @@ export function TeacherScheduleTable({
           if (!grouped[cs.class_id]) {
             grouped[cs.class_id] = [];
           }
+          const info = studentMap[cs.student_id];
           grouped[cs.class_id].push({
             id: cs.student_id,
-            name: studentMap[cs.student_id] || '이름없음',
+            name: info?.name || '이름없음',
+            grade: info?.grade,
+            school_level: info?.school_level,
+            grade_year: info?.grade_year,
           });
         });
 
