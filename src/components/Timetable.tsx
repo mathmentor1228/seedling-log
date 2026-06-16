@@ -428,10 +428,16 @@ export function Timetable() {
               endTime: slot.end_time,
               teacherId: course.teacher_id,
               teacherName: teacherMap[course.teacher_id] || '미배정',
-              students: slotStuds.map((ss: any) => ({
-                id: ss.student_id,
-                name: studentNameMap[ss.student_id] || '—',
-              })),
+              students: slotStuds.map((ss: any) => {
+                const info = studentNameMap[ss.student_id];
+                return {
+                  id: ss.student_id,
+                  name: info?.name || '—',
+                  grade: info?.grade,
+                  school_level: info?.school_level,
+                  grade_year: info?.grade_year,
+                };
+              }),
             });
           }
         } else {
