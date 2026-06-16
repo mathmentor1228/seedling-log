@@ -80,9 +80,44 @@ function dateInRange(date: string | null, start: string | null, end: string | nu
   return date >= start && date <= rangeEnd;
 }
 
+// Roman numeral conversion (I/II/III)
+function romanToInt(roman: string): number | null {
+  const map: Record<string, number> = { I: 1, II: 2, III: 3 };
+  return map[roman] ?? null;
+}
+
+// Infer grade from exam title (high-school course names)
+// e.g. "기말고사 - 공통영어1" → 1, "공통수학II" → 2
+function inferGradeFromTitle(title: string | null | undefined): number | null {
+  if (!title) return null;
+  const t = title.replace(/\s+/g, '');
+
+  // 공통XX1/2 or 공통XXI/II  (공통영어, 공통수학, 공통국어, 공통사회, 공통과학 등)
+  const commonMatch = t.match(/공통[가-힣]+(III|II|I|[1-3])/);
+  if (commonMatch) {
+    const token = commonMatch[1];
+    if (/^[1-3]$/.test(token)) return Number(token);
+    const r = romanToInt(token);
+    if (r) return r;
+  }
+
+  // 영어I/II, 수학I/II → 2학년/3학년
+  const upperMatch = t.match(/(?:^|[^가-힣])(영어|수학|국어)(III|II|I)(?:$|[^가-힣A-Za-z])/);
+  if (upperMatch) {
+    const r = romanToInt(upperMatch[2]);
+    if (r) return r + 1; // 영어I = 고2
+  }
+
+  return null;
+}
+
 function inferScheduleGrade(schedule: Schedule, archives: any[], students: any[]): number | null {
   const existing = normalizeGradeYear(schedule.grade);
   if (existing) return existing;
+
+  // Title-based inference takes priority (most reliable for high-school courses)
+  const fromTitle = inferGradeFromTitle(schedule.title);
+  if (fromTitle) return fromTitle;
 
   const archiveGrades = new Set<number>();
   for (const archive of archives) {
