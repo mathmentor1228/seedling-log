@@ -45,6 +45,9 @@ interface ScheduleRow {
 interface StudentInfo {
   id: string;
   name: string;
+  grade?: string | null;
+  school_level?: string | null;
+  grade_year?: number | null;
 }
 
 interface TeacherScheduleTableProps {
