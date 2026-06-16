@@ -111,7 +111,74 @@ function inferGradeFromTitle(title: string | null | undefined): number | null {
   return null;
 }
 
-function inferScheduleGrade(schedule: Schedule, archives: any[], students: any[]): number | null {
+const ROMAN_SUFFIX_MAP: Record<string, string> = { I: '1', II: '2', III: '3', Ⅰ: '1', Ⅱ: '2', Ⅲ: '3' };
+
+function normalizeCourseName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .trim()
+    .replace(/[ⅠⅡⅢ]/g, (token) => ROMAN_SUFFIX_MAP[token] || token)
+    .replace(/\s+/g, '')
+    .replace(/[·ㆍ∙・.]/g, '')
+    .replace(/(III|II|I)$/i, (token) => ROMAN_SUFFIX_MAP[token.toUpperCase()] || token)
+    .toLowerCase();
+}
+
+function getScheduleCourseCandidates(schedule: Schedule): string[] {
+  const candidates = new Set<string>();
+  const add = (value: string | null | undefined) => {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    candidates.add(trimmed);
+    trimmed
+      .split(/[/,，]|\s+및\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => candidates.add(part));
+  };
+
+  add(schedule.subject);
+  add(schedule.title);
+  schedule.title
+    ?.split(/[-–—:：]/)
+    .slice(1)
+    .forEach(add);
+
+  return Array.from(candidates);
+}
+
+function inferGradeFromTextbooks(schedule: Schedule, textbooks: Textbook[]): number | null | undefined {
+  const candidates = getScheduleCourseCandidates(schedule)
+    .map(normalizeCourseName)
+    .filter(Boolean);
+  if (candidates.length === 0) return undefined;
+
+  const candidateSet = new Set(candidates);
+  const grades = new Set<number>();
+
+  for (const textbook of textbooks) {
+    if (textbook.school_name !== schedule.school_name) continue;
+    const grade = normalizeGradeYear(textbook.grade);
+    if (!grade) continue;
+    const textbookNames = [textbook.course_name, textbook.textbook_name]
+      .map(normalizeCourseName)
+      .filter(Boolean);
+    if (textbookNames.some((name) => candidateSet.has(name))) {
+      grades.add(grade);
+    }
+  }
+
+  if (grades.size === 1) return Array.from(grades)[0];
+  if (grades.size > 1) return null;
+  return undefined;
+}
+
+function inferScheduleGrade(schedule: Schedule, archives: any[], students: any[], textbooks: Textbook[]): number | null {
+  // School-specific course/textbook catalog is the authority: e.g. 선부고 영어1=2학년, 공통영어1=1학년.
+  const fromTextbooks = inferGradeFromTextbooks(schedule, textbooks);
+  if (fromTextbooks !== undefined) return fromTextbooks;
+
   const existing = normalizeGradeYear(schedule.grade);
   if (existing) return existing;
 
@@ -203,7 +270,7 @@ export function useExamArchiveData() {
     )
       .map((schedule) => ({
         ...schedule,
-        grade: inferScheduleGrade(schedule, allArchives, students),
+        grade: inferScheduleGrade(schedule, allArchives, students, allTextbooks),
       }))
       .sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
 
