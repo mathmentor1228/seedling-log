@@ -27,6 +27,7 @@ export interface Textbook {
   school_name: string;
   grade: number | null;
   subject: string;
+  course_name?: string | null;
   publisher: string | null;
   textbook_name: string | null;
   year: number;
