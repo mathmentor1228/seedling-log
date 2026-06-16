@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Users, Clock, Building2, GripVertical, ArrowRight, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentGrade } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
