@@ -37,6 +37,13 @@ function sortByCategory(a: Schedule, b: Schedule) {
 
 const SUBJECT_CATS: SubjectCategory[] = ['math', 'english', 'korean', 'science', 'other'];
 
+function formatScheduleGrade(schoolName: string | null, grade: number | null): string {
+  if (!grade) return '';
+  const last = (schoolName || '').slice(-1);
+  const prefix = last === '고' ? '고' : last === '중' ? '중' : last === '초' ? '초' : '';
+  return prefix ? `${prefix}${grade}` : `${grade}학년`;
+}
+
 
 interface Props {
   schedules: Schedule[];
@@ -339,6 +346,11 @@ export function UnifiedCalendarView({ schedules }: Props) {
                               </div>
                               <div className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
                                 <span>{it.school_name}</span>
+                                {it.grade && (
+                                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
+                                    {formatScheduleGrade(it.school_name, it.grade)}
+                                  </Badge>
+                                )}
                                 <span>·</span>
                                 <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SCHEDULE_TYPE_COLORS[it.schedule_type])}>
                                   {SCHEDULE_TYPE_LABELS[it.schedule_type] || it.schedule_type}
@@ -393,6 +405,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         </div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
+                          {s.grade && ` · ${formatScheduleGrade(s.school_name, s.grade)}`}
                           {s.subject && ` · ${s.subject}`}
                           {s.end_date && s.end_date !== s.start_date && ` ~ ${format(parseISO(s.end_date), 'M월 d일', { locale: ko })}`}
                         </div>
