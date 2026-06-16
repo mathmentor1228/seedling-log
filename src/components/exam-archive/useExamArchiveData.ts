@@ -65,6 +65,45 @@ function buildEventSchedule(event: any, schoolName: string): Schedule {
   };
 }
 
+function normalizeGradeYear(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const match = value.match(/[1-6]/);
+    return match ? Number(match[0]) : null;
+  }
+  return null;
+}
+
+function dateInRange(date: string | null, start: string | null, end: string | null) {
+  if (!date || !start) return false;
+  const rangeEnd = end || start;
+  return date >= start && date <= rangeEnd;
+}
+
+function inferScheduleGrade(schedule: Schedule, archives: any[], students: any[]): number | null {
+  const existing = normalizeGradeYear(schedule.grade);
+  if (existing) return existing;
+
+  const archiveGrades = new Set<number>();
+  for (const archive of archives) {
+    if (archive.school_name !== schedule.school_name) continue;
+    if (!dateInRange(schedule.start_date, archive.exam_date_start || null, archive.exam_date_end || null)) continue;
+    const grade = normalizeGradeYear(archive.grade_year);
+    if (grade) archiveGrades.add(grade);
+  }
+  if (archiveGrades.size === 1) return Array.from(archiveGrades)[0];
+
+  const activeStudentGrades = new Set<number>();
+  for (const student of students) {
+    if (student.school !== schedule.school_name) continue;
+    const grade = normalizeGradeYear(student.grade_year ?? student.grade);
+    if (grade) activeStudentGrades.add(grade);
+  }
+  if (activeStudentGrades.size === 1) return Array.from(activeStudentGrades)[0];
+
+  return null;
+}
+
 const RECENT_PAST_EXAM_DAYS = 120;
 
 export function useExamArchiveData() {
@@ -84,7 +123,7 @@ export function useExamArchiveData() {
       supabase.from('school_textbooks').select('*').order('grade'),
       supabase.from('school_files').select('*').order('created_at', { ascending: false }),
       supabase.from('school_exam_archives').select('*').order('updated_at', { ascending: false }),
-      supabase.from('students').select('id, school').in('enrollment_status', ['재학', '재등원']),
+      supabase.from('students').select('id, school, grade, school_level, grade_year').in('enrollment_status', ['재학', '재등원']),
       supabase.from('academy_events').select('id, title, start_at, end_at, category').eq('category', 'exam').order('start_at', { ascending: true }),
     ]);
 
@@ -126,7 +165,12 @@ export function useExamArchiveData() {
           schedule,
         ])
       ).values()
-    ).sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
+    )
+      .map((schedule) => ({
+        ...schedule,
+        grade: inferScheduleGrade(schedule, allArchives, students),
+      }))
+      .sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
 
     setSchedules(mergedSchedules);
     setTextbooks(allTextbooks);

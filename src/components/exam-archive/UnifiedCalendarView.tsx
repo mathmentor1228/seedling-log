@@ -304,16 +304,19 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         {format(cell.date, 'd')}
                       </div>
                       <div className="space-y-0.5">
-                        {items.slice(0, 3).map((it, idx) => (
-                          <div
-                            key={idx}
-                            className="truncate text-[9px] px-1 py-px rounded text-white"
-                            style={{ background: colorFor(it.school_name) }}
-                            title={`${it.school_name} · ${it.title}`}
-                          >
-                            {it.title}
-                          </div>
-                        ))}
+                        {items.slice(0, 3).map((it, idx) => {
+                          const gradeLabel = formatScheduleGrade(it.school_name, it.grade);
+                          return (
+                            <div
+                              key={idx}
+                              className="truncate text-[9px] px-1 py-px rounded text-white"
+                              style={{ background: colorFor(it.school_name) }}
+                              title={`${it.school_name}${gradeLabel ? ` · ${gradeLabel}` : ''} · ${it.title}`}
+                            >
+                              {gradeLabel ? `${gradeLabel} ` : ''}{it.title}
+                            </div>
+                          );
+                        })}
                         {items.length > 3 && (
                           <div className="text-[9px] text-muted-foreground">+{items.length - 3}</div>
                         )}
