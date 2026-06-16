@@ -394,9 +394,17 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                 <div className="space-y-1">
                   <div className="text-xs font-medium text-muted-foreground">학생 명단 ({detailPopup.students.length}명)</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {detailPopup.students.map(s => (
-                      <span key={s.id} className="text-xs bg-muted px-2 py-1 rounded-md">{s.name}</span>
-                    ))}
+                    {detailPopup.students.map(s => {
+                      const gradeLabel = formatStudentGrade(s);
+                      return (
+                        <span key={s.id} className="text-xs bg-muted px-2 py-1 rounded-md">
+                          {s.name}
+                          {gradeLabel && (
+                            <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
