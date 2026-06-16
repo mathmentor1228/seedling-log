@@ -277,19 +277,22 @@ function buildHomeworkCheckSummaryMap(rows: HomeworkCheckSummaryRow[]) {
   const statusMap: Record<string, string | null> = {};
   const resultMap: Record<string, string | null> = {};
 
+  // HW-SUMMARY-LATEST-WINS-V2: rows arrive ordered by assigned_date DESC, so the
+  // FIRST row per (student, subject) is the most recent homework assignment and
+  // must be the source of truth. Older rows must not overwrite a newer status —
+  // otherwise an older unchecked assignment would wipe out the latest checked
+  // result and the dashboard would incorrectly fall back to "확인요망".
   (rows || []).forEach((hw) => {
     const key = `${hw.student_id}:${hw.subject}`;
+    if (statusMap[key] !== undefined) return; // keep the latest row only
+
     const checkStatus = hw.check_status || 'unchecked';
-
-    if (checkStatus !== 'checked') {
-      statusMap[key] = 'unchecked';
-      resultMap[key] = null;
-      return;
-    }
-
-    if (statusMap[key] === undefined) {
+    if (checkStatus === 'checked') {
       statusMap[key] = 'checked';
       resultMap[key] = hw.result || null;
+    } else {
+      statusMap[key] = 'unchecked';
+      resultMap[key] = null;
     }
   });
 
