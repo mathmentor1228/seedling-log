@@ -445,7 +445,10 @@ export function Timetable() {
           const enrolledIds = enrollmentMap[course.id] || [];
           const sessionStudents = enrolledIds
             .filter(sid => studentNameMap[sid])
-            .map(sid => ({ id: sid, name: studentNameMap[sid] }));
+            .map(sid => {
+              const info = studentNameMap[sid];
+              return { id: sid, name: info.name, grade: info.grade, school_level: info.school_level, grade_year: info.grade_year };
+            });
 
           if (sessionStudents.length > 0) {
             examRows.push({
