@@ -1479,9 +1479,19 @@ export function Timetable() {
                     <SelectValue placeholder={studentsLoading ? '로딩중...' : '학생 선택'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
+                    {students.map((s) => {
+                      const gradeLabel = formatStudentGrade(s);
+                      return (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="inline-flex items-center gap-1">
+                            {s.name}
+                            {gradeLabel && (
+                              <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
