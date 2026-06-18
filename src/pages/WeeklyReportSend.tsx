@@ -579,6 +579,33 @@ export default function WeeklyReportSend() {
         variant: failCount > 0 ? 'destructive' : 'default',
       });
 
+      // Sync to Google Docs if any parent message was published
+      if (parentSentCount > 0) {
+        try {
+          const { data: gdocRes, error: gdocErr } = await supabase.functions.invoke(
+            'upload-weekly-reports-to-gdoc',
+            {
+              body: {
+                week_start: format(weekStart, 'yyyy-MM-dd'),
+                week_end: format(weekEnd, 'yyyy-MM-dd'),
+              },
+            }
+          );
+          if (gdocErr) throw gdocErr;
+          toast({
+            title: 'Google Docs 업로드 완료',
+            description: `${gdocRes?.count ?? 0}명의 코멘트가 문서에 반영되었습니다.`,
+          });
+        } catch (e: any) {
+          console.error('gdoc upload failed', e);
+          toast({
+            title: 'Google Docs 업로드 실패',
+            description: e?.message ?? '업로드 중 오류가 발생했습니다.',
+            variant: 'destructive',
+          });
+        }
+      }
+
       // Refresh the list
       await fetchReports();
     } catch (error: any) {
