@@ -609,6 +609,17 @@ export default function Reports() {
       if (error) throw error;
       setReports(prev => prev.map(r => ids.includes(r.id) ? { ...r, parent_visible: visible } : r));
       toast({ title: `${ids.length}건 ${visible ? '학부모 공개' : '학부모 비공개'} 처리 완료` });
+      // Sync affected weeks to Google Docs
+      const affectedWeeks = new Set<string>();
+      reports.forEach(r => {
+        if (ids.includes(r.id)) affectedWeeks.add(`${r.week_start}|${r.week_end}`);
+      });
+      for (const key of affectedWeeks) {
+        const [ws, we] = key.split('|');
+        supabase.functions.invoke('upload-weekly-reports-to-gdoc', {
+          body: { week_start: ws, week_end: we },
+        }).catch((e) => console.error('gdoc sync failed', e));
+      }
     } catch (error: any) {
       toast({ title: '처리 실패', description: error.message, variant: 'destructive' });
     } finally {
@@ -1502,6 +1513,9 @@ export default function Reports() {
                                 .eq('id', report.id);
                               setReports(prev => prev.map(r => r.id === report.id ? { ...r, parent_visible: checked } : r));
                               toast({ title: checked ? '학부모 공개됨' : '학부모 비공개됨' });
+                              supabase.functions.invoke('upload-weekly-reports-to-gdoc', {
+                                body: { week_start: report.week_start, week_end: report.week_end },
+                              }).catch((e) => console.error('gdoc sync failed', e));
                             }}
                           />
                         </TableCell>
