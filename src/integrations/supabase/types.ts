@@ -6834,6 +6834,30 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_report_gdocs: {
+        Row: {
+          document_id: string
+          document_url: string
+          last_student_count: number
+          last_uploaded_at: string
+          week_start: string
+        }
+        Insert: {
+          document_id: string
+          document_url: string
+          last_student_count?: number
+          last_uploaded_at?: string
+          week_start: string
+        }
+        Update: {
+          document_id?: string
+          document_url?: string
+          last_student_count?: number
+          last_uploaded_at?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       weekly_reports: {
         Row: {
           avg_understanding: number | null
