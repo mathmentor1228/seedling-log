@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
       .select("student_id, parent_message, parent_sent_at, students:student_id(name, grade)")
       .eq("week_start", week_start)
       .eq("week_end", week_end)
-      .eq("parent_sent_status", "sent")
-      .order("parent_sent_at", { ascending: true });
+      .eq("parent_visible", true)
+      .not("parent_message", "is", null);
 
     if (error) throw error;
     const rows = (reports ?? []) as unknown as ReportRow[];
