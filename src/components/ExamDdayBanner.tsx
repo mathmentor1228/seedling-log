@@ -136,8 +136,8 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       ? eventList.filter((e) => e.title.includes(schoolFilter))
       : eventList;
 
-    // Merge + dedupe by (school + start date). Same school+date = same exam regardless of label.
-    // Prefer the most descriptive title (containing 기말/중간/모의 over generic 정기고사).
+    // Merge + dedupe by (school + exam-type). Same school+exam (e.g. 기말고사 spanning 4 days)
+    // should appear as a single D-day entry using the earliest start date.
     const score = (title: string) => {
       let s = 0;
       if (/기말|중간|모의|학평|수능/.test(title)) s += 10;
@@ -146,14 +146,33 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       s += Math.min(title.length, 30) / 100;
       return s;
     };
+    const examTypeKey = (title: string) => {
+      if (/기말/.test(title)) return '기말고사';
+      if (/중간/.test(title)) return '중간고사';
+      if (/모의/.test(title)) return '모의고사';
+      if (/학평/.test(title)) return '학평';
+      if (/수능/.test(title)) return '수능';
+      if (/수행/.test(title)) return '수행평가';
+      if (/정기고사/.test(title)) return '정기고사';
+      return title.split(' ').slice(1).join(' ') || title;
+    };
     const grouped = new Map<string, ExamEvent>();
     for (const e of [...filteredEvents, ...schoolList, ...archiveList]) {
       const date = e.start_at.split('T')[0];
       const school = (e.title.match(/^([^\s]+(?:고|중|초|대))/)?.[1]) || e.title.split(' ')[0];
-      const key = `${school}|${date}`;
+      const type = examTypeKey(e.title);
+      const key = `${school}|${type}`;
       const existing = grouped.get(key);
-      if (!existing || score(e.title) > score(existing.title)) {
+      if (!existing) {
         grouped.set(key, e);
+      } else {
+        const existingDate = existing.start_at.split('T')[0];
+        const earlier = date < existingDate ? e.start_at : existing.start_at;
+        const betterTitle = score(e.title) > score(existing.title) ? e.title : existing.title;
+        const aEnd = e.end_at || e.start_at;
+        const bEnd = existing.end_at || existing.start_at;
+        const laterEnd = aEnd > bEnd ? aEnd : bEnd;
+        grouped.set(key, { ...existing, title: betterTitle, start_at: earlier, end_at: laterEnd });
       }
     }
     const merged = Array.from(grouped.values());
