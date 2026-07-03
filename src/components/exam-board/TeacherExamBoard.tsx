@@ -70,8 +70,18 @@ function periodSortKey(year: number | null, period: string | null, examDate: str
   return base * 100000 + (examDate ? parseInt(examDate.replace(/-/g, '').slice(2), 10) % 100000 : 0);
 }
 
+// 과목별 라인 색 (내신 성적 추이 페이지와 동일 팔레트)
+const SUBJECT_COLORS: Record<string, string> = {
+  수학: 'hsl(217 91% 60%)',
+  영어: 'hsl(142 71% 45%)',
+  국어: 'hsl(271 76% 53%)',
+  과학: 'hsl(25 95% 53%)',
+  사회: 'hsl(0 84% 60%)',
+};
+const DEFAULT_LINE_COLOR = 'hsl(217 91% 60%)';
+
 // ── 미니 스파크라인 (내신=선, 수행=점) ──────────────────────────
-function ScoreSparkline({ line, perf }: { line: number[]; perf: number[] }) {
+function ScoreSparkline({ line, perf, color }: { line: number[]; perf: number[]; color: string }) {
   const W = 110, H = 30, PAD = 3;
   const all = [...line, ...perf];
   if (all.length === 0) return <span className="text-xs text-muted-foreground">기록 없음</span>;
@@ -81,9 +91,9 @@ function ScoreSparkline({ line, perf }: { line: number[]; perf: number[] }) {
   const pts = line.map((v, i) => `${x(i, line.length)},${y(v)}`).join(' ');
   return (
     <svg width={W} height={H} className="shrink-0">
-      {line.length > 1 && <polyline points={pts} fill="none" stroke="hsl(217 91% 60%)" strokeWidth="1.5" />}
+      {line.length > 1 && <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />}
       {line.map((v, i) => (
-        <circle key={`l${i}`} cx={x(i, line.length)} cy={y(v)} r="2.2" fill="hsl(217 91% 60%)" />
+        <circle key={`l${i}`} cx={x(i, line.length)} cy={y(v)} r="2.2" fill={color} />
       ))}
       {perf.map((v, i) => (
         <circle key={`p${i}`} cx={x(i, perf.length)} cy={y(v)} r="2.2" fill="hsl(38 92% 50%)" opacity="0.9" />
@@ -263,16 +273,22 @@ export function TeacherExamBoard() {
     return published ? { label: '분석지', variant: 'default' as const } : { label: '분석지 초안', variant: 'secondary' as const };
   }
 
-  function sparkData(student: StudentRow) {
+  // 과목별 성적 추이 (과목당 그래프 1개)
+  function sparkDataBySubject(student: StudentRow) {
     const subj = scopedSubjectsByStudent.get(student.id) || new Set<string>();
-    const rows = (resultsByStudent.get(student.id) || []).filter(r =>
-      subjectFilter !== 'all' ? r.subject === subjectFilter : subj.has(r.subject));
-    const line = rows.filter(r => r.exam_type === 'midterm' || r.exam_type === 'final').map(r => Number(r.actual_score));
-    const perf = rows.filter(r => r.exam_type === 'performance').map(r => Number(r.actual_score));
-    const last = line[line.length - 1] ?? null;
-    const prev = line[line.length - 2] ?? null;
-    const delta = last != null && prev != null ? last - prev : null;
-    return { line: line.slice(-6), perf: perf.slice(-6), last, delta };
+    const targets = subjectFilter !== 'all'
+      ? [subjectFilter]
+      : Array.from(subj).sort();
+    const all = resultsByStudent.get(student.id) || [];
+    return targets.map(subject => {
+      const rows = all.filter(r => r.subject === subject);
+      const line = rows.filter(r => r.exam_type === 'midterm' || r.exam_type === 'final').map(r => Number(r.actual_score));
+      const perf = rows.filter(r => r.exam_type === 'performance').map(r => Number(r.actual_score));
+      const last = line[line.length - 1] ?? null;
+      const prev = line[line.length - 2] ?? null;
+      const delta = last != null && prev != null ? last - prev : null;
+      return { subject, line: line.slice(-6), perf: perf.slice(-6), last, delta };
+    }).filter(d => d.line.length > 0 || d.perf.length > 0);
   }
 
   if (loading) {
@@ -349,15 +365,14 @@ export function TeacherExamBoard() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-32">학생</TableHead>
-                  <TableHead className="w-40">성적 추이</TableHead>
-                  <TableHead className="w-24">최근 내신</TableHead>
+                  <TableHead className="w-64">성적 추이 (과목별)</TableHead>
                   <TableHead>이번 시험 범위</TableHead>
                   <TableHead className="w-28 text-right">상태</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {g.students.map(s => {
-                  const spark = sparkData(s);
+                  const sparks = sparkDataBySubject(s);
                   const scopes = scopeFor(s);
                   const rep = reportBadge(s);
                   return (
@@ -368,23 +383,43 @@ export function TeacherExamBoard() {
                           {s.grade || (s.grade_year ? `${s.school_level || ''}${s.grade_year}` : '')}
                         </span>
                       </TableCell>
-                      <TableCell><ScoreSparkline line={spark.line} perf={spark.perf} /></TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {spark.last != null ? (
-                          <span className="flex items-center gap-1 text-sm">
-                            {spark.last}점
-                            {spark.delta != null && (spark.delta > 0
-                              ? <TrendingUp className="w-3.5 h-3.5 text-green-600" />
-                              : spark.delta < 0
-                                ? <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                                : <Minus className="w-3.5 h-3.5 text-muted-foreground" />)}
-                            {spark.delta != null && spark.delta !== 0 && (
-                              <span className={`text-xs ${spark.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                {spark.delta > 0 ? '+' : ''}{spark.delta}
-                              </span>
-                            )}
-                          </span>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      <TableCell>
+                        {sparks.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">기록 없음</span>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {sparks.map(sp => (
+                              <div key={sp.subject} className="flex items-center gap-2">
+                                <span
+                                  className="text-xs font-medium w-8 shrink-0"
+                                  style={{ color: SUBJECT_COLORS[sp.subject] || DEFAULT_LINE_COLOR }}
+                                >
+                                  {sp.subject}
+                                </span>
+                                <ScoreSparkline
+                                  line={sp.line}
+                                  perf={sp.perf}
+                                  color={SUBJECT_COLORS[sp.subject] || DEFAULT_LINE_COLOR}
+                                />
+                                {sp.last != null ? (
+                                  <span className="flex items-center gap-1 text-sm whitespace-nowrap">
+                                    {sp.last}점
+                                    {sp.delta != null && (sp.delta > 0
+                                      ? <TrendingUp className="w-3.5 h-3.5 text-green-600" />
+                                      : sp.delta < 0
+                                        ? <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+                                        : <Minus className="w-3.5 h-3.5 text-muted-foreground" />)}
+                                    {sp.delta != null && sp.delta !== 0 && (
+                                      <span className={`text-xs ${sp.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        {sp.delta > 0 ? '+' : ''}{sp.delta}
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : <span className="text-xs text-muted-foreground">수행만</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[280px]">
                         {scopes.length > 0 ? scopes.map((sc, i) => (
@@ -429,28 +464,42 @@ export function TeacherExamBoard() {
               {(resultsByStudent.get(detailStudent.id) || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">등록된 성적이 없습니다.</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>시기</TableHead>
-                      <TableHead>과목</TableHead>
-                      <TableHead>유형</TableHead>
-                      <TableHead className="text-right">점수</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(resultsByStudent.get(detailStudent.id) || []).slice().reverse().map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-sm">{periodLabel(r.exam_year, r.exam_period, r.exam_type)}</TableCell>
-                        <TableCell className="text-sm">{r.subject}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {r.exam_type === 'midterm' ? '중간' : r.exam_type === 'final' ? '기말' : r.exam_type === 'performance' ? '수행' : '기타'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{r.actual_score}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                Array.from(
+                  (resultsByStudent.get(detailStudent.id) || []).reduce((m, r) => {
+                    if (!m.has(r.subject)) m.set(r.subject, []);
+                    m.get(r.subject)!.push(r);
+                    return m;
+                  }, new Map<string, ExamResult[]>())
+                ).sort(([a], [b]) => a.localeCompare(b, 'ko')).map(([subject, rows]) => (
+                  <div key={subject} className="mb-4">
+                    <h4
+                      className="text-sm font-semibold mb-1"
+                      style={{ color: SUBJECT_COLORS[subject] || DEFAULT_LINE_COLOR }}
+                    >
+                      {subject}
+                    </h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>시기</TableHead>
+                          <TableHead>유형</TableHead>
+                          <TableHead className="text-right">점수</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rows.slice().reverse().map((r, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="text-sm">{periodLabel(r.exam_year, r.exam_period, r.exam_type)}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {r.exam_type === 'midterm' ? '중간' : r.exam_type === 'final' ? '기말' : r.exam_type === 'performance' ? '수행' : '기타'}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{r.actual_score}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))
               )}
             </div>
           )}
