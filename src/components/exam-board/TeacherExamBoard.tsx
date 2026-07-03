@@ -372,6 +372,8 @@ export function TeacherExamBoard() {
         if (!ongoing && (!ended || daysSinceEnd > COLLECT_WINDOW_DAYS)) continue;
         let total = 0, done = 0;
         for (const s of g.students) {
+          // 시험 대상 학년이 명시되면(예: 자유학기제로 2·3학년만) 그 학년만 — 학년 미상 학생은 포함
+          if (exam.grades && s.grade_year != null && !exam.grades.includes(s.grade_year)) continue;
           const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
           for (const subject of subj) {
             if (subjectFilter !== 'all' && subject !== subjectFilter) continue;
@@ -400,6 +402,7 @@ export function TeacherExamBoard() {
     const examKey = periodSortKey(sheetExam.year, sheetExam.period, null);
     for (const s of scopedStudents) {
       if (normalizeSchool(s.school) !== sheetExam.school) continue;
+      if (sheetExam.grades && s.grade_year != null && !sheetExam.grades.includes(s.grade_year)) continue;
       const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
       for (const subject of subj) {
         if (subjectFilter !== 'all' && subject !== subjectFilter) continue;
@@ -642,6 +645,11 @@ export function TeacherExamBoard() {
                 </p>
                 <p className="font-semibold text-sm">
                   {t.school} {examTitleLabel(t.exam)} — 성적 입력
+                  {t.exam.grades && (
+                    <Badge variant="outline" className="ml-1.5 text-[11px] align-middle">
+                      {t.exam.grades.join('·')}학년만
+                    </Badge>
+                  )}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="flex-1 max-w-56 h-1.5 rounded-full bg-muted overflow-hidden">

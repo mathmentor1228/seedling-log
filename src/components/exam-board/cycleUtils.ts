@@ -11,6 +11,7 @@ export type CycleExam = {
   semester: '1' | '2';
   examType: 'midterm' | 'final';
   period: string;          // exam_period: "1-a" | "1-b" | "2-a" | "2-b"
+  grades: number[] | null; // 시험 대상 학년 (예: [2,3] — 자유학기제로 1학년 제외 등). null=전 학년/미상
 };
 
 export const SUBJECT_COLORS: Record<string, string> = {
@@ -115,6 +116,29 @@ function parseExamMeta(
   return { semester, examType };
 }
 
+// 텍스트에서 대상 학년 추출: "2,3학년", "2·3학년", "중2 중3", "3학년" 등
+export function parseGradesFromText(text: string | null | undefined): number[] | null {
+  if (!text) return null;
+  const grades = new Set<number>();
+  // "2,3학년" / "2·3학년" / "1~3학년" 패턴
+  const groupMatch = text.match(/([1-6](?:\s*[,·~\-]\s*[1-6])*)\s*학년/g);
+  if (groupMatch) {
+    for (const g of groupMatch) {
+      const nums = g.match(/[1-6]/g) || [];
+      if (g.includes('~') || g.includes('-')) {
+        const [a, b] = [Number(nums[0]), Number(nums[nums.length - 1])];
+        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) grades.add(i);
+      } else {
+        nums.forEach(n => grades.add(Number(n)));
+      }
+    }
+  }
+  // "중2", "고3" 패턴
+  const levelMatch = text.match(/[초중고]\s*([1-6])/g);
+  if (levelMatch) levelMatch.forEach(m => { const n = m.match(/[1-6]/); if (n) grades.add(Number(n[0])); });
+  return grades.size > 0 ? Array.from(grades).sort() : null;
+}
+
 type DetectInput = {
   archives: { school_name: string; semester: string | null; exam_type: string | null; exam_date_start: string | null; exam_date_end: string | null }[];
   schedules: { school_name: string; schedule_type: string; title: string; start_date: string | null; end_date: string | null }[];
@@ -126,6 +150,7 @@ type DetectInput = {
 export function detectCycleExams({ archives, schedules, events, schoolNames }: DetectInput): Map<string, CycleExam[]> {
   const bySchool = new Map<string, Map<string, CycleExam>>();
   const put = (school: string, title: string, start: string, end: string | null,
+    grades: number[] | null,
     semesterField?: string | null, examTypeField?: string | null) => {
     if (!start) return;
     const { semester, examType } = parseExamMeta(title, start, semesterField, examTypeField);
@@ -141,29 +166,37 @@ export function detectCycleExams({ archives, schedules, events, schoolNames }: D
       start,
       end: end || start,
       year, semester, examType, period,
+      grades,
     };
-    // 아카이브(범위·기간 명시) > 일정 > 캘린더 순으로 먼저 넣은 쪽 유지하되, 기간이 더 넓으면 갱신
     if (!existing) slot.set(key, entry);
     else {
+      // 기간은 넓은 쪽으로, 학년은 명시된 소스들의 합집합으로 병합
       if (entry.start < existing.start) existing.start = entry.start;
       if (entry.end > existing.end) existing.end = entry.end;
+      if (grades && grades.length > 0) {
+        existing.grades = existing.grades
+          ? Array.from(new Set([...existing.grades, ...grades])).sort()
+          : grades;
+      }
     }
   };
 
   for (const a of archives) {
     if (!a.exam_date_start) continue;
     const school = normalizeSchool(a.school_name);
-    put(school, `${a.semester || ''} ${a.exam_type || ''}`.trim(), a.exam_date_start, a.exam_date_end, a.semester, a.exam_type);
+    const grades = (a as any).grade_year != null ? [Number((a as any).grade_year)] : null;
+    put(school, `${a.semester || ''} ${a.exam_type || ''}`.trim(), a.exam_date_start, a.exam_date_end, grades, a.semester, a.exam_type);
   }
   for (const s of schedules) {
     if (s.schedule_type !== 'exam' || !s.start_date) continue;
-    put(normalizeSchool(s.school_name), s.title, s.start_date, s.end_date);
+    const grades = parseGradesFromText((s as any).grade) || parseGradesFromText(s.title);
+    put(normalizeSchool(s.school_name), s.title, s.start_date, s.end_date, grades);
   }
   for (const ev of events) {
     if (!ev.title || !ev.start_at) continue;
     for (const school of schoolNames) {
       if (!matchesSchoolTitle(ev.title, school)) continue;
-      put(school, ev.title, ev.start_at.slice(0, 10), ev.end_at ? ev.end_at.slice(0, 10) : null);
+      put(school, ev.title, ev.start_at.slice(0, 10), ev.end_at ? ev.end_at.slice(0, 10) : null, parseGradesFromText(ev.title));
     }
   }
 

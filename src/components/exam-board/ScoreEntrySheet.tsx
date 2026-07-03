@@ -75,6 +75,7 @@ export function ScoreEntrySheet({ open, onOpenChange, exam, rows, onSave }: {
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{exam.year}년 {examTitleLabel(exam)}</span>
             <Badge variant="secondary" className="ml-2 text-[11px]">시험 일정에서 자동 설정</Badge>
+            {exam.grades && <Badge variant="outline" className="ml-1 text-[11px]">대상 {exam.grades.join('·')}학년</Badge>}
             <span className="ml-2">시행 {dateLabel} · 내 학생 {rows.length}명</span>
           </p>
         </DialogHeader>
