@@ -44,6 +44,8 @@ interface ScheduleSlot {
   classroomName: string | null;
   isExamPrep?: boolean;
   examPrepStudentIds?: string[];
+  isSupplementary?: boolean;
+  supplementaryStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,7 +146,7 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const [schedRes, examRes] = await Promise.all([
+      const [schedRes, sessRes, suppRes] = await Promise.all([
         supabase
           .from('class_schedules')
           .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
@@ -152,15 +154,23 @@ export function TeacherAttendanceView() {
           .eq('day_of_week', dow)
           .eq('is_active', true)
           .order('start_time'),
+        // EXAM-PREP-ATT-V2: 내신특강 = exam_prep_sessions → exam_prep_courses → exam_prep_enrollments
         supabase
-          .from('exam_prep_schedules')
-          .select('id, student_id, subject, start_time, end_time')
-          .eq('teacher_id', teacherId)
+          .from('exam_prep_sessions')
+          .select('id, course_id, schedule_date, start_time, end_time')
           .eq('schedule_date', today),
+        // 오늘 잡힌 보충수업 (lesson_types 에 '보충수업' 포함 — class_id 유무 무관)
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, subject, notes, lesson_types, class_id')
+          .eq('teacher_id', teacherId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['보충수업']),
       ]);
 
       const schedules = schedRes.data || [];
-      const examPrep = examRes.data || [];
+      const sessions = sessRes.data || [];
+      const suppLessons = suppRes.data || [];
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
@@ -172,28 +182,78 @@ export function TeacherAttendanceView() {
         classroomName: s.classrooms?.name || null,
       }));
 
-      // Group exam prep schedules by start-end-subject into synthetic slots
-      const examGroups = new Map<string, { startTime: string; endTime: string; subject: string; studentIds: string[] }>();
-      examPrep.forEach((e: any) => {
-        const start = (e.start_time || '').slice(0, 5);
-        const end = (e.end_time || '').slice(0, 5);
-        const key = `${start}-${end}-${e.subject}`;
-        if (!examGroups.has(key)) examGroups.set(key, { startTime: start, endTime: end, subject: e.subject, studentIds: [] });
-        examGroups.get(key)!.studentIds.push(e.student_id);
+      // Build exam prep slots: filter sessions by courses owned by this teacher, then attach enrolled students
+      let examSlots: ScheduleSlot[] = [];
+      if (sessions.length > 0) {
+        const courseIds = [...new Set(sessions.map((s: any) => s.course_id))];
+        const { data: courses } = await supabase
+          .from('exam_prep_courses')
+          .select('id, teacher_id, subject, title')
+          .in('id', courseIds)
+          .eq('teacher_id', teacherId)
+          .is('deleted_at', null);
+        const myCourseIds = (courses || []).map((c: any) => c.id);
+        const courseMap = new Map((courses || []).map((c: any) => [c.id, c]));
+        if (myCourseIds.length > 0) {
+          const { data: enrollments } = await supabase
+            .from('exam_prep_enrollments')
+            .select('course_id, student_id')
+            .in('course_id', myCourseIds)
+            .neq('status', 'cancelled');
+          const enrollMap = new Map<string, string[]>();
+          (enrollments || []).forEach((e: any) => {
+            const arr = enrollMap.get(e.course_id) || [];
+            if (!arr.includes(e.student_id)) arr.push(e.student_id);
+            enrollMap.set(e.course_id, arr);
+          });
+          examSlots = sessions
+            .filter((s: any) => myCourseIds.includes(s.course_id))
+            .map((s: any) => {
+              const c: any = courseMap.get(s.course_id);
+              return {
+                id: `examprep-${s.id}`,
+                classId: '',
+                className: c?.title ? `시험특강·${c.title}` : '시험특강',
+                subject: c?.subject || '',
+                startTime: (s.start_time || '').slice(0, 5),
+                endTime: (s.end_time || '').slice(0, 5),
+                classroomName: null,
+                isExamPrep: true,
+                examPrepStudentIds: enrollMap.get(s.course_id) || [],
+              } as ScheduleSlot;
+            })
+            .filter(s => (s.examPrepStudentIds || []).length > 0);
+        }
+      }
+
+      // Group supplementary lessons by 시간 (parsed from notes "[보충 시간: HH:MM]") + subject
+      const parseSuppTime = (notes: string | null): string => {
+        if (!notes) return '미정';
+        const m = notes.match(/보충\s*시간\s*[:：]\s*([0-9]{1,2}[:：][0-9]{2}|미정)/);
+        return m ? m[1].replace('：', ':') : '미정';
+      };
+      const suppGroups = new Map<string, { time: string; subject: string; studentIds: string[] }>();
+      suppLessons.forEach((s: any) => {
+        if (!s.student_id) return;
+        const time = parseSuppTime(s.notes);
+        const subject = s.subject || '';
+        const key = `${time}-${subject}`;
+        if (!suppGroups.has(key)) suppGroups.set(key, { time, subject, studentIds: [] });
+        suppGroups.get(key)!.studentIds.push(s.student_id);
       });
-      const examSlots: ScheduleSlot[] = Array.from(examGroups.entries()).map(([k, g]) => ({
-        id: `examprep-${k}`,
+      const suppSlots: ScheduleSlot[] = Array.from(suppGroups.entries()).map(([k, g]) => ({
+        id: `supp-${k}`,
         classId: '',
-        className: '시험특강',
+        className: '보충수업',
         subject: g.subject,
-        startTime: g.startTime,
-        endTime: g.endTime,
+        startTime: g.time === '미정' ? '23:58' : g.time,
+        endTime: g.time === '미정' ? '23:59' : g.time,
         classroomName: null,
-        isExamPrep: true,
-        examPrepStudentIds: g.studentIds,
+        isSupplementary: true,
+        supplementaryStudentIds: g.studentIds,
       }));
 
-      const all = [...parsed, ...examSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const all = [...parsed, ...examSlots, ...suppSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
       if (all.length === 0) { setSlots([]); setLoading(false); return; }
       setSlots(all);
 
@@ -211,8 +271,9 @@ export function TeacherAttendanceView() {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && s.classId).map(s => s.classId))];
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && s.classId).map(s => s.classId))];
       const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
+      const suppIds = [...new Set(slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []))];
 
       let cs: { student_id: string; class_id: string }[] = [];
       if (classIds.length > 0) {
@@ -220,17 +281,28 @@ export function TeacherAttendanceView() {
         cs = data || [];
       }
 
-      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds])];
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds])];
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
         ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
         : Promise.resolve({ data: [] as any[] });
 
-      const [studentRes, logRes, lessonRes] = await Promise.all([
+      // 보충수업 출결 (class_id = NULL, 학생별로 별도 record)
+      const suppLessonQuery = suppIds.length > 0
+        ? supabase.from('lesson_records')
+            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .in('student_id', suppIds)
+            .eq('lesson_date', today)
+            .is('class_id', null)
+            .contains('lesson_types', ['보충수업'])
+        : Promise.resolve({ data: [] as any[] });
+
+      const [studentRes, logRes, lessonRes, suppLessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
         lessonQuery,
+        suppLessonQuery,
       ]);
 
       const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
@@ -251,6 +323,12 @@ export function TeacherAttendanceView() {
         });
       });
 
+      const suppLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      ((suppLessonRes as any).data ?? []).forEach((record: any) => {
+        if (!record.student_id) return;
+        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+      });
+
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
       (studentRes.data ?? []).forEach(s => {
         studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, baseStatus: (s as any).status ?? null });
@@ -260,14 +338,20 @@ export function TeacherAttendanceView() {
       slots.forEach(slot => {
         const slotStudentIds = slot.isExamPrep
           ? (slot.examPrepStudentIds || [])
-          : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+          : slot.isSupplementary
+            ? (slot.supplementaryStudentIds || [])
+            : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
         map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
             if (!student) return null;
 
             const log = logMap.get(sid);
-            const lesson = slot.isExamPrep ? null : lessonMap.get(`${sid}:${slot.classId}`);
+            const lesson = slot.isExamPrep
+              ? null
+              : slot.isSupplementary
+                ? (suppLessonMap.get(sid) || null)
+                : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
             const isEarly = attendance.includes('조기등원');
 
@@ -309,11 +393,13 @@ export function TeacherAttendanceView() {
     if (!teacherId) return;
     const ch = supabase.channel('teacher-att-shared')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchStudents().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchStudents().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_sessions' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_enrollments' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [teacherId, fetchStudents]);
+  }, [teacherId, fetchStudents, fetchSchedule]);
 
   const activeSlot = useMemo(() => slots.find(s => s.id === activeSlotId) || null, [slots, activeSlotId]);
   const activeStudents = activeSlotId ? (studentMap[activeSlotId] || []) : [];
@@ -523,16 +609,16 @@ export function TeacherAttendanceView() {
         ? existingLesson.lesson_range
         : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n');
 
-      const lessonPayload = { attendance_status: lessonAttendanceStatus, lesson_range: mergedRange, submitted: false };
+      const lessonPayload = { attendance_status: lessonAttendanceStatus, lesson_range: mergedRange, understanding_score: null, homework_status: 'none_assigned', submitted: true, submitted_at: nowIso };
       if (existingLesson) {
-        await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+        await supabase.from('lesson_records').update(lessonPayload as any).eq('id', existingLesson.id);
       } else {
         await supabase.from('lesson_records').insert({
           teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
           subject: activeSlot.subject as any, lesson_date: today,
           lesson_range: lessonRangeText, understanding_score: null,
           homework_status: 'none_assigned', learning_issues: [],
-          attendance_status: lessonAttendanceStatus, submitted: false,
+          attendance_status: lessonAttendanceStatus, submitted: true, submitted_at: nowIso,
         } as any);
       }
 

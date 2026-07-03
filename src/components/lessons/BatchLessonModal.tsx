@@ -27,12 +27,16 @@ import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRig
 
 // HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
 // per-item homework check UI looks/behaves the same as the individual lesson form.
+// HW-CHECK-OPTIONS-ALIGN-V2: keep the per-item check buttons identical to
+// RosterActionModal.HOMEWORK_RESULT_OPTIONS (dashboard 숙제 검사 모달) so the
+// teacher sees the same choices regardless of entry point.
 const HW_RESULT_BUTTON_OPTIONS = [
   { value: 'completed', label: '완료', icon: CheckCircle2 },
   { value: 'partial', label: '부분', icon: Clock },
   { value: 'not_done', label: '미완', icon: XCircle },
   { value: 'lost', label: '분실', icon: PackageX },
   { value: 'low_effort', label: '성의부족', icon: Frown },
+  { value: 'low_effort_completed', label: '성의부족+완료', icon: CheckCircle2 },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle },
 ];
 
@@ -558,13 +562,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               : understandingScore;
           }
         }
-        if (activeFields.has('homework_status')) {
-          const ext = (usePerStudentHomework && recordId)
-            ? (perStudentHomework[recordId] || homeworkStatus)
-            : homeworkStatus;
-          // lesson_records.homework_status is a constrained enum, so map extended value
-          p.homework_status = mapResultToStatus(ext);
-        }
+        // HW-CHECK-SOURCE-OF-TRUTH-V2: homework_status is now derived from explicit
+        // homework_assignments checks below. Do not write the draft's default
+        // 'none_assigned' just because the teacher opened the homework check section.
         if (activeFields.has('notes')) {
           const val = (usePerStudentMemo && recordId)
             ? (perStudentMemo[recordId] ?? notes)
@@ -1035,10 +1035,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
         // HW-NO-AUTO-CONFIRM-V1: Only write homework_status when the teacher explicitly toggled this field on.
         // Otherwise we would silently overwrite (and effectively confirm/reset) the existing status on every bulk draft save.
-        if (activeFields.has('homework_status')) {
-          const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
-          payload.homework_status = mapResultToStatus(hw);
-        }
+        // HW-CHECK-SOURCE-OF-TRUTH-V2: Do not overwrite lesson_records.homework_status
+        // from the bulk draft save path. Explicit per-item homework checks above are
+        // the only source that should update the homework check result.
 
         const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
         payload.lesson_types = types;

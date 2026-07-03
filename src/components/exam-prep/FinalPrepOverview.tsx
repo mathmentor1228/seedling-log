@@ -24,13 +24,14 @@ interface CourseView {
   sessions: Session[]; enrollments: Enrollment[];
 }
 
-type SortMode = 'teacher' | 'student' | 'school' | 'date';
+type SortMode = 'teacher' | 'student' | 'school' | 'date' | 'grade';
 
 interface FinalPrepEntry {
   courseId: string; courseTitle: string; subject: string;
   teacherId: string; teacherName: string; schoolName: string;
   session: Session; enrollment: Enrollment | undefined;
   studentId: string; studentName: string; studentSchool: string;
+  studentGradeYear: number | null; studentSchoolLevel: string | null;
   slotStart: string; slotEnd: string;
 }
 
@@ -44,7 +45,7 @@ interface GroupedScheduleEntry {
   teacherName: string; schoolName: string;
   session: Session;
   slotStart: string; slotEnd: string;
-  students: { id: string; name: string; school: string; status: string }[];
+  students: { id: string; name: string; school: string; status: string; gradeYear: number | null; schoolLevel: string | null }[];
 }
 
 function fmtDate(dateStr: string) {
@@ -82,6 +83,7 @@ export function FinalPrepOverview({
   teacherMap: Record<string, string>;
 }) {
   const [sortMode, setSortMode] = useState<SortMode>('teacher');
+  const [gradeFilter, setGradeFilter] = useState<string>('all'); // 'all' | grade label like '고1','중3'
 
   const finalPrepEntries = useMemo(() => {
     const entries: FinalPrepEntry[] = [];
@@ -127,6 +129,8 @@ export function FinalPrepOverview({
             studentId: sid,
             studentName: st?.name || '—',
             studentSchool: st?.school || '미지정',
+            studentGradeYear: st?.grade_year ?? null,
+            studentSchoolLevel: st?.school_level ?? null,
             slotStart: slotStart?.slice(0, 5) || '',
             slotEnd: slotEnd?.slice(0, 5) || '',
           });
@@ -152,20 +156,53 @@ export function FinalPrepOverview({
       map.get(key)!.students.push({
         id: e.studentId, name: e.studentName, school: e.studentSchool,
         status: e.enrollment?.status || 'pending',
+        gradeYear: e.studentGradeYear, schoolLevel: e.studentSchoolLevel,
       });
     }
     return Array.from(map.values());
   }, [finalPrepEntries]);
 
+  // Grade label helper (e.g. "고1", "중3"). Returns '미지정' if unknown.
+  const gradeLabelOf = (level: string | null, year: number | null) => {
+    if (!level && !year) return '미지정';
+    const lv = level === '초등' ? '초' : level === '중등' ? '중' : level === '고등' ? '고' : (level || '');
+    return `${lv}${year ?? ''}` || '미지정';
+  };
+
+  // Available grade options for filter chips
+  const availableGrades = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of groupedScheduleEntries) {
+      for (const st of e.students) set.add(gradeLabelOf(st.schoolLevel, st.gradeYear));
+    }
+    return [...set].sort();
+  }, [groupedScheduleEntries]);
+
+  // Apply grade filter (filters students inside each grouped entry; drops empty)
+  const filteredScheduleEntries = useMemo(() => {
+    if (gradeFilter === 'all') return groupedScheduleEntries;
+    return groupedScheduleEntries
+      .map(e => ({ ...e, students: e.students.filter(st => gradeLabelOf(st.schoolLevel, st.gradeYear) === gradeFilter) }))
+      .filter(e => e.students.length > 0);
+  }, [groupedScheduleEntries, gradeFilter]);
+
   // Group by sort mode
   const grouped = useMemo(() => {
     const map: Record<string, GroupedScheduleEntry[]> = {};
-    for (const e of groupedScheduleEntries) {
+    for (const e of filteredScheduleEntries) {
       let key: string;
       if (sortMode === 'date') key = e.session.schedule_date;
       else if (sortMode === 'teacher') key = e.teacherName;
       else if (sortMode === 'school') key = e.schoolName;
-      else {
+      else if (sortMode === 'grade') {
+        // grade mode: explode per student grade
+        for (const st of e.students) {
+          const k = gradeLabelOf(st.schoolLevel, st.gradeYear);
+          if (!map[k]) map[k] = [];
+          map[k].push({ ...e, students: [st] });
+        }
+        continue;
+      } else {
         // student mode: explode back per student
         for (const st of e.students) {
           const k = st.name;
@@ -190,7 +227,7 @@ export function FinalPrepOverview({
       });
     }
     return sorted;
-  }, [groupedScheduleEntries, sortMode]);
+  }, [filteredScheduleEntries, sortMode]);
 
   if (finalPrepEntries.length === 0) {
     return (
@@ -207,6 +244,7 @@ export function FinalPrepOverview({
     student: <Users className="w-3.5 h-3.5" />,
     school: <School className="w-3.5 h-3.5" />,
     date: <Calendar className="w-3.5 h-3.5" />,
+    grade: <Users className="w-3.5 h-3.5" />,
   };
   const sortIcon = SORT_ICONS[sortMode];
 
@@ -237,9 +275,33 @@ export function FinalPrepOverview({
             <SelectItem value="teacher">선생님별</SelectItem>
             <SelectItem value="student">학생별</SelectItem>
             <SelectItem value="school">학교별</SelectItem>
+            <SelectItem value="grade">학년별</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      {availableGrades.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground mr-1">학년 필터:</span>
+          <Badge
+            variant={gradeFilter === 'all' ? 'default' : 'outline'}
+            className="cursor-pointer text-[11px]"
+            onClick={() => setGradeFilter('all')}
+          >
+            전체
+          </Badge>
+          {availableGrades.map(g => (
+            <Badge
+              key={g}
+              variant={gradeFilter === g ? 'default' : 'outline'}
+              className="cursor-pointer text-[11px]"
+              onClick={() => setGradeFilter(g)}
+            >
+              {g}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-4">
         {grouped.map(([groupName, entries]) => (

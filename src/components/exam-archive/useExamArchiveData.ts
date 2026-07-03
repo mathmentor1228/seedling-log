@@ -65,6 +65,147 @@ function buildEventSchedule(event: any, schoolName: string): Schedule {
   };
 }
 
+function normalizeGradeYear(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const match = value.match(/[1-6]/);
+    return match ? Number(match[0]) : null;
+  }
+  return null;
+}
+
+function dateInRange(date: string | null, start: string | null, end: string | null) {
+  if (!date || !start) return false;
+  const rangeEnd = end || start;
+  return date >= start && date <= rangeEnd;
+}
+
+// Roman numeral conversion (I/II/III)
+function romanToInt(roman: string): number | null {
+  const map: Record<string, number> = { I: 1, II: 2, III: 3 };
+  return map[roman] ?? null;
+}
+
+// Infer grade from exam title (high-school course names)
+// e.g. "기말고사 - 공통영어1" → 1, "공통수학II" → 2
+function inferGradeFromTitle(title: string | null | undefined): number | null {
+  if (!title) return null;
+  const t = title.replace(/\s+/g, '');
+
+  // 공통XX1/2 or 공통XXI/II  (공통영어, 공통수학, 공통국어, 공통사회, 공통과학 등)
+  const commonMatch = t.match(/공통[가-힣]+(III|II|I|[1-3])/);
+  if (commonMatch) {
+    const token = commonMatch[1];
+    if (/^[1-3]$/.test(token)) return Number(token);
+    const r = romanToInt(token);
+    if (r) return r;
+  }
+
+  // 영어I/II, 수학I/II → 2학년/3학년
+  const upperMatch = t.match(/(?:^|[^가-힣])(영어|수학|국어)(III|II|I)(?:$|[^가-힣A-Za-z])/);
+  if (upperMatch) {
+    const r = romanToInt(upperMatch[2]);
+    if (r) return r + 1; // 영어I = 고2
+  }
+
+  return null;
+}
+
+const ROMAN_SUFFIX_MAP: Record<string, string> = { I: '1', II: '2', III: '3', Ⅰ: '1', Ⅱ: '2', Ⅲ: '3' };
+
+function normalizeCourseName(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .trim()
+    .replace(/[ⅠⅡⅢ]/g, (token) => ROMAN_SUFFIX_MAP[token] || token)
+    .replace(/\s+/g, '')
+    .replace(/[·ㆍ∙・.]/g, '')
+    .replace(/(III|II|I)$/i, (token) => ROMAN_SUFFIX_MAP[token.toUpperCase()] || token)
+    .toLowerCase();
+}
+
+function getScheduleCourseCandidates(schedule: Schedule): string[] {
+  const candidates = new Set<string>();
+  const add = (value: string | null | undefined) => {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    candidates.add(trimmed);
+    trimmed
+      .split(/[/,，]|\s+및\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => candidates.add(part));
+  };
+
+  add(schedule.subject);
+  add(schedule.title);
+  schedule.title
+    ?.split(/[-–—:：]/)
+    .slice(1)
+    .forEach(add);
+
+  return Array.from(candidates);
+}
+
+function inferGradeFromTextbooks(schedule: Schedule, textbooks: Textbook[]): number | null | undefined {
+  const candidates = getScheduleCourseCandidates(schedule)
+    .map(normalizeCourseName)
+    .filter(Boolean);
+  if (candidates.length === 0) return undefined;
+
+  const candidateSet = new Set(candidates);
+  const grades = new Set<number>();
+
+  for (const textbook of textbooks) {
+    if (textbook.school_name !== schedule.school_name) continue;
+    const grade = normalizeGradeYear(textbook.grade);
+    if (!grade) continue;
+    const textbookNames = [textbook.course_name, textbook.textbook_name]
+      .map(normalizeCourseName)
+      .filter(Boolean);
+    if (textbookNames.some((name) => candidateSet.has(name))) {
+      grades.add(grade);
+    }
+  }
+
+  if (grades.size === 1) return Array.from(grades)[0];
+  if (grades.size > 1) return null;
+  return undefined;
+}
+
+function inferScheduleGrade(schedule: Schedule, archives: any[], students: any[], textbooks: Textbook[]): number | null {
+  // School-specific course/textbook catalog is the authority: e.g. 선부고 영어1=2학년, 공통영어1=1학년.
+  const fromTextbooks = inferGradeFromTextbooks(schedule, textbooks);
+  if (fromTextbooks !== undefined) return fromTextbooks;
+
+  const existing = normalizeGradeYear(schedule.grade);
+  if (existing) return existing;
+
+  // Title-based inference takes priority (most reliable for high-school courses)
+  const fromTitle = inferGradeFromTitle(schedule.title);
+  if (fromTitle) return fromTitle;
+
+  const archiveGrades = new Set<number>();
+  for (const archive of archives) {
+    if (archive.school_name !== schedule.school_name) continue;
+    if (!dateInRange(schedule.start_date, archive.exam_date_start || null, archive.exam_date_end || null)) continue;
+    const grade = normalizeGradeYear(archive.grade_year);
+    if (grade) archiveGrades.add(grade);
+  }
+  if (archiveGrades.size === 1) return Array.from(archiveGrades)[0];
+
+  const activeStudentGrades = new Set<number>();
+  for (const student of students) {
+    if (student.school !== schedule.school_name) continue;
+    const grade = normalizeGradeYear(student.grade_year ?? student.grade);
+    if (grade) activeStudentGrades.add(grade);
+  }
+  if (activeStudentGrades.size === 1) return Array.from(activeStudentGrades)[0];
+
+  return null;
+}
+
 const RECENT_PAST_EXAM_DAYS = 120;
 
 export function useExamArchiveData() {
@@ -84,7 +225,7 @@ export function useExamArchiveData() {
       supabase.from('school_textbooks').select('*').order('grade'),
       supabase.from('school_files').select('*').order('created_at', { ascending: false }),
       supabase.from('school_exam_archives').select('*').order('updated_at', { ascending: false }),
-      supabase.from('students').select('id, school').in('enrollment_status', ['재학', '재등원']),
+      supabase.from('students').select('id, school, grade, school_level, grade_year').in('enrollment_status', ['재학', '재등원']),
       supabase.from('academy_events').select('id, title, start_at, end_at, category').eq('category', 'exam').order('start_at', { ascending: true }),
     ]);
 
@@ -126,7 +267,12 @@ export function useExamArchiveData() {
           schedule,
         ])
       ).values()
-    ).sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
+    )
+      .map((schedule) => ({
+        ...schedule,
+        grade: inferScheduleGrade(schedule, allArchives, students, allTextbooks),
+      }))
+      .sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
 
     setSchedules(mergedSchedules);
     setTextbooks(allTextbooks);
@@ -199,8 +345,8 @@ export function useExamArchiveData() {
       });
 
     setSchools(schoolInfos);
-    if (!selectedSchool && schoolInfos.length > 0) {
-      setSelectedSchool(schoolInfos[0].name);
+    if (!selectedSchool) {
+      setSelectedSchool('__hub__');
     }
     } catch (err) {
       console.error('useExamArchiveData fetchAll error:', err);

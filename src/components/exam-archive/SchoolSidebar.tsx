@@ -6,9 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { Plus, Search, School, Users, CalendarClock } from 'lucide-react';
+import { Plus, Search, School, Users, CalendarClock, LayoutDashboard } from 'lucide-react';
 import type { SchoolInfo } from './types';
 import { SCHOOL_LEVEL_LABELS } from './types';
+
+export const HUB_SENTINEL = '__hub__';
 
 interface Props {
   schools: SchoolInfo[];
@@ -82,6 +84,22 @@ export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSc
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div
+          onClick={() => onSelectSchool(HUB_SENTINEL)}
+          className={cn(
+            "rounded-lg p-3 cursor-pointer transition-all border-2",
+            selectedSchool === HUB_SENTINEL
+              ? "bg-primary/15 border-primary/40 shadow-sm"
+              : "hover:bg-muted/60 border-transparent bg-gradient-to-br from-primary/5 to-transparent"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <LayoutDashboard className={cn("w-4 h-4 shrink-0", selectedSchool === HUB_SENTINEL ? "text-primary" : "text-primary/70")} />
+            <span className={cn("font-bold text-sm", selectedSchool === HUB_SENTINEL && "text-primary")}>통합 허브</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground ml-6 mt-0.5">자료 업로드 · 전체 캘린더</p>
+        </div>
+        <div className="h-px bg-border my-2" />
         {filtered.map(school => {
           const isSelected = selectedSchool === school.name;
           const ddayInfo = school.nextExam ? getDdayDisplay(school.nextExam.daysLeft) : null;

@@ -14,7 +14,8 @@ import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from './useTeachersList';
 import { fetchStudentsByIds, fetchTeacherStudentIds, groupStudentsByGrade, getStudentGroupLabel } from './studentSelection';
 import { getTodayKST } from '@/lib/utils';
-import { User, Users, Search, Loader2, CheckCircle2, UserCheck } from 'lucide-react';
+import { User, Users, Search, Loader2, CheckCircle2, UserCheck, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
@@ -39,6 +40,7 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
   const { toast } = useToast();
   const isAssistant = checkIsAssistant(role);
   const { teachers } = useTeachersList();
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState<'choose' | 'batch'>('choose');
   const [teacherId, setTeacherId] = useState('');
@@ -177,6 +179,17 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
             <DialogTitle className="text-base">수업기록 생성 방식</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-3 py-2">
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"
+              onClick={() => { onOpenChange(false); navigate('/lessons/quick'); }}
+            >
+              <Zap className="w-6 h-6 text-primary" />
+              <div className="text-center">
+                <p className="font-semibold text-sm">⚡ 빠른 입력 (추천)</p>
+                <p className="text-xs text-muted-foreground">공통란 1회 + 학생별 평가를 한 화면에서</p>
+              </div>
+            </Button>
             <Button
               variant="outline"
               className="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"

@@ -832,24 +832,28 @@ export function LessonRecordForm({
     try {
       let recordId = existingRecordId;
 
-      // PREFILL-FIX-V5: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
-      // This prevents reusing a previous draft and ensures prefill runs correctly
-      if (!forceNewRecord && !recordId && initialContext?.student_id && initialContext?.class_id) {
-        const { data: existing } = await supabase
-          .from('lesson_records')
-          .select('id')
-          .eq('student_id', initialContext.student_id)
-          .eq('class_id', initialContext.class_id)
-          .eq('lesson_date', initialContext.lesson_date || getTodayKST())
-          .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType)
-          .maybeSingle();
-
-        if (existing) {
-          recordId = existing.id;
-          console.log('[PREFILL-FIX-V5] Found existing record for context:', existing.id);
+      // PREFILL-FIX-V6: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
+      // For exam prep / supplementary, initialContext.class_id may be '' — still look up by null class_id.
+      if (!forceNewRecord && !recordId && initialContext?.student_id) {
+        const hasClassId = !!initialContext.class_id;
+        const lookupTypes = initialContext.lesson_types || [];
+        const isExamPrepOrSupp = lookupTypes.includes('시험특강') || lookupTypes.includes('보충수업');
+        if (hasClassId || isExamPrepOrSupp) {
+          let q = supabase
+            .from('lesson_records')
+            .select('id')
+            .eq('student_id', initialContext.student_id)
+            .eq('lesson_date', initialContext.lesson_date || getTodayKST())
+            .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType);
+          q = hasClassId ? q.eq('class_id', initialContext.class_id) : q.is('class_id', null);
+          const { data: existing } = await q.maybeSingle();
+          if (existing) {
+            recordId = existing.id;
+            console.log('[PREFILL-FIX-V6] Found existing record for context:', existing.id);
+          }
         }
       } else if (forceNewRecord) {
-        console.log('[PREFILL-FIX-V5] forceNewRecord=true, skipping DB lookup for existing drafts');
+        console.log('[PREFILL-FIX-V6] forceNewRecord=true, skipping DB lookup for existing drafts');
       }
 
       if (recordId) {
@@ -1377,16 +1381,19 @@ export function LessonRecordForm({
           .eq('id', draftId);
         if (error) throw error;
       } else {
-        // DRAFT-OVERWRITE-V1: Check for existing record with same student+class+date+subject before inserting
-        const { data: existingRecord } = await supabase
+        // DRAFT-OVERWRITE-V2: Check for existing record with same student+class+date+subject before inserting
+        // Use .is() for null class_id (exam prep / supplementary) since .eq() never matches NULL
+        let existingQuery = supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', payload.student_id)
-          .eq('class_id', payload.class_id)
           .eq('lesson_date', payload.lesson_date)
           .eq('subject', payload.subject)
-          .eq('submitted', false)
-          .maybeSingle();
+          .eq('submitted', false);
+        existingQuery = payload.class_id === null
+          ? existingQuery.is('class_id', null)
+          : existingQuery.eq('class_id', payload.class_id);
+        const { data: existingRecord } = await existingQuery.maybeSingle();
 
         if (existingRecord) {
           // Overwrite existing draft with latest data
@@ -2749,6 +2756,7 @@ export function LessonRecordForm({
                 <SelectItem value="__none__">선택 안함</SelectItem>
                 <SelectItem value="은서조교">은서조교</SelectItem>
                 <SelectItem value="유빈조교">유빈조교</SelectItem>
+                <SelectItem value="최수린조교">최수린조교</SelectItem>
               </SelectContent>
             </Select>
           </div>

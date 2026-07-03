@@ -263,20 +263,40 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
             ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>날짜</TableHead><TableHead>과목</TableHead><TableHead>내용</TableHead><TableHead>이해도</TableHead><TableHead>숙제</TableHead>
+                  <TableHead>날짜</TableHead><TableHead>과목</TableHead><TableHead>구분</TableHead><TableHead>내용</TableHead><TableHead>이해도</TableHead><TableHead>숙제</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {thisMonthLessons.map((l: any) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="text-xs">{l.lesson_date?.slice(5)}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-[10px]">{l.subject}</Badge></TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate">{l.lesson_range}</TableCell>
-                      <TableCell className="text-xs">{l.understanding_score ?? '-'}/5</TableCell>
-                      <TableCell className="text-xs">
-                        {l.homework_status === 'completed' ? '✅' : l.homework_status === 'partial' ? '⚠️' : l.homework_status === 'not_done' ? '❌' : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {thisMonthLessons.map((l: any) => {
+                    const types: string[] = Array.isArray(l.lesson_types) ? l.lesson_types : [];
+                    const typeColor = (t: string) =>
+                      t === '보충수업' ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
+                      : t === '시험특강' ? 'bg-purple-500/15 text-purple-600 border-purple-500/30'
+                      : t === '방학특강' ? 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30'
+                      : t === '테스트' ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                      : t === '휴강' ? 'bg-rose-500/15 text-rose-600 border-rose-500/30'
+                      : 'bg-muted text-muted-foreground border-border';
+                    return (
+                      <TableRow key={l.id}>
+                        <TableCell className="text-xs">{l.lesson_date?.slice(5)}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-[10px]">{l.subject}</Badge></TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {types.filter(t => t !== '정규수업').map(t => (
+                              <Badge key={t} className={`text-[10px] h-4 px-1 ${typeColor(t)}`}>{t}</Badge>
+                            ))}
+                            {types.length === 0 || (types.length === 1 && types[0] === '정규수업') ? (
+                              <span className="text-[10px] text-muted-foreground">정규</span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[200px] truncate">{l.lesson_range}</TableCell>
+                        <TableCell className="text-xs">{l.understanding_score ?? '-'}/5</TableCell>
+                        <TableCell className="text-xs">
+                          {l.homework_status === 'completed' ? '✅' : l.homework_status === 'partial' ? '⚠️' : l.homework_status === 'not_done' ? '❌' : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

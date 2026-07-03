@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer, DoorOpen, LogIn, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentGrade } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
@@ -75,7 +75,7 @@ interface ScheduleRow {
   endTime: string;
   teacherId: string;
   teacherName: string;
-  students: { id: string; name: string }[];
+  students: { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[];
   groupNames?: string[];
   classroomId?: string | null;
   classroomName?: string;
@@ -89,6 +89,9 @@ interface Teacher {
 interface Student {
   id: string;
   name: string;
+  grade?: string | null;
+  school_level?: string | null;
+  grade_year?: number | null;
 }
 
 interface StudentScheduleRow {
@@ -101,11 +104,12 @@ interface StudentScheduleRow {
 }
 
 export function Timetable() {
-  const { user, role } = useAuth();
+  const { user, role, assignedSubject } = useAuth();
   const { toast } = useToast();
   const isAdminUser = isAdmin(role);
   const isAssistantUser = isAssistant(role);
   const canViewAllStudents = isAdminUser || isAssistantUser;
+  const subjectLock = (role === 'assistant' && assignedSubject) ? assignedSubject : null;
 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
   const [examPrepRows, setExamPrepRows] = useState<ScheduleRow[]>([]);
@@ -185,8 +189,12 @@ export function Timetable() {
         scheduleQuery = scheduleQuery.eq('teacher_id', user.id);
       }
 
-      const { data: schedulesData, error: schedError } = await scheduleQuery;
+      const { data: schedulesDataRaw, error: schedError } = await scheduleQuery;
       if (schedError) throw schedError;
+      // Assistants assigned to a subject only see that subject
+      const schedulesData = subjectLock
+        ? (schedulesDataRaw || []).filter((s: any) => s.classes?.subject === subjectLock)
+        : schedulesDataRaw;
 
       const teacherIds = new Set<string>();
       const classIds = new Set<string>();
@@ -210,7 +218,7 @@ export function Timetable() {
         }
       }
 
-      let studentsByClass: Record<string, { id: string; name: string }[]> = {};
+      let studentsByClass: Record<string, { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[]> = {};
       if (classIds.size > 0) {
         const { data: classStudents } = await supabase
           .from('class_students')
@@ -221,19 +229,22 @@ export function Timetable() {
           const studentIds = [...new Set(classStudents.map((cs) => cs.student_id))];
           const { data: studentsData } = await supabase
             .from('students')
-            .select('id, name')
+            .select('id, name, grade, school_level, grade_year')
             .in('id', studentIds)
             .neq('enrollment_status', '퇴원');
 
-          const studentMap: Record<string, string> = {};
-          (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
+          const studentMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
+          (studentsData || []).forEach((s) => { studentMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year }; });
 
           classStudents.forEach((cs) => {
             if (!studentMap[cs.student_id]) return;
             if (!studentsByClass[cs.class_id]) studentsByClass[cs.class_id] = [];
             studentsByClass[cs.class_id].push({
               id: cs.student_id,
-              name: studentMap[cs.student_id],
+              name: studentMap[cs.student_id].name,
+              grade: studentMap[cs.student_id].grade,
+              school_level: studentMap[cs.student_id].school_level,
+              grade_year: studentMap[cs.student_id].grade_year,
             });
           });
 
@@ -340,7 +351,8 @@ export function Timetable() {
         .from('exam_prep_courses')
         .select('id, subject, teacher_id, title, school_name')
         .is('deleted_at', null);
-      const { data: courses } = await courseQuery;
+      const { data: coursesRaw } = await courseQuery;
+      const courses = subjectLock ? (coursesRaw || []).filter((c: any) => c.subject === subjectLock) : coursesRaw;
       if (!courses || courses.length === 0) { setExamPrepRows([]); return; }
 
       // Fetch teacher names for exam prep courses that might not be in teacherMap
@@ -387,10 +399,10 @@ export function Timetable() {
       const slotStudentIds = relevantSlotStudents.map((ss: any) => ss.student_id);
       const enrolledStudentIds = enrollments.map((e: any) => e.student_id);
       const allStudentIds = [...new Set([...slotStudentIds, ...enrolledStudentIds])];
-      let studentNameMap: Record<string, string> = {};
+      let studentNameMap: Record<string, { name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }> = {};
       if (allStudentIds.length > 0) {
-        const { data: studData } = await supabase.from('students').select('id, name').in('id', allStudentIds).neq('enrollment_status', '퇴원');
-        (studData || []).forEach((s: any) => { studentNameMap[s.id] = s.name; });
+        const { data: studData } = await supabase.from('students').select('id, name, grade, school_level, grade_year').in('id', allStudentIds).neq('enrollment_status', '퇴원');
+        (studData || []).forEach((s: any) => { studentNameMap[s.id] = { name: s.name, grade: s.grade, school_level: s.school_level, grade_year: s.grade_year }; });
       }
 
       // Build exam prep schedule rows grouped by date
@@ -416,10 +428,16 @@ export function Timetable() {
               endTime: slot.end_time,
               teacherId: course.teacher_id,
               teacherName: teacherMap[course.teacher_id] || '미배정',
-              students: slotStuds.map((ss: any) => ({
-                id: ss.student_id,
-                name: studentNameMap[ss.student_id] || '—',
-              })),
+              students: slotStuds.map((ss: any) => {
+                const info = studentNameMap[ss.student_id];
+                return {
+                  id: ss.student_id,
+                  name: info?.name || '—',
+                  grade: info?.grade,
+                  school_level: info?.school_level,
+                  grade_year: info?.grade_year,
+                };
+              }),
             });
           }
         } else {
@@ -427,7 +445,10 @@ export function Timetable() {
           const enrolledIds = enrollmentMap[course.id] || [];
           const sessionStudents = enrolledIds
             .filter(sid => studentNameMap[sid])
-            .map(sid => ({ id: sid, name: studentNameMap[sid] }));
+            .map(sid => {
+              const info = studentNameMap[sid];
+              return { id: sid, name: info.name, grade: info.grade, school_level: info.school_level, grade_year: info.grade_year };
+            });
 
           if (sessionStudents.length > 0) {
             examRows.push({
@@ -577,7 +598,7 @@ export function Timetable() {
     setStudentsLoading(true);
     try {
       const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
-      let query = supabase.from('students').select('id, name', { count: 'exact' }).neq('enrollment_status', '퇴원');
+      let query = supabase.from('students').select('id, name, grade, school_level, grade_year', { count: 'exact' }).neq('enrollment_status', '퇴원');
       if (studentSearchQuery.trim()) {
         query = query.ilike('name', `%${studentSearchQuery.trim()}%`);
       }
@@ -863,11 +884,17 @@ export function Timetable() {
       {row.students.length > 0 && (
         <div className="flex flex-wrap gap-1 items-center">
           <Users className="w-3 h-3 text-muted-foreground shrink-0" />
-          {row.students.map((s) => (
-            <span key={s.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">
-              {s.name}
-            </span>
-          ))}
+          {row.students.map((s) => {
+            const gradeLabel = formatStudentGrade(s);
+            return (
+              <span key={s.id} className="text-xs bg-muted px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                {s.name}
+                {gradeLabel && (
+                  <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                )}
+              </span>
+            );
+          })}
           <button
             onClick={(e) => { e.stopPropagation(); handleCopy(row.students.map((s) => s.name).join(', '), row.classId + row.dayOfWeek); }}
             className="ml-1 text-muted-foreground hover:text-foreground"
@@ -1452,9 +1479,19 @@ export function Timetable() {
                     <SelectValue placeholder={studentsLoading ? '로딩중...' : '학생 선택'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
+                    {students.map((s) => {
+                      const gradeLabel = formatStudentGrade(s);
+                      return (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="inline-flex items-center gap-1">
+                            {s.name}
+                            {gradeLabel && (
+                              <span className="text-[10px] text-muted-foreground">({gradeLabel})</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

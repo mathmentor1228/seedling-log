@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import {
-  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight,
+  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight, Calculator, Check,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell,
@@ -41,6 +41,8 @@ interface TeacherRevenueRow {
   student_count: number;
   prev_revenue: number;
   prev_student_count: number;
+  student_ids: string[];
+  prev_student_ids: string[];
   salary: number;
   profit: number;
   margin: number;
@@ -88,13 +90,73 @@ function monthRange(m: string) {
 
 const UNASSIGNED = '__unassigned__';
 
+const MULTI_SUBJECT_DISCOUNT: Record<number, number> = {
+  1: 0,
+  2: 50000,
+  3: 80000,
+  4: 100000,
+};
+const SIBLING_DISCOUNT = 10000;
+
+// Compute effective per-course fee after multi-subject + sibling discounts.
+// Returns { feeByCourseId, discountByStudentId }
+function computeEffectiveFees(
+  courses: any[],
+  siblingCountByGroup: Map<number, number>,
+  siblingGroupByStudent: Map<string, number | null>,
+) {
+  const feeByCourse = new Map<string, number>();
+  const discountByStudent = new Map<string, { gross: number; discount: number; subjects: number; sibling: boolean; hasCustom: boolean }>();
+
+  // group active courses by student
+  const byStudent = new Map<string, any[]>();
+  for (const c of courses) {
+    const status = c.students?.enrollment_status;
+    if (status !== '재학' && status !== '재등원') continue;
+    if (!byStudent.has(c.student_id)) byStudent.set(c.student_id, []);
+    byStudent.get(c.student_id)!.push(c);
+  }
+
+  for (const [sid, list] of byStudent.entries()) {
+    const subjects = new Set<string>();
+    let gross = 0;
+    let hasCustom = false;
+    for (const c of list) {
+      const subj = c.course_policies?.subject;
+      if (subj) subjects.add(subj);
+      const policyFee = Number(c.course_policies?.monthly_fee ?? 0);
+      const customFee = c.custom_monthly_fee == null ? null : Number(c.custom_monthly_fee);
+      if (customFee != null) hasCustom = true;
+      gross += customFee != null ? customFee : policyFee;
+    }
+    const groupId = siblingGroupByStudent.get(sid) ?? null;
+    const sibCount = groupId != null ? (siblingCountByGroup.get(groupId) || 0) : 0;
+    const subjectCount = subjects.size;
+    const multi = hasCustom ? 0 : (MULTI_SUBJECT_DISCOUNT[Math.min(subjectCount, 4)] ?? (subjectCount > 4 ? 100000 : 0));
+    const sib = hasCustom ? 0 : (sibCount > 1 ? SIBLING_DISCOUNT : 0);
+    const discount = multi + sib;
+
+    discountByStudent.set(sid, { gross, discount, subjects: subjectCount, sibling: sibCount > 1, hasCustom });
+
+    // scale each course's fee pro-rata
+    const ratio = gross > 0 ? Math.max(0, (gross - discount)) / gross : 1;
+    for (const c of list) {
+      const policyFee = Number(c.course_policies?.monthly_fee ?? 0);
+      const customFee = c.custom_monthly_fee == null ? null : Number(c.custom_monthly_fee);
+      const raw = customFee != null ? customFee : policyFee;
+      feeByCourse.set(c.id, raw * ratio);
+    }
+  }
+  return { feeByCourse, discountByStudent };
+}
+
 // Compute per-teacher revenue + per-student contributions for one month.
-// Returns Map<teacher_id, { revenue, students:Set, contribs:StudentContrib[] }>
 function computeAttribution(
   courses: any[],
   subjectTeachers: any[],
   lessons: any[],
   studentNameMap: Map<string, { name: string; grade: string | null }>,
+  feeByCourse: Map<string, number>,
 ) {
   const result = new Map<
     string,
@@ -124,7 +186,9 @@ function computeAttribution(
   for (const c of courses) {
     const status = c.students?.enrollment_status;
     if (status !== '재학' && status !== '재등원') continue;
-    const fee = Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
+    const fee = feeByCourse.has(c.id)
+      ? feeByCourse.get(c.id)!
+      : Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
     if (fee <= 0) continue;
     const subject = c.course_policies?.subject || '';
     const key = subject ? `${c.student_id}::${subject}` : '';
@@ -176,6 +240,7 @@ function computeAttribution(
   return result;
 }
 
+
 export default function TeacherRevenueSection() {
   const { toast } = useToast();
   const months = useMemo(() => getMonthOptions(), []);
@@ -187,6 +252,7 @@ export default function TeacherRevenueSection() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [newStudents, setNewStudents] = useState<MovementStudent[]>([]);
   const [withdrawnStudents, setWithdrawnStudents] = useState<MovementStudent[]>([]);
+  const [targetMargin, setTargetMargin] = useState<string>('30');
 
   const fetchData = async () => {
     setLoading(true);
@@ -232,12 +298,24 @@ export default function TeacherRevenueSection() {
           .lt('lesson_date', prevEnd) as any,
         supabase
           .from('students')
-          .select('id, name, grade, enrollment_status, registration_date, updated_at') as any,
+          .select('id, name, grade, enrollment_status, registration_date, updated_at, sibling_group_id') as any,
       ]);
 
       const studentNameMap = new Map<string, { name: string; grade: string | null }>();
-      (studentsAll || []).forEach((s: any) =>
-        studentNameMap.set(s.id, { name: s.name, grade: s.grade }),
+      const siblingGroupByStudent = new Map<string, number | null>();
+      const siblingCountByGroup = new Map<number, number>();
+      (studentsAll || []).forEach((s: any) => {
+        studentNameMap.set(s.id, { name: s.name, grade: s.grade });
+        siblingGroupByStudent.set(s.id, s.sibling_group_id ?? null);
+        if (s.sibling_group_id != null && s.enrollment_status !== '퇴원') {
+          siblingCountByGroup.set(s.sibling_group_id, (siblingCountByGroup.get(s.sibling_group_id) || 0) + 1);
+        }
+      });
+
+      const { feeByCourse } = computeEffectiveFees(
+        (courses || []) as any[],
+        siblingCountByGroup,
+        siblingGroupByStudent,
       );
 
       const curAttrib = computeAttribution(
@@ -245,13 +323,16 @@ export default function TeacherRevenueSection() {
         (subjectTeachers || []) as any[],
         (lessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
       const prevAttrib = computeAttribution(
         (courses || []) as any[],
         (subjectTeachers || []) as any[],
         (prevLessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
+
 
       const teacherNameMap = new Map<string, string>();
       (profiles || []).forEach((p: any) => teacherNameMap.set(p.id, p.full_name || '이름없음'));
@@ -291,6 +372,8 @@ export default function TeacherRevenueSection() {
             student_count: cur?.students.size || 0,
             prev_revenue: prev?.revenue || 0,
             prev_student_count: prev?.students.size || 0,
+            student_ids: cur ? Array.from(cur.students) : [],
+            prev_student_ids: prev ? Array.from(prev.students) : [],
             salary,
             profit,
             margin,
@@ -358,8 +441,15 @@ export default function TeacherRevenueSection() {
     const salary = rows.reduce((a, r) => a + r.salary, 0);
     const profit = revenue - salary;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
-    const studentTotal = rows.reduce((a, r) => a + r.student_count, 0);
-    const prevStudentTotal = rows.reduce((a, r) => a + r.prev_student_count, 0);
+    // Dedupe across teachers: a student taking multiple subjects from different teachers counts once.
+    const curSet = new Set<string>();
+    const prevSet = new Set<string>();
+    rows.forEach((r) => {
+      r.student_ids.forEach((id) => curSet.add(id));
+      r.prev_student_ids.forEach((id) => prevSet.add(id));
+    });
+    const studentTotal = curSet.size;
+    const prevStudentTotal = prevSet.size;
     return { revenue, prevRevenue, salary, profit, margin, studentTotal, prevStudentTotal };
   }, [rows]);
 
@@ -388,7 +478,7 @@ export default function TeacherRevenueSection() {
               선생님별 매출 · 인원 · 급여
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              매출은 그 달 제출된 수업일지의 (학생·과목) 실제 수업 횟수 비율로 분배됩니다. 전월 비교는 같은 방식으로 계산.
+              매출은 다과목 할인(2과목 -5만 / 3과목 -8만 / 4과목 -10만)과 형제 할인(인당 -1만)을 학생별로 반영한 뒤, 수업일지의 실제 수업 횟수 비율로 선생님에게 분배됩니다.
             </p>
           </div>
           <Select value={month} onValueChange={setMonth}>
@@ -515,8 +605,59 @@ export default function TeacherRevenueSection() {
 
       {/* Per-teacher table with expandable per-student breakdown */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 space-y-3">
           <CardTitle className="text-sm">선생님 상세 (▶ 클릭 시 학생별 수강료 표시)</CardTitle>
+          {!loading && rows.length > 0 && (() => {
+            const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+            const totalRecommended = rows.reduce(
+              (a, r) => a + Math.max(0, Math.round(r.revenue * (1 - m / 100))),
+              0,
+            );
+            const totalDiff = totalRecommended - totals.salary;
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-primary">
+                  <Calculator className="w-4 h-4" />
+                  목표 마진율
+                </div>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={targetMargin}
+                    onChange={(e) => setTargetMargin(e.target.value)}
+                    className="h-8 w-20 text-right font-mono"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  → 추천 총 급여{' '}
+                  <span className="font-mono font-semibold text-foreground">{wonFmt(totalRecommended)}</span>
+                  {totals.salary > 0 && (
+                    <span className={`ml-2 ${totalDiff < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                      (현재 대비 {totalDiff >= 0 ? '+' : ''}{wonFmt(totalDiff)})
+                    </span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 ml-auto"
+                  onClick={() => {
+                    const next: Record<string, string> = { ...salaryDraft };
+                    rows.forEach((r) => {
+                      next[r.teacher_id] = String(Math.max(0, Math.round(r.revenue * (1 - m / 100))));
+                    });
+                    setSalaryDraft(next);
+                    toast({ title: `목표 마진 ${m}% 기준 추천 급여를 입력란에 반영했습니다`, description: '각 행의 저장 버튼을 눌러 확정하세요.' });
+                  }}
+                >
+                  전체 입력란에 반영
+                </Button>
+              </div>
+            );
+          })()}
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -532,6 +673,7 @@ export default function TeacherRevenueSection() {
                     <TableHead className="text-center">전월 대비</TableHead>
                     <TableHead className="text-right">매출</TableHead>
                     <TableHead className="w-44">급여 (원)</TableHead>
+                    <TableHead className="text-right">추천 급여</TableHead>
                     <TableHead className="text-right">차액</TableHead>
                     <TableHead className="text-right">마진</TableHead>
                   </TableRow>
@@ -539,7 +681,7 @@ export default function TeacherRevenueSection() {
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         해당 월 매출 데이터가 없습니다
                       </TableCell>
                     </TableRow>
@@ -592,6 +734,37 @@ export default function TeacherRevenueSection() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-mono">
+                              {(() => {
+                                const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+                                const rec = Math.max(0, Math.round(r.revenue * (1 - m / 100)));
+                                const diff = rec - r.salary;
+                                return (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <div className="text-right">
+                                      <div className="text-xs">{wonFmt(rec)}</div>
+                                      {r.salary > 0 && (
+                                        <div className={`text-[10px] font-sans ${diff < 0 ? 'text-destructive' : diff > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                          {diff === 0 ? '±0' : (diff > 0 ? '+' : '') + shortWon(Math.abs(diff))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      title="이 추천 급여를 입력란에 반영"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSalaryDraft({ ...salaryDraft, [r.teacher_id]: String(rec) });
+                                      }}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
                               <span className={r.profit < 0 ? 'text-destructive' : 'text-emerald-600'}>
                                 {r.profit >= 0 ? '+' : ''}{wonFmt(r.profit)}
                               </span>
@@ -605,7 +778,7 @@ export default function TeacherRevenueSection() {
                           {isOpen && (
                             <TableRow key={r.teacher_id + '_detail'} className="bg-muted/20 hover:bg-muted/20">
                               <TableCell></TableCell>
-                              <TableCell colSpan={7} className="py-3">
+                              <TableCell colSpan={8} className="py-3">
                                 {r.contribs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground">담당 학생 수강료 데이터가 없습니다.</p>
                                 ) : (

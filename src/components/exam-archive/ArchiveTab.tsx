@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { TeacherExamNotes, type TeacherNote } from './TeacherExamNotes';
 
 interface Props {
   schoolName: string;
@@ -282,6 +283,14 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
                       {s.label}
                     </button>
                   ))}
+                </div>
+
+                <div className="pt-2 border-t">
+                  <TeacherExamNotes
+                    archiveId={a.id}
+                    notes={Array.isArray(a.teacher_notes) ? (a.teacher_notes as TeacherNote[]) : []}
+                    onChange={(next) => { a.teacher_notes = next; onRefetch(); }}
+                  />
                 </div>
               </CardContent>
             </Card>

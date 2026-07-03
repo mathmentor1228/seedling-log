@@ -30,7 +30,9 @@ import {
   BookCopy,
   Brain,
   Wallet,
-  TrendingUp
+  TrendingUp,
+  MessageCircle,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -146,6 +148,8 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, allowedRoles: ['admin', 'assistant'] },
+        { label: '영어팀 채널', href: '/private-channel', icon: <MessageCircle className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'] },
       ],
     },
     {
@@ -176,6 +180,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, allowedRoles: ['admin'] },
     { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
     { label: '수강료 관리', href: '/admin/tuition', icon: <Wallet className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+    { label: '수입 관리', href: '/admin/income', icon: <TrendingUp className="w-4 h-4" />, allowedRoles: ['admin'] },
   ];
 };
 

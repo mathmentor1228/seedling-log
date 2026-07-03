@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Users, Clock, Building2, GripVertical, ArrowRight, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentGrade } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,7 +34,7 @@ interface ScheduleRow {
   endTime: string;
   teacherId: string;
   teacherName: string;
-  students: { id: string; name: string }[];
+  students: { id: string; name: string; grade?: string | null; school_level?: string | null; grade_year?: number | null }[];
   groupNames?: string[];
   classroomId?: string | null;
   classroomName?: string;
@@ -330,7 +330,10 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                                 {/* Show student names in timeline mode */}
                                 {mode === 'timeline' && row.students.length > 0 && (
                                   <div className="text-[10px] text-muted-foreground pl-4 mt-0.5 leading-tight">
-                                    {row.students.slice(0, 4).map(s => s.name).join(', ')}
+                                    {row.students.slice(0, 4).map(s => {
+                                      const gradeLabel = formatStudentGrade(s);
+                                      return `${s.name}${gradeLabel ? `(${gradeLabel})` : ''}`;
+                                    }).join(', ')}
                                     {row.students.length > 4 && ` 외 ${row.students.length - 4}명`}
                                   </div>
                                 )}
@@ -391,9 +394,17 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                 <div className="space-y-1">
                   <div className="text-xs font-medium text-muted-foreground">학생 명단 ({detailPopup.students.length}명)</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {detailPopup.students.map(s => (
-                      <span key={s.id} className="text-xs bg-muted px-2 py-1 rounded-md">{s.name}</span>
-                    ))}
+                    {detailPopup.students.map(s => {
+                      const gradeLabel = formatStudentGrade(s);
+                      return (
+                        <span key={s.id} className="text-xs bg-muted px-2 py-1 rounded-md">
+                          {s.name}
+                          {gradeLabel && (
+                            <span className="text-[10px] text-muted-foreground ml-1">({gradeLabel})</span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

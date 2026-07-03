@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, LogIn, LogOut, Users,
 } from 'lucide-react';
@@ -55,9 +57,10 @@ function LiveClock() {
 /* ------------------------------------------------------------------ */
 /*  Stat Card with count-up                                            */
 /* ------------------------------------------------------------------ */
-function StatCard({ label, value, sub, color, icon: Icon }: {
+function StatCard({ label, value, sub, color, icon: Icon, onClick }: {
   label: string; value: number; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
   icon: React.ElementType;
+  onClick?: () => void;
 }) {
   const colorMap = {
     green: 'border-success/30 shadow-glow-success',
@@ -79,7 +82,13 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
   };
 
   return (
-    <Card className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02]`}>
+    <Card
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40' : ''}`}
+    >
       <CardContent className="p-4 flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg[color]}`}>
           <Icon className="w-5 h-5" />
@@ -255,12 +264,112 @@ function ClassroomView({ slots }: { slots: ClassroomSlot[] }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Attendance Detail Dialog (student list per stat card)              */
+/* ------------------------------------------------------------------ */
+function AttendanceDetailDialog({
+  kind,
+  onClose,
+  logs,
+}: {
+  kind: null | 'rate' | 'late' | 'absent';
+  onClose: () => void;
+  logs: AttendanceLog[];
+}) {
+  const open = kind !== null;
+
+  const { title, items } = useMemo(() => {
+    if (!kind) return { title: '', items: [] as { name: string; sub?: string; tag?: string; tagColor?: string }[] };
+
+    if (kind === 'rate') {
+      const present = logs
+        .filter(l => l.checked_in_at)
+        .sort((a, b) => (a.checked_in_at || '').localeCompare(b.checked_in_at || ''));
+      return {
+        title: `오늘 출석한 학생 (${present.length}명)`,
+        items: present.map(l => ({
+          name: l.student_name || '-',
+          sub: l.checked_in_at
+            ? `입실 ${fmtTime(l.checked_in_at)}${l.checked_out_at ? ` · 퇴실 ${fmtTime(l.checked_out_at)}` : ''}`
+            : '',
+          tag: l.checked_out_at ? '퇴실' : '재원',
+          tagColor: l.checked_out_at ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/15 text-emerald-600',
+        })),
+      };
+    }
+
+    if (kind === 'late') {
+      const late = logs
+        .filter(l => l.checked_in_at && new Date(l.checked_in_at).getMinutes() > 10)
+        .sort((a, b) => (a.checked_in_at || '').localeCompare(b.checked_in_at || ''));
+      return {
+        title: `지각 학생 (${late.length}명)`,
+        items: late.map(l => ({
+          name: l.student_name || '-',
+          sub: l.checked_in_at ? `입실 ${fmtTime(l.checked_in_at)}` : '',
+          tag: '지각',
+          tagColor: 'bg-amber-500/15 text-amber-600',
+        })),
+      };
+    }
+
+    // absent
+    const absent = logs
+      .filter(l => !l.checked_in_at)
+      .sort((a, b) => (a.student_name || '').localeCompare(b.student_name || '', 'ko'));
+    return {
+      title: `결석 학생 (${absent.length}명)`,
+      items: absent.map(l => ({
+        name: l.student_name || '-',
+        sub: '미등원',
+        tag: '결석',
+        tagColor: 'bg-destructive/15 text-destructive',
+      })),
+    };
+  }, [kind, logs]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">해당 학생이 없습니다.</p>
+        ) : (
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <ul className="space-y-1.5">
+              {items.map((it, i) => (
+                <li
+                  key={`${it.name}-${i}`}
+                  className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-muted/40 border border-border/40"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{it.name}</p>
+                    {it.sub && <p className="text-xs text-muted-foreground truncate">{it.sub}</p>}
+                  </div>
+                  {it.tag && (
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${it.tagColor}`}>
+                      {it.tag}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailOpen, setDetailOpen] = useState<null | 'rate' | 'late' | 'absent'>(null);
 
   // KST 기준 오늘 날짜 및 요일 (UTC+9)
   const today = useMemo(() => {
@@ -369,6 +478,7 @@ function PrincipalContent() {
     const ch = supabase
       .channel('principal-dash')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchAll().catch(() => {}); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'students' }, () => { fetchAll().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
@@ -399,7 +509,7 @@ function PrincipalContent() {
 
       <PageTransition>
         <div className="space-y-5">
-          {/* 출석 현황 */}
+          {/* 출석 현황 — 클릭 시 학생 명단 모달 */}
           <div className="grid grid-cols-3 gap-3">
             <StatCard
               icon={CheckCircle}
@@ -407,6 +517,7 @@ function PrincipalContent() {
               value={attendanceRate}
               sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`}
               color="green"
+              onClick={() => setDetailOpen('rate')}
             />
             <StatCard
               icon={Clock}
@@ -414,6 +525,7 @@ function PrincipalContent() {
               value={lateCount}
               sub="오늘 기준"
               color="orange"
+              onClick={() => setDetailOpen('late')}
             />
             <StatCard
               icon={XCircle}
@@ -421,8 +533,15 @@ function PrincipalContent() {
               value={absentCount}
               sub="미등원 학생"
               color="red"
+              onClick={() => setDetailOpen('absent')}
             />
           </div>
+
+          <AttendanceDetailDialog
+            kind={detailOpen}
+            onClose={() => setDetailOpen(null)}
+            logs={logs}
+          />
 
           {/* 강의실 수업 현황 */}
           <ClassroomView slots={classroomSlots} />

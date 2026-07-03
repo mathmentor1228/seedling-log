@@ -161,6 +161,7 @@ interface TodaySlotStudent {
   prevNextLessonGoal?: string | null;
   // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous homework assignment check status
   latestAssignmentCheckStatus?: string | null;
+  latestAssignmentResult?: string | null;
   // HW-STATUS-SYNC-V1: homework_status from today's lesson_records (single source of truth)
   homeworkStatus?: string | null;
   // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
@@ -227,10 +228,75 @@ function getHomeworkStatusLabel(status: string | null | undefined): string {
   if (['not_done', '미이행', '미완료'].includes(normalized)) return '미이행';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return '일부완료';
   if (['completed', '완료'].includes(normalized)) return '완료';
+  if (['unable_to_verify', '확인불가'].includes(normalized)) return '확인불가';
   if (['checked', '확인함', '확인됨'].includes(normalized)) return '확인함';
   if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return '확인요망';
   if (['none_assigned', '없음'].includes(normalized)) return '미배정';
   return '확인요망';
+}
+
+function mapHomeworkAssignmentResultToStatus(result: string | null | undefined): string | null {
+  if (!result) return null;
+  if (result === 'completed' || result === 'low_effort_completed') return 'completed';
+  if (result === 'partial') return 'partial';
+  if (result === 'not_done' || result === 'low_effort' || result === 'lost') return 'not_done';
+  if (result === 'unable_to_verify') return 'unable_to_verify';
+  return null;
+}
+
+function getEffectiveHomeworkStatus(input: {
+  homeworkStatus?: string | null;
+  lessonSubmitted?: boolean;
+  latestAssignmentCheckStatus?: string | null;
+  latestAssignmentResult?: string | null;
+  previousHomeworkStatus?: TodaySlotStudent['previousHomeworkStatus'];
+}): string | null {
+  const mappedAssignmentResult = mapHomeworkAssignmentResultToStatus(input.latestAssignmentResult);
+  if (input.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
+  if (mappedAssignmentResult) return mappedAssignmentResult;
+
+  const isDefaultDraft = input.homeworkStatus === 'none_assigned' && !input.lessonSubmitted;
+  if (input.homeworkStatus && !isDefaultDraft && input.homeworkStatus !== 'none_assigned') return input.homeworkStatus;
+  if (input.latestAssignmentCheckStatus === 'checked') return 'checked';
+
+  if (input.previousHomeworkStatus === 'completed') return '완료';
+  if (input.previousHomeworkStatus === 'partial') return '일부완료';
+  if (input.previousHomeworkStatus === 'not_done') return '미이행';
+  if (input.previousHomeworkStatus === 'none_assigned') return '없음';
+  return null;
+}
+
+interface HomeworkCheckSummaryRow {
+  student_id: string;
+  subject: string;
+  check_status: string | null;
+  result: string | null;
+}
+
+function buildHomeworkCheckSummaryMap(rows: HomeworkCheckSummaryRow[]) {
+  const statusMap: Record<string, string | null> = {};
+  const resultMap: Record<string, string | null> = {};
+
+  // HW-SUMMARY-LATEST-WINS-V2: rows arrive ordered by assigned_date DESC, so the
+  // FIRST row per (student, subject) is the most recent homework assignment and
+  // must be the source of truth. Older rows must not overwrite a newer status —
+  // otherwise an older unchecked assignment would wipe out the latest checked
+  // result and the dashboard would incorrectly fall back to "확인요망".
+  (rows || []).forEach((hw) => {
+    const key = `${hw.student_id}:${hw.subject}`;
+    if (statusMap[key] !== undefined) return; // keep the latest row only
+
+    const checkStatus = hw.check_status || 'unchecked';
+    if (checkStatus === 'checked') {
+      statusMap[key] = 'checked';
+      resultMap[key] = hw.result || null;
+    } else {
+      statusMap[key] = 'unchecked';
+      resultMap[key] = null;
+    }
+  });
+
+  return { statusMap, resultMap };
 }
 
 // HOMEWORK-STATUS-DISPLAY-FIX-V1: Get badge variant based on status
@@ -240,6 +306,7 @@ function getHomeworkStatusBadgeClass(status: string | null | undefined): string 
   if (['not_done', '미이행', '미완료'].includes(normalized)) return 'bg-red-500/15 text-red-600 border-red-500/30';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['completed', '완료', 'checked', '확인함', '확인됨'].includes(normalized)) return 'bg-green-500/15 text-green-600 border-green-500/30';
+  if (['unable_to_verify', '확인불가'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['none_assigned', '없음'].includes(normalized)) return 'bg-muted text-muted-foreground';
   return 'bg-muted text-muted-foreground';
@@ -428,7 +495,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission?: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; latestAssignmentResult?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission?: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -543,32 +610,42 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
         // Admin and Teacher can view dashboard stats (not assistant)
         if (!isAssistant(role)) {
-          // Fetch students count
+          // STAT-CONSISTENCY-V1: Filter active students only (재학+재등원), exclude 퇴원/휴학
           const { count: studentsCount } = await supabase
             .from('students')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .in('enrollment_status', ['재학', '재등원']);
 
           // Fetch classes count
           const { count: classesCount } = await supabase
             .from('classes')
             .select('*', { count: 'exact', head: true });
 
-          // Fetch lessons this week
+          // Fetch lessons this week (exclude 휴강 = canceled lessons)
           let lessonsQuery = supabase
             .from('lesson_records')
-            .select('*', { count: 'exact' })
-            .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'));
+            .select('understanding_score, lesson_types, submitted', { count: 'exact' })
+            .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'))
+            .eq('submitted', true);
 
           // Teachers only see their own lessons
           if (isTeacher(role)) {
             lessonsQuery = lessonsQuery.eq('teacher_id', user.id);
           }
 
-          const { count: lessonsCount, data: lessonsData } = await lessonsQuery;
+          const { data: lessonsRaw } = await lessonsQuery;
+          // Exclude 휴강 lessons from counts and averages
+          const lessonsData = (lessonsRaw || []).filter(
+            (l: any) => !((l.lesson_types || []) as string[]).includes('휴강'),
+          );
+          const lessonsCount = lessonsData.length;
 
-          // Calculate average understanding
-          const avgScore = lessonsData?.length 
-            ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
+          // STAT-CONSISTENCY-V1: Average understanding only over non-null scores (1-5)
+          const scoredLessons = lessonsData.filter(
+            (l: any) => typeof l.understanding_score === 'number' && l.understanding_score >= 1,
+          );
+          const avgScore = scoredLessons.length
+            ? scoredLessons.reduce((sum: number, l: any) => sum + l.understanding_score, 0) / scoredLessons.length
             : 0;
 
           // Fetch weekly reports for high-risk student count only
@@ -995,21 +1072,36 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         
         // NEXT-HW-BADGE-V1: Fetch homework_assignments for today's lesson records
         let hwAssignmentSet = new Set<string>();
+        let nextHwStudentSubjectSet = new Set<string>();
         // Photo submission tracking moved to PHOTO-STABLE-V2 below
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
             .from('homework_assignments')
-            .select('lesson_record_id, student_id, submitted_at, submission_image_url')
+            .select('lesson_record_id, student_id, subject, submitted_at, submission_image_url')
             .in('lesson_record_id', recordIds)
             .not('content', 'eq', '');
           
-          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id).filter(Boolean));
+        }
+
+        if (studentIds.length > 0) {
+          const rosterSubjectsForHw = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+          const { data: todayHwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject')
+            .in('student_id', studentIds)
+            .in('subject', rosterSubjectsForHw as any)
+            .eq('assigned_date', today)
+            .not('content', 'eq', '');
+
+          nextHwStudentSubjectSet = new Set((todayHwAssignments || []).map((ha: any) => `${ha.student_id}:${ha.subject}`));
         }
 
         // PHOTO-STABLE-V2: Fetch photo/audio submissions from homework_submissions + homework_assignments
         let photoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
+        let latestAssignmentResultMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           // Primary source: homework_submissions table (joined via homework_assignments for subject)
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
@@ -1039,7 +1131,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           // PHOTO-MATCH-V3: If latest homework has no submission, do NOT fall back to older homework submissions.
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status, result')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1047,10 +1139,6 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
-
-            if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
-              latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
-            }
 
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
@@ -1077,6 +1165,22 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
             if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
+
+          const checkSubjects = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+          const { data: previousHwChecks } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject, assigned_date, check_status, result, created_at')
+            .in('student_id', studentIds)
+            .in('subject', checkSubjects as any)
+            .lt('assigned_date', today)
+            .not('content', 'eq', '')
+            .order('assigned_date', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1000);
+
+          const latestSummary = buildHomeworkCheckSummaryMap(previousHwChecks || []);
+          latestAssignmentCheckStatusMap = latestSummary.statusMap;
+          latestAssignmentResultMap = latestSummary.resultMap;
         }
 
         // Build submission sets from map
@@ -1125,7 +1229,8 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             recordId: lr.id,
             homeworkStatus: lr.homework_status || null,
             latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
-            hasNextHomework: hwAssignmentSet.has(lr.id),
+            latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
+            hasNextHomework: hwAssignmentSet.has(lr.id) || nextHwStudentSubjectSet.has(photoKey),
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
             hasAudioSubmission: audioSubmissionSet.has(photoKey),
             prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
@@ -1198,6 +1303,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               recordId: null,
               homeworkStatus: null,
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+              latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
               hasNextHomework: false,
               hasPhotoSubmission: hasPhoto,
               hasAudioSubmission: hasAudio,
@@ -1536,6 +1642,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         homeworkStatus?: string | null;
         // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous assignment check status
         latestAssignmentCheckStatus?: string | null;
+        latestAssignmentResult?: string | null;
         todayTestData?: {
           test_content: string | null;
           test_title: string | null;
@@ -1586,19 +1693,34 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         // Fetch homework assignments for today's records (for hasNextHomework)
         const recordIds = (todayRecords || []).map((lr: any) => lr.id).filter(Boolean);
         let hwAssignmentSet = new Set<string>();
+        let nextHwStudentSubjectSet = new Set<string>();
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
             .from('homework_assignments')
-            .select('lesson_record_id')
+            .select('lesson_record_id, student_id, subject')
             .in('lesson_record_id', recordIds)
             .not('content', 'eq', '');
-          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id).filter(Boolean));
+        }
+
+        if (studentIds.length > 0) {
+          const rosterSubjectsForHw = [...new Set(allStudentClassPairs.map((p) => p.subject))].filter(Boolean);
+          const { data: todayHwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject')
+            .in('student_id', studentIds)
+            .in('subject', rosterSubjectsForHw as any)
+            .eq('assigned_date', today)
+            .not('content', 'eq', '');
+
+          nextHwStudentSubjectSet = new Set((todayHwAssignments || []).map((ha: any) => `${ha.student_id}:${ha.subject}`));
         }
 
         // Fetch photo/audio submissions for teacher's students
         let teacherPhotoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
+        let latestAssignmentResultMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
           const { data: submissions } = await supabase
@@ -1624,7 +1746,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status, result')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1632,10 +1754,6 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
-
-            if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
-              latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
-            }
 
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
@@ -1655,6 +1773,22 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
             if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
+
+          const checkSubjects = [...new Set(allStudentClassPairs.map((p) => p.subject))].filter(Boolean);
+          const { data: previousHwChecks } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject, assigned_date, check_status, result, created_at')
+            .in('student_id', studentIds)
+            .in('subject', checkSubjects as any)
+            .lt('assigned_date', today)
+            .not('content', 'eq', '')
+            .order('assigned_date', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1000);
+
+          const latestSummary = buildHomeworkCheckSummaryMap(previousHwChecks || []);
+          latestAssignmentCheckStatusMap = latestSummary.statusMap;
+          latestAssignmentResultMap = latestSummary.resultMap;
         }
 
         if (todayRecords) {
@@ -1672,7 +1806,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               submitted: lr.submitted || false,
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
-              hasNextHomework: hwAssignmentSet.has(lr.id),
+              hasNextHomework: hwAssignmentSet.has(lr.id) || nextHwStudentSubjectSet.has(photoKey),
               hasPhotoSubmission: !!pd && pd.urls.length > 0,
               hasAudioSubmission: !!pd?.audioUrl,
               photoData: pd || null,
@@ -1680,6 +1814,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               homeworkStatus: lr.homework_status || null,
               // HOMEWORK-CHECK-STATUS-SYNC-V1: Include latest previous assignment check status
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+              latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
               // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
@@ -1734,6 +1869,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                   photoData: null,
                   homeworkStatus: null,
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[`${ts.student_id}:${ts.subject}`] || null,
+                  latestAssignmentResult: latestAssignmentResultMap[`${ts.student_id}:${ts.subject}`] || null,
                   subject: ts.subject,
                   todayTestData: {
                     test_content: ts.content || null,
@@ -1816,6 +1952,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             prevNextLessonGoal: prevGoalMap[goalKey] || null,
             // HOMEWORK-CHECK-STATUS-SYNC-V1: Add latest previous assignment check status
             latestAssignmentCheckStatus: recordInfo?.latestAssignmentCheckStatus || null,
+            latestAssignmentResult: recordInfo?.latestAssignmentResult || null,
             // DASH-ROW-TEST-SNIPPET-V1: Add today's test data
             todayTestData: recordInfo?.todayTestData || null,
             // HW-STATUS-SYNC-V1: Pass homework_status from lesson_records
@@ -1949,7 +2086,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
           const isEP = !!(slot.isExamPrep || (slot.class_id && slot.class_id.startsWith('exam-prep-')));
-          const isSup = !!(slot as any).isSupplementary;
+          const isSup = !!(slot as any).isSupplementary || (typeof slot.id === 'string' && slot.id.startsWith('supp-'));
           slot.students.forEach(student => {
             const key = `${student.id}:${slot.class_id || 'null'}:${slot.subject}`;
             candidates.set(key, {
@@ -1959,7 +2096,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               teacher_id: user.id,
               isExamPrep: isEP,
               isSupplementary: isSup,
-              existingRecordId: (slot as any).supplementaryRecordId || undefined,
+              existingRecordId: student.lessonRecordId || (slot as any).supplementaryRecordId || undefined,
             });
           });
         });
@@ -3187,14 +3324,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                     {slot.rows.map((row: any) => {
                                       const statusKey = getLessonStatusKey(row.student_id, row.class_id, row.subject);
                                       const ls = lessonStatusMap[statusKey];
-                                      const rawHwStatus = (() => {
-                                        const hwFromRecord = ls?.homeworkStatus;
-                                        const isDefaultDraft = hwFromRecord === 'none_assigned' && !ls?.submitted;
-                                        if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
-                                        if (ls?.latestAssignmentCheckStatus === 'checked') return 'checked';
-                                        if (ls?.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
-                                        return null;
-                                      })();
+                                      const rawHwStatus = getEffectiveHomeworkStatus({
+                                        homeworkStatus: ls?.homeworkStatus,
+                                        lessonSubmitted: ls?.submitted,
+                                        latestAssignmentCheckStatus: ls?.latestAssignmentCheckStatus,
+                                        latestAssignmentResult: ls?.latestAssignmentResult,
+                                      });
                                       const testState = latestTests.getStudentState(row.student_id);
                                       const isTestExpanded = latestTests.isExpanded(row.student_id);
 
@@ -3229,15 +3364,21 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                                 size="sm"
                                                 className="h-7 text-xs px-2.5"
                                                 onClick={() => {
+                                                  const isExamPrepRow = !!row.isExamPrep || (typeof row.class_id === 'string' && row.class_id.startsWith('exam-prep-'));
                                                   setAdminLessonModalContext({
                                                     student_id: row.student_id,
-                                                    class_id: row.class_id,
+                                                    // EXAM-PREP-FIX-V1 / SUPP-FIX-V1: class_id must be a real UUID or empty string; the synthetic "exam-prep-*" id is not a uuid
+                                                    class_id: (isExamPrepRow || row.isSupplementary) ? '' : row.class_id,
                                                     subject: row.subject,
                                                     lesson_date: getTodayKST(),
                                                     ...(row.isSupplementary ? { lesson_types: ['보충수업'] } : {}),
+                                                    ...(isExamPrepRow ? { lesson_types: ['시험특강'] } : {}),
                                                   });
-                                                  setAdminLessonModalRecordId(row.isSupplementary ? (row.supplementaryRecordId || ls?.recordId || null) : (ls?.recordId || null));
-                                                  setAdminLessonModalForceNew(row.isSupplementary ? false : !ls?.recordId);
+                                                  const resolvedRecordId = row.isSupplementary
+                                                    ? (row.supplementaryRecordId || ls?.recordId || null)
+                                                    : (ls?.recordId || null);
+                                                  setAdminLessonModalRecordId(resolvedRecordId);
+                                                  setAdminLessonModalForceNew(!resolvedRecordId);
                                                   setAdminLessonModalOpen(true);
                                                 }}
                                               >
@@ -3294,6 +3435,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                                   if (label === '확인함') return 'text-success';
                                                   if (label === '미이행') return 'text-destructive';
                                                   if (label === '일부완료') return 'text-warning';
+                                                  if (label === '확인불가') return 'text-warning';
                                                   if (label === '확인요망') return 'text-warning';
                                                   return 'text-muted-foreground';
                                                 })()
@@ -3524,20 +3666,13 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                 {(slot?.students || []).map((student) => {
                                   const testState = latestTests.getStudentState(student.id);
                                   const isTestExpanded = latestTests.isExpanded(student.id);
-                                  const rawHwStatus = (() => {
-                                    // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', skip to fallback
-                                    const hwFromRecord = student.homeworkStatus;
-                                    const isDefaultDraft = hwFromRecord === 'none_assigned' && !student.lessonSubmitted;
-                                    if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
-                                    if (student.latestAssignmentCheckStatus === 'checked') return 'checked';
-                                    if (student.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
-                                    // Fallback to RPC result
-                                    if (student.previousHomeworkStatus === 'completed') return '완료';
-                                    if (student.previousHomeworkStatus === 'partial') return '일부완료';
-                                    if (student.previousHomeworkStatus === 'not_done') return '미이행';
-                                    if (student.previousHomeworkStatus === 'none_assigned') return '없음';
-                                    return null;
-                                  })();
+                                  const rawHwStatus = getEffectiveHomeworkStatus({
+                                    homeworkStatus: student.homeworkStatus,
+                                    lessonSubmitted: student.lessonSubmitted,
+                                    latestAssignmentCheckStatus: student.latestAssignmentCheckStatus,
+                                    latestAssignmentResult: student.latestAssignmentResult,
+                                    previousHomeworkStatus: student.previousHomeworkStatus,
+                                  });
 
                                   if (student.hyugangRecordId) {
                                     return (
@@ -3579,7 +3714,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                           <span className="font-semibold text-sm text-foreground">{student.name}</span>
                                           {getAttendanceStatusBadge(student.attendanceStatus)}
                                           {getRosterBadges(
-                                            student.previousHomeworkStatus,
+                                            normalizeHomeworkStatus(rawHwStatus),
                                             student.debugReason,
                                             student.firstSubject,
                                             student.followup2wDue,
@@ -3695,6 +3830,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                               if (label === '확인함') return 'text-success';
                                               if (label === '미이행') return 'text-destructive';
                                               if (label === '일부완료') return 'text-warning';
+                                              if (label === '확인불가') return 'text-warning';
                                               if (label === '확인요망') return 'text-warning';
                                               return 'text-muted-foreground';
                                             })()

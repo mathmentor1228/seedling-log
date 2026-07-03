@@ -105,20 +105,77 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       schoolList = Array.from(grouped.values());
     }
 
+    // 3) school_exam_archives — 학교별 기말/중간고사 (과목별 다중행, school+exam_type+date로 dedupe)
+    let archiveList: ExamEvent[] = [];
+    {
+      let q = supabase
+        .from('school_exam_archives')
+        .select('id, school_name, exam_type, semester, exam_date_start, exam_date_end')
+        .not('exam_date_start', 'is', null)
+        .gte('exam_date_start', todayStr)
+        .order('exam_date_start');
+      if (schoolFilter) q = q.eq('school_name', schoolFilter);
+      const { data: archives } = await q;
+      const grouped = new Map<string, ExamEvent>();
+      for (const a of (archives || []) as any[]) {
+        const key = `${a.school_name}|${a.exam_type}|${a.exam_date_start}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            id: `archive-${a.school_name}-${a.exam_type}-${a.exam_date_start}`,
+            title: `${a.school_name} ${a.semester ? a.semester + ' ' : ''}${a.exam_type}`,
+            start_at: a.exam_date_start,
+            end_at: a.exam_date_end,
+          });
+        }
+      }
+      archiveList = Array.from(grouped.values());
+    }
+
     // Filter academy events by school name when schoolFilter set
     const filteredEvents = schoolFilter
       ? eventList.filter((e) => e.title.includes(schoolFilter))
       : eventList;
 
-    // Merge + dedupe by (title + start date)
-    const merged: ExamEvent[] = [];
-    const seen = new Set<string>();
-    for (const e of [...filteredEvents, ...schoolList]) {
-      const key = `${e.title}|${e.start_at.split('T')[0]}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(e);
+    // Merge + dedupe by (school + exam-type). Same school+exam (e.g. 기말고사 spanning 4 days)
+    // should appear as a single D-day entry using the earliest start date.
+    const score = (title: string) => {
+      let s = 0;
+      if (/기말|중간|모의|학평|수능/.test(title)) s += 10;
+      if (/\d학기/.test(title)) s += 5;
+      if (!/정기고사/.test(title)) s += 1;
+      s += Math.min(title.length, 30) / 100;
+      return s;
+    };
+    const examTypeKey = (title: string) => {
+      if (/기말/.test(title)) return '기말고사';
+      if (/중간/.test(title)) return '중간고사';
+      if (/모의/.test(title)) return '모의고사';
+      if (/학평/.test(title)) return '학평';
+      if (/수능/.test(title)) return '수능';
+      if (/수행/.test(title)) return '수행평가';
+      if (/정기고사/.test(title)) return '정기고사';
+      return title.split(' ').slice(1).join(' ') || title;
+    };
+    const grouped = new Map<string, ExamEvent>();
+    for (const e of [...filteredEvents, ...schoolList, ...archiveList]) {
+      const date = e.start_at.split('T')[0];
+      const school = (e.title.match(/^([^\s]+(?:고|중|초|대))/)?.[1]) || e.title.split(' ')[0];
+      const type = examTypeKey(e.title);
+      const key = `${school}|${type}`;
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, e);
+      } else {
+        const existingDate = existing.start_at.split('T')[0];
+        const earlier = date < existingDate ? e.start_at : existing.start_at;
+        const betterTitle = score(e.title) > score(existing.title) ? e.title : existing.title;
+        const aEnd = e.end_at || e.start_at;
+        const bEnd = existing.end_at || existing.start_at;
+        const laterEnd = aEnd > bEnd ? aEnd : bEnd;
+        grouped.set(key, { ...existing, title: betterTitle, start_at: earlier, end_at: laterEnd });
+      }
     }
+    const merged = Array.from(grouped.values());
 
     // Show nearest upcoming exams (more entries when no school filter for teacher view)
     merged.sort((a, b) => a.start_at.localeCompare(b.start_at));

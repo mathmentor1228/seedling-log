@@ -375,10 +375,34 @@ Deno.serve(async (req) => {
             const aiAdminTag = aiReportData?._debug?.admin_tag || aiReportData?.admin_tag;
             qualityTag = determineQualityTag(true, subjectCount, lessonCount, aiAdminTag);
 
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}`;
+            // WEEKLY-SUMMARY-APPEND-V1: Append teacher-curated weekly comments verbatim so
+            // they always reach parents (independent of AI quality).
+            const { data: weeklySummaries } = await supabase
+              .from('lesson_records')
+              .select('weekly_summary, subject, teacher_id, lesson_date, profiles:teacher_id(full_name)')
+              .eq('student_id', student.id)
+              .gte('lesson_date', weekStart)
+              .lte('lesson_date', weekEnd)
+              .not('weekly_summary', 'is', null);
+
+            const seen = new Set<string>();
+            const summaryBlocks: string[] = [];
+            for (const r of (weeklySummaries || []) as any[]) {
+              const key = `${r.teacher_id}|${r.subject}|${r.weekly_summary}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const name = r.profiles?.full_name || '담당 선생님';
+              summaryBlocks.push(`【${r.subject} ${name}】\n${r.weekly_summary}`);
+            }
+            const summaryAppendix = summaryBlocks.length > 0
+              ? `\n\n---\n💬 담당 선생님 주간 코멘트\n\n${summaryBlocks.join('\n\n')}`
+              : '';
+            const missingTag = summaryBlocks.length === 0 ? ' weekly_summary=MISSING' : ` weekly_summary=${summaryBlocks.length}`;
+
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`;
             
             // parent_message from generate-ai-report already includes the header, so don't add it again
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}${summaryAppendix}`;
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
@@ -393,18 +417,37 @@ Deno.serve(async (req) => {
               avgUnderstanding = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
             }
 
-            // HW-RATE-FIX: enum values are completed/partial/not_done/none_assigned.
-            // Exclude none_assigned/none/null from denominator; count completed as 1.0 and partial as 0.5.
+            // HW-RATE-FIX + HW-MERGE-V1: enum values are completed/partial/not_done/none_assigned.
+            // Combine lesson_records.homework_status AND homework_assignments (DailyHomeworkChecklist).
             const hwLessons = lessons.filter(
               (l) => l.homework_status && l.homework_status !== 'none_assigned' && l.homework_status !== 'none'
             );
-            if (hwLessons.length > 0) {
-              const score = hwLessons.reduce((acc, l) => {
-                if (l.homework_status === 'completed') return acc + 1;
-                if (l.homework_status === 'partial') return acc + 0.5;
-                return acc;
-              }, 0);
-              homeworkCompletionRate = Math.round((score / hwLessons.length) * 100);
+            let hwCount = hwLessons.length;
+            let hwScore = hwLessons.reduce((acc, l) => {
+              if (l.homework_status === 'completed') return acc + 1;
+              if (l.homework_status === 'partial') return acc + 0.5;
+              return acc;
+            }, 0);
+
+            const { data: hwAssignments } = await supabase
+              .from('homework_assignments')
+              .select('result, check_status, assigned_date, checked_at')
+              .eq('student_id', student.id)
+              .lte('assigned_date', weekEnd)
+              .eq('check_status', 'checked');
+            for (const a of hwAssignments || []) {
+              const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
+              const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
+              if (!countedInWeek) continue;
+              const r = a.result;
+              if (!r || r === 'unable_to_verify') continue;
+              if (r === 'completed' || r === 'low_effort_completed') { hwCount++; hwScore += 1; }
+              else if (r === 'partial') { hwCount++; hwScore += 0.5; }
+              else if (r === 'not_done' || r === 'low_effort' || r === 'lost') { hwCount++; }
+            }
+
+            if (hwCount > 0) {
+              homeworkCompletionRate = Math.round((hwScore / hwCount) * 100);
             }
           }
 

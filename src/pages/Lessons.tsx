@@ -188,7 +188,7 @@ const HOMEWORK_STATUS = [
 ];
 
 export default function Lessons() {
-  const { user, role } = useAuth();
+  const { user, role, assignedSubject } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
@@ -205,7 +205,18 @@ export default function Lessons() {
   const [filterEndDate, setFilterEndDate] = useState<string>(getTodayKST());
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterHomeworkStatus, setFilterHomeworkStatus] = useState<string>('all');
-  const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterSubject, setFilterSubject] = useState<string>(() => {
+    // Assistants with an assigned subject are locked to that subject
+    if (role === 'assistant' && assignedSubject) return assignedSubject;
+    return 'all';
+  });
+  // Keep filter in sync once auth resolves
+  useEffect(() => {
+    if (role === 'assistant' && assignedSubject && filterSubject !== assignedSubject) {
+      setFilterSubject(assignedSubject);
+    }
+  }, [role, assignedSubject]);
+  const subjectLocked = role === 'assistant' && !!assignedSubject;
   const [filterTeacherId, setFilterTeacherId] = useState<string>('all');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -1037,7 +1048,7 @@ export default function Lessons() {
 
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">과목</Label>
-                  <Select value={filterSubject} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
+                  <Select value={filterSubject} disabled={subjectLocked} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
                     <SelectTrigger className="h-9">
                       <SelectValue />
                     </SelectTrigger>

@@ -1,56 +1,102 @@
-# 숙제 확인 로직 재정비
 
-## 문제 요약
+# 수업일지 입력 부담 감소 시스템
 
-1. **일괄입력의 숙제 확인이 빈약함** — `BatchLessonModal`은 오늘 배정될 숙제(`lesson_record_id` = 오늘 draft)만 불러옴. 개별 일지처럼 "지난 수업의 숙제 내용 + 결과 옵션 7가지(완료/부분/미완/분실/성의부족/완료+성의부족/확인불가)"를 학생별로 보여주지 않음.
+목표: 매일 학생별로 똑같은 내용을 반복 타이핑하는 부담을 없애고, 주간리포트 품질은 오히려 더 좋게 만든다.
 
-2. **'확인 버튼 안 눌러도 확인됨' 버그** — `BatchLessonModal.handleApply` (line 596-618)에서 '숙제상태' 필드만 체크해도 해당 학생·과목의 **이전 모든 unchecked homework_assignments**를 자동으로 `check_status='checked'`로 일괄 업데이트함. 또한 `handleBulkDraftSave` (line 697-698)는 activeFields에 'homework_status'가 없어도 항상 `payload.homework_status = mapResultToStatus('none_assigned')`로 덮어쓰기 → 이전 확인된 상태 파괴.
+## 1. 반 단위 일괄입력 화면 (A)
 
-3. **동일 숙제 중복 INSERT** — `LessonRecordForm.handleSubmit` (line 1476-1491)와 `handleSaveDraft` (line 1412-1427)는 매 저장마다 `delete().eq('lesson_record_id')` 후 전부 재INSERT. lesson_record_id가 없는 동일 내용 carry-forward 숙제와 별개로, draft → submit 흐름에서 같은 lesson_record에 attach된 숙제 외에 다른 경로(예: BatchLessonModal에서도 동일 record에 add)에서 추가 INSERT 시 중복.  또한 **carry-forward** 로직(line 2051)은 `lesson_record_id` 없이 INSERT → 다음 수업에서 또 carry-forward되면 또 새 row.
+새 페이지/탭: **"오늘 수업 한번에 기록"** (선생님 대시보드 + Lessons 탭 진입)
 
-4. **데일리숙제 자동생성** — 현재 `BatchLessonModal`의 새 숙제 항목 기본 `homework_type: 'daily'` (line 334), `addHomework`도 default `'daily'`. 사용자 정책: **기본은 'regular'(1회성)**, 데일리는 명시 옵트인할 때만.
+- 좌측: 오늘 내 수업 슬롯 리스트 (시간 + 반 + 과목 + 학생 N명)
+- 슬롯 클릭 → 우측에 한 장의 "수업 카드" 펼침
+  - **공통란(한 번만 입력, 모든 학생에 적용)**
+    - 진도/단원 (curriculum_map에서 자동 제안)
+    - 수업 내용 (lesson_range)
+    - 과제 부여 내용
+  - **학생별 빠른 입력 (행당 3초)**
+    - 학생 이름 | 이해도 1-5 (탭/슬라이더) | 숙제 상태 (✅/△/✗) | 짧은 코멘트 (선택)
+- 한 번에 저장 → 학생 N명 lesson_records가 동일한 공통란 + 개별 평가로 생성
 
-## 변경 사항
+기존 `NewLessonEntryDialog` 일괄 생성 + `BatchLessonModal`을 합쳐 **"공통란 + 학생별 평가" 단일 화면**으로 재구성. 빈 레코드 생성 후 다시 채우는 2-스텝 흐름 제거.
 
-### A. `src/components/lessons/BatchLessonModal.tsx`
+## 2. 이전 회차 자동 채움 (B)
 
-**A1. 숙제 확인 자동화 제거 (auto-confirm 버그 차단)**
-- `handleApply` (line 583-620): `activeFields.has('homework_status')`일 때 student/subject의 모든 unchecked를 자동 checked로 덮어쓰는 두 번째 update(line 607-618) **삭제**. lesson_record_id로 연결된 항목만 결과 기록(첫 번째 update만 유지)하되, `check_status='checked'`로 일괄 설정하지 말고 **per-item 결과**가 명시된 경우만 처리하도록 변경.
-- `handleBulkDraftSave` (line 697-698): `if (activeFields.has('homework_status'))` 가드 추가 — 사용자가 명시적으로 변경한 경우에만 `homework_status` payload에 포함.
+수업 카드 열릴 때 자동 prefill:
+- **진도**: 같은 (teacher_id, class_id 또는 student set, subject)의 가장 최근 lesson_record의 `lesson_range` + curriculum_map의 다음 단원 제안
+- **과제 부여**: 직전 회차의 과제 그대로 + "오늘 같은 과제 연장" 토글
+- **이해도**: 학생별 최근 평균을 회색 placeholder로 표시 (덮어쓰기 전까지 저장 안됨)
+- **숙제 상태**: `homework_submissions`/`homework_assignments`에 이미 제출 데이터가 있으면 자동 매핑 (기존 sync hook 재활용)
 
-**A2. 학생별 지난숙제 표시 (per-student previous homework UI)**
-- 학생 선택 후 step='edit' 진입 시 (currently in `searchDrafts`/handleNextStep 부분), 각 학생/과목에 대해 **lesson_date < today** & `check_status='unchecked'` & `content<>''` 인 `homework_assignments`를 별도 fetch → `prevUncheckedByDraft: Record<draftId, HomeworkAssignment[]>` 상태 추가.
-- '숙제 상태' 섹션(FieldToggleBlock field="homework_status", line 1111-1149) UI 확장:
-  - `usePerStudentHomework=true`일 때, 각 학생 블록에 **지난 숙제 내용 목록** + 항목별 결과 7-옵션 셀렉트(`HOMEWORK_STATUS_OPTIONS`) 표시.
-  - 새 상태: `perStudentPrevHwResults: Record<draftId, Record<hwAssignmentId, result>>` 와 메모 `perStudentPrevHwNotes`.
-  - 저장 시 항목별 `homework_assignments.update({check_status:'checked', result, notes, checked_at, checked_by})` 호출 — **버튼이 명시적으로 선택된 항목만**.
+"이전 회차 그대로" 버튼 한 번이면 공통란이 통째로 채워짐.
 
-**A3. 신규 숙제 default `homework_type` → 'regular'**
-- Line 334: `homework_type: 'daily'` → `'regular'`.
-- Line 443 (load): fallback `'regular'` (기존 daily로 저장된 건 유지).
-- Select dropdown(line 1311-1318, 1342-1349) 옵션 순서: regular(다음수업까지) 먼저, daily(데일리체크), weekly, long_term.
+## 3. 일일 필수항목 최소화 + 주간 필수 free-text (D)
 
-### B. `src/components/lessons/LessonRecordForm.tsx`
+`lesson_records` 폼을 두 레벨로 분리:
 
-**B1. 중복 INSERT 방지 (idempotent upsert)**
-- Line 1412-1427 (handleSaveDraft) & 1476-1491 (handleSubmit): `delete` 직전에 트랜잭션 없으니, **선 fetch 후 diff** 방식으로 변경하거나, 적어도 `delete` + `insert`를 `Promise.all` 묶지 않고 await 순서대로 유지. **추가**: insert payload에 `homework_type: 'regular'` 명시(현재 미지정으로 DB default 'regular' 의존). 더 중요: **carry-forward 시 동일 (student_id, subject, content, assigned_date) 중복 방지** — line 2051 INSERT 전에 동일 row 존재 여부 maybeSingle 체크.
+- **일일 필수 (매 회차)**: 이해도, 숙제 상태, 진도 (공통란에서 1회 입력)
+- **주간 필수 (학생당 주 1회)**: "이번 주 핵심 코멘트" free-text 한 단락
+  - 일요일 23:59 마감 알림
+  - 미작성 학생 리스트가 선생님 대시보드 상단에 위젯으로 노출 (PrepLectureProposalsWidget 옆)
+- **AI 주간 종합**: `generate-weekly-reports` 함수가 다음을 입력으로 받음
+  - 한 주의 일일 lesson_records (이해도/숙제/진도)
+  - 주간 필수 코멘트 한 단락
+  - 시험/숙제 평가 결과
+  → 학부모 리포트 본문 자동 작성, 선생님은 검수/수정만
 
-**B2. 신규 숙제 항목에 명시적 type 옵션 UI (옵트인)**
-- 현재 `newHomeworkItems` 타입은 `{ content: string }[]`만 — 'daily' 옵트인 토글이 없음. 각 항목 옆에 작은 토글/뱃지 "데일리 체크" 추가 → 켜진 경우만 `homework_type: 'daily'` 그 외 `'regular'`. State 타입을 `{ content: string; is_daily: boolean }[]`로 확장.
-- handleSaveDraft/handleSubmit insert payload에 `homework_type: item.is_daily ? 'daily' : 'regular'` 명시.
+## 4. 음성 메모 모드 (C, 선택 기능)
 
-### C. 데일리 자동 생성 안 함 (확인)
-- 현재 코드베이스 grep 결과, lesson_record 저장이 daily homework를 자동 생성하는 트리거/엣지함수는 없음 (DailyHomeworkManager/Checklist는 사용자가 명시 페이지에서 생성). 추가 작업 없음.
+선생님이 본인 계정에서 옵션 ON 가능 (개인 설정):
+- 수업 카드 우상단 🎙 버튼
+- 1-2분 녹음 → ElevenLabs Scribe(`scribe_v2`)로 STT → Lovable AI(`google/gemini-2.5-flash`)가 학생별 초안 생성
+  - 출력: `{학생ID: {이해도, 짧은 코멘트, 숙제 상태}}` JSON
+- 선생님이 수업 카드에서 검수/수정 후 저장
 
-## 비변경 (스코프 외)
-- `homework_assignments` 스키마, RLS, trigger 변경 없음.
-- 개별 일지의 '확인 저장' 버튼 동작 자체(handleSaveHomeworkCheckForItem)는 정상이라 유지.
-- DailyHomeworkChecklist UI 변경 없음.
+ElevenLabs는 standard connector로 연결, 키는 서버에만. 음성 파일은 처리 후 즉시 폐기 (저장 안함).
 
-## 검증
-- 빌드 통과 확인.
-- 빠른 수동 시나리오 가이드:
-  1. 일괄입력에서 '숙제상태'만 토글하지 않고 저장 → 이전 숙제가 자동확인되지 않음.
-  2. 일괄입력에서 학생별 모드로 지난숙제 항목별 결과 선택 → 선택한 항목만 checked.
-  3. 개별 일지에서 숙제 1건 입력 → 저장 2회 반복 → homework_assignments 1행만 존재.
-  4. 신규 숙제에 '데일리 체크' 토글 OFF → `homework_type='regular'`로 저장.
+## 5. 학부모 주간리포트 보장 장치
+
+- 주간 필수 코멘트 미작성이면 AI 리포트 생성 차단 + 알림
+- AI는 일일 데이터 + 주간 코멘트 모두 인용. 일일 데이터만으로는 절대 학부모 발송 불가
+- 기존 `weekly_reports` 흐름/검수 단계 유지 — 자동 발송 아님
+
+---
+
+## 기술 변경 요약
+
+**DB 마이그레이션**
+- `lesson_records`에 컬럼 추가:
+  - `weekly_summary` (text, nullable) — 주간 필수 코멘트
+  - `weekly_summary_week` (date) — 해당 주 월요일
+  - `is_common_entry` (boolean, default false) — 일괄 입력 출처 표시
+- 인덱스: `(teacher_id, student_id, weekly_summary_week)`
+
+**프론트엔드**
+- 신규: `src/components/lessons/UnifiedLessonCard.tsx` — 공통란+학생별 평가 단일 화면
+- 신규: `src/components/lessons/WeeklySummaryWidget.tsx` — 미작성 학생 리스트 (대시보드)
+- 신규: `src/components/lessons/VoiceMemoCapture.tsx` — 녹음/STT/AI 초안 UI (옵션 ON시 표시)
+- 신규: `src/pages/UnifiedLessonEntryPage.tsx` (또는 Lessons 탭 추가)
+- 수정: `NewLessonEntryDialog`, `BatchLessonModal` — 신규 화면으로 라우팅
+- 수정: `TeacherDashboard.tsx` — WeeklySummaryWidget 추가
+
+**Edge Functions**
+- 신규: `transcribe-lesson-memo` (ElevenLabs Scribe STT)
+- 신규: `draft-lesson-from-memo` (Lovable AI로 학생별 초안 생성)
+- 수정: `generate-weekly-reports` — `weekly_summary` 입력 추가, 미작성시 차단
+
+**Connectors**
+- ElevenLabs 연결 (음성 메모 옵션에만 필요)
+
+---
+
+## 단계별 진행
+
+이 작업은 크니까 두 단계로 나눠서 작업할게요:
+
+**1단계 (먼저 실행)** — A + B + D
+- 일괄입력 화면, 이전 회차 자동채움, 주간 필수 코멘트, AI 주간 종합 보강
+
+**2단계 (1단계 검증 후)** — C 음성 메모
+- ElevenLabs 연결, 녹음/STT/초안 생성 흐름 추가
+- 선생님 개인 설정에서 ON/OFF
+
+승인하시면 1단계부터 바로 시작합니다.

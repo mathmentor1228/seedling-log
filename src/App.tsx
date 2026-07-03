@@ -43,6 +43,7 @@ const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
 const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
 const TuitionPage = lazy(() => import("./pages/TuitionPage"));
+const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
 const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
 const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
@@ -58,7 +59,10 @@ const QuizBulkUploadPage = lazy(() => import("./pages/QuizBulkUploadPage"));
 const QuizLookupPage = lazy(() => import("./pages/QuizLookupPage"));
 const LessonRecordPage = lazy(() => import("./pages/LessonRecordPage"));
 const BatchLessonEntryPage = lazy(() => import("./pages/BatchLessonEntryPage"));
+const QuickLessonEntryPage = lazy(() => import("./pages/QuickLessonEntryPage"));
 const SubjectMaterialPage = lazy(() => import("./pages/SubjectMaterialPage"));
+const PrivateChannelPage = lazy(() => import("./pages/PrivateChannelPage"));
+const WorkLogsPage = lazy(() => import("./pages/WorkLogsPage"));
 const StudentLogin = lazy(() => import("./pages/student/StudentLogin"));
 const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
 const StudentHomework = lazy(() => import("./pages/student/StudentHomework"));
@@ -160,6 +164,7 @@ const App = () => (
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
+                <Route path="/lessons/quick" element={<QuickLessonEntryPage />} />
                 <Route path="/lessons/record/new" element={<LessonRecordPage />} />
                 <Route path="/lessons/record/:recordId" element={<LessonRecordPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
@@ -175,6 +180,7 @@ const App = () => (
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
                 <Route path="/admin/office" element={<AdminOfficePage />} />
                 <Route path="/admin/tuition" element={<TuitionPage />} />
+                <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
@@ -189,6 +195,8 @@ const App = () => (
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="/study-sessions" element={<StudySessionPage />} />
+                <Route path="/private-channel" element={<PrivateChannelPage />} />
+                <Route path="/work-logs" element={<WorkLogsPage />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

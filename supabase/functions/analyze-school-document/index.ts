@@ -623,6 +623,40 @@ ${subjectInstruction}
       }
     }
 
+    // Year normalization: if AI extracted dates with a past year (no year in source doc),
+    // bump them forward so they fall on/after today. Applies to schedules and exam_schedule.
+    const bumpYearIfPast = (dateStr: any): any => {
+      if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (!y || !m || !d) return dateStr;
+      const today = new Date();
+      const candidate = new Date(y, m - 1, d);
+      if (candidate >= new Date(today.getFullYear(), today.getMonth(), today.getDate())) return dateStr;
+      // shift up year by year until not in the past
+      let newYear = today.getFullYear();
+      let shifted = new Date(newYear, m - 1, d);
+      if (shifted < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+        newYear += 1;
+        shifted = new Date(newYear, m - 1, d);
+      }
+      const mm = String(m).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      return `${newYear}-${mm}-${dd}`;
+    };
+    if (extractedData && Array.isArray(extractedData.schedules)) {
+      extractedData.schedules = extractedData.schedules.map((s: any) => ({
+        ...s,
+        start_date: bumpYearIfPast(s?.start_date),
+        end_date: bumpYearIfPast(s?.end_date),
+      }));
+    }
+    if (extractedData && Array.isArray(extractedData.exam_schedule)) {
+      extractedData.exam_schedule = extractedData.exam_schedule.map((s: any) => ({
+        ...s,
+        date: bumpYearIfPast(s?.date),
+      }));
+    }
+
     return new Response(
       JSON.stringify({ success: true, data: extractedData }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

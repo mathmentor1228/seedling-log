@@ -35,8 +35,32 @@ const ROOM_IDS = ['room10', 'glass'];
 // Show popup at scheduled start (0), then again at 5min and 10min after if still unmarked.
 const ALERT_TIERS_MIN = [0, 5, 10];
 const POLL_INTERVAL_MS = 60_000;
-const SNOOZE_KEY = 'attendanceAlertSnoozeV2';
-const ESCALATED_KEY = 'attendanceAlertEscalatedV1';
+// ATT-ALERT-DISMISS-LOCAL-V3: persist per-user per-day dismiss in localStorage
+const SNOOZE_KEY_BASE = 'attendanceAlertSnoozeV3';
+const ESCALATED_KEY_BASE = 'attendanceAlertEscalatedV2';
+const MUTE_ALL_KEY_BASE = 'attendanceAlertMuteAllV2';
+
+function userKey(base: string, userId?: string) {
+  return `${base}:${userId ?? 'anon'}`;
+}
+
+// Load/save a single "mute everything until" timestamp (per-day, per-user) in localStorage
+function loadMuteAll(userId?: string): number {
+  try {
+    const raw = localStorage.getItem(userKey(MUTE_ALL_KEY_BASE, userId));
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { date: string; until: number };
+    const today = new Date().toISOString().split('T')[0];
+    if (parsed.date !== today) return 0;
+    return parsed.until || 0;
+  } catch {
+    return 0;
+  }
+}
+function saveMuteAll(until: number, userId?: string) {
+  const today = new Date().toISOString().split('T')[0];
+  localStorage.setItem(userKey(MUTE_ALL_KEY_BASE, userId), JSON.stringify({ date: today, until }));
+}
 
 function getDayOfWeekKo(d: Date) {
   return ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
@@ -51,7 +75,7 @@ function parseSlotToMinutes(slot: string) {
 // Snooze: map of entryKey -> epoch ms until which the popup should not auto-open
 function loadDayMap(key: string): Map<string, number> {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw) as { date: string; items: Record<string, number> };
     const today = new Date().toISOString().split('T')[0];
@@ -63,7 +87,7 @@ function loadDayMap(key: string): Map<string, number> {
 }
 function saveDayMap(key: string, m: Map<string, number>) {
   const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem(
+  localStorage.setItem(
     key,
     JSON.stringify({ date: today, items: Object.fromEntries(m.entries()) })
   );
@@ -74,8 +98,11 @@ export function AttendanceAlertWatcher() {
   const [entries, setEntries] = useState<OverdueEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const SNOOZE_KEY = userKey(SNOOZE_KEY_BASE, user?.id);
+  const ESCALATED_KEY = userKey(ESCALATED_KEY_BASE, user?.id);
   const snoozeRef = useRef<Map<string, number>>(loadDayMap(SNOOZE_KEY));
   const escalatedRef = useRef<Map<string, number>>(loadDayMap(ESCALATED_KEY));
+  const muteAllRef = useRef<number>(loadMuteAll(user?.id));
 
   const setBusy = (key: string, v: boolean) => {
     setBusyKeys((prev) => {
@@ -103,12 +130,16 @@ export function AttendanceAlertWatcher() {
     // This ensures the popup only shows children that belong to this teacher's actual timetable today.
     const teacherOnlyOwnSlots = role === 'teacher';
 
-    // Exclude withdrawn/inactive students from popup
+    // ATT-ALERT-NAME-LOOKUP-V1: room_assignments.student_names is sometimes out of sync
+    // with student_ids (different sort order), causing popups to show the WRONG name —
+    // including showing a withdrawn student's name when the actual id is an active student.
+    // Always resolve names from the students table by id, and filter out withdrawn here too.
     const { data: activeStudents } = await supabase
       .from('students')
-      .select('id')
+      .select('id, name')
       .in('enrollment_status', ['재학', '재등원']);
     const activeStudentIds = new Set((activeStudents ?? []).map((s) => s.id));
+    const nameById = new Map<string, string>((activeStudents ?? []).map((s) => [s.id, s.name]));
 
     const { data: assigned } = await supabase
       .from('room_assignments')
@@ -170,8 +201,7 @@ export function AttendanceAlertWatcher() {
       if (minutesLate > 240) return;
 
       const ids = (a.student_ids ?? []) as string[];
-      const names = (a.student_names ?? []) as string[];
-      ids.forEach((id, i) => {
+      ids.forEach((id) => {
         if (!activeStudentIds.has(id)) return;
         if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
         if (absentIds.has(id)) return;
@@ -183,7 +213,7 @@ export function AttendanceAlertWatcher() {
         overdue.push({
           key,
           studentId: id,
-          studentName: names[i] ?? '이름없음',
+          studentName: nameById.get(id) ?? '이름없음',
           roomLabel: ROOM_LABELS[a.room] ?? a.room,
           roomId: a.room,
           slotStart: slot.slice(0, 5),
@@ -209,8 +239,10 @@ export function AttendanceAlertWatcher() {
     }
 
     // Auto-open: only if any entry has crossed a new tier that isn't snoozed
+    // AND the global "mute all today" timestamp has not been set.
     const nowEpoch = Date.now();
-    const shouldOpen = overdue.some((o) => {
+    const globallyMuted = muteAllRef.current > nowEpoch;
+    const shouldOpen = !globallyMuted && overdue.some((o) => {
       const snoozeUntil = snoozeRef.current.get(o.key) ?? 0;
       if (snoozeUntil > nowEpoch) return false;
       // entry is past a tier boundary (0/5/10) → open
@@ -281,6 +313,10 @@ export function AttendanceAlertWatcher() {
     eod.setHours(23, 59, 59, 999);
     entries.forEach((e) => snoozeRef.current.set(e.key, eod.getTime()));
     saveDayMap(SNOOZE_KEY, snoozeRef.current);
+    // Also globally mute popups for the rest of the day so newly overdue
+    // students don't immediately re-open the dialog.
+    muteAllRef.current = eod.getTime();
+    saveMuteAll(eod.getTime(), user?.id);
   };
 
   const handleClose = () => {
