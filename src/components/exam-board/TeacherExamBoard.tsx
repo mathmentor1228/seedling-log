@@ -1,6 +1,7 @@
-// EXAM-BOARD-V2: 강사용 내신 보드 — 학생 카드형
-// 카드 3요소: ①성적 추세·하락 경보 ②시험 준비 체크(범위·분석지·특강) ③시험 후 팔로업(성적 입력→리뷰)
-// 담당학생 스코핑(class_students→classes.teacher_id) 기본 내장.
+// EXAM-BOARD-V3: 내신 사이클 브리핑 — "화면을 보러 가는 게 아니라 할 일이 도착한다"
+// ① 시험 일정(아카이브+학교일정+학원캘린더 3원 병합)이 종료를 감지 → 성적 입력 할 일 카드 자동 생성
+// ② 입력은 시험 단위 시트(연도·학기 자동, Enter로 다음 학생) — ScoreEntrySheet
+// ③ 기존 카드/표 보기는 상세 화면으로 유지. 담당학생 스코핑 기본 내장.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,8 +20,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, School as SchoolIcon,
   TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, CircleDashed,
-  LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, Pencil, Save,
+  LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, Pencil, Save, Inbox,
 } from 'lucide-react';
+import {
+  CycleExam, SUBJECT_COLORS, DEFAULT_LINE_COLOR,
+  normalizeSchool, detectCycleExams, periodSortKey, examResultLabel, examTitleLabel,
+} from './cycleUtils';
+import { ScoreEntrySheet, EntryRow } from './ScoreEntrySheet';
 
 type StudentRow = {
   id: string; name: string; grade: string | null; school: string | null;
@@ -49,42 +55,11 @@ type ReportRow = {
   school_name: string; grade: number | null; subject: string;
   exam_year: number | null; exam_period: string | null; is_published: boolean | null;
 };
+type EventRow = { title: string | null; start_at: string | null; end_at: string | null };
 
-const FOLLOWUP_WINDOW_DAYS = 30; // 시험 종료 후 팔로업을 추적하는 기간
-
-// 학교명 정규화 (useExamArchiveData와 동일 규칙 — 신길초등학교 ↔ 신길초)
-function normalizeSchool(name: string | null): string {
-  if (!name) return '';
-  const compact = name.trim().replace(/\s+/g, '');
-  for (const [suffix, rep] of [['초등학교', '초'], ['중학교', '중'], ['고등학교', '고']] as const) {
-    if (compact.endsWith(suffix)) return compact.slice(0, -suffix.length) + rep;
-  }
-  return compact;
-}
-
-function periodLabel(year: number | null, period: string | null, examType: string) {
-  if (!year && !period) return examType === 'performance' ? '수행' : examType;
-  const sem = period?.startsWith('2') ? '2학기' : '1학기';
-  const mf = period?.endsWith('a') ? '중간' : period?.endsWith('b') ? '기말' : '';
-  const base = `${year ? String(year).slice(2) + '년 ' : ''}${sem} ${mf}`.trim();
-  return examType === 'performance' ? `${base} 수행` : base;
-}
-
-function periodSortKey(year: number | null, period: string | null, examDate: string | null) {
-  const m: Record<string, number> = { '1-a': 1, '1-b': 2, '2-a': 3, '2-b': 4 };
-  const base = (year ?? 0) * 10 + (period ? m[period] ?? 0 : 0);
-  return base * 100000 + (examDate ? parseInt(examDate.replace(/-/g, '').slice(2), 10) % 100000 : 0);
-}
-
-// 과목별 라인 색 (내신 성적 추이 페이지와 동일 팔레트)
-const SUBJECT_COLORS: Record<string, string> = {
-  수학: 'hsl(217 91% 60%)',
-  영어: 'hsl(142 71% 45%)',
-  국어: 'hsl(271 76% 53%)',
-  과학: 'hsl(25 95% 53%)',
-  사회: 'hsl(0 84% 60%)',
-};
-const DEFAULT_LINE_COLOR = 'hsl(217 91% 60%)';
+const COLLECT_WINDOW_DAYS = 14;  // 시험 종료 후 성적 수집 할 일을 띄우는 기간
+const FOLLOWUP_WINDOW_DAYS = 30; // 팔로업 배지 추적 기간
+const PREP_WINDOW_DAYS = 21;     // 시험 전 준비 카드 기간
 
 // ── 미니 스파크라인 (내신=선, 수행=점) ──────────────────────────
 function ScoreSparkline({ line, perf, color }: { line: number[]; perf: number[]; color: string }) {
@@ -118,31 +93,25 @@ export function TeacherExamBoard() {
   const [reviews, setReviews] = useState<Map<string, ReviewRow>>(new Map());
   const [archives, setArchives] = useState<ArchiveRow[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [enrolledStudentIds, setEnrolledStudentIds] = useState<Set<string>>(new Set());
   const [teacherFilter, setTeacherFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [detailStudent, setDetailStudent] = useState<StudentRow | null>(null);
-  // VIEW-MODE-V1: 카드 ↔ 표 보기 전환 (localStorage에 기억)
+  const [sheetExam, setSheetExam] = useState<CycleExam | null>(null);
   const [viewMode, setViewMode] = useState<'card' | 'table'>(
     () => (localStorage.getItem('examBoard.viewMode') === 'table' ? 'table' : 'card')
   );
   const [tableSort, setTableSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'dday', dir: 1 });
 
-  function switchView(mode: 'card' | 'table') {
-    setViewMode(mode);
-    localStorage.setItem('examBoard.viewMode', mode);
-  }
-
-  function toggleSort(key: string) {
-    setTableSort(prev => (prev.key === key ? { key, dir: prev.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
-  }
-
-  // EDIT-MODE-V1: 보드에서 성적 직접 입력
-  const nowKST = getTodayKST(); // 'yyyy-MM-dd'
+  const nowKST = getTodayKST();
+  const currentYear = Number(nowKST.slice(0, 4));
   const nowMonth = Number(nowKST.slice(5, 7));
+
+  // EDIT-MODE-V1: 자유 입력(시험 시트 밖 보조 수단)
   const [editMode, setEditMode] = useState(false);
-  const [entryYear, setEntryYear] = useState<number>(Number(nowKST.slice(0, 4)));
+  const [entryYear, setEntryYear] = useState<number>(currentYear);
   const [entrySemester, setEntrySemester] = useState<'1' | '2'>(nowMonth >= 8 || nowMonth <= 1 ? '2' : '1');
   const [entryType, setEntryType] = useState<'midterm' | 'final' | 'performance'>(
     [3, 4, 9, 10].includes(nowMonth) ? 'midterm' : 'final'
@@ -151,69 +120,22 @@ export function TeacherExamBoard() {
   const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({});
   const entryPeriod = `${entrySemester}-${entryType === 'midterm' ? 'a' : 'b'}`;
 
+  function switchView(mode: 'card' | 'table') {
+    setViewMode(mode);
+    localStorage.setItem('examBoard.viewMode', mode);
+  }
+  function toggleSort(key: string) {
+    setTableSort(prev => (prev.key === key ? { key, dir: prev.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  }
   function draftKey(studentId: string, subject: string) {
     return `${studentId}|${subject}`;
-  }
-
-  async function saveScore(student: StudentRow, subject: string) {
-    const key = draftKey(student.id, subject);
-    const raw = scoreDrafts[key];
-    if (raw == null || raw.trim() === '') return;
-    const score = Number(raw);
-    if (Number.isNaN(score) || score < 0 || score > 100) {
-      toast.error('0~100 사이 점수를 입력해주세요.');
-      return;
-    }
-    setSavingKeys(p => ({ ...p, [key]: true }));
-    try {
-      const existing = (resultsByStudent.get(student.id) || []).find(r =>
-        r.subject === subject && r.exam_year === entryYear
-        && r.exam_period === entryPeriod && r.exam_type === entryType);
-      if (existing) {
-        const { data, error } = await supabase.functions.invoke('student-exam-results', {
-          body: { action: 'staff_update', result_id: existing.id, patch: { actual_score: score } },
-        });
-        if (error || data?.error) throw new Error(data?.error || error?.message);
-        setResults(prev => prev.map(r => (r.id === existing.id ? { ...r, actual_score: score } : r)));
-      } else {
-        const { data: created, error: cErr } = await supabase.functions.invoke('student-exam-results', {
-          body: {
-            action: 'staff_create',
-            student_id: student.id,
-            school_name: student.school || '학교 미지정',
-            subject,
-            exam_type: entryType,
-            exam_year: entryYear,
-            exam_period: entryPeriod,
-            exam_date: nowKST,
-          },
-        });
-        if (cErr || created?.error || !created?.id) throw new Error(created?.error || cErr?.message || '생성 실패');
-        const { data: upd, error: uErr } = await supabase.functions.invoke('student-exam-results', {
-          body: { action: 'staff_update', result_id: created.id, patch: { actual_score: score } },
-        });
-        if (uErr || upd?.error) throw new Error(upd?.error || uErr?.message);
-        setResults(prev => [...prev, {
-          id: created.id, student_id: student.id, subject,
-          exam_type: entryType, exam_year: entryYear, exam_period: entryPeriod,
-          actual_score: score, exam_date: nowKST, submitted_at: new Date().toISOString(),
-        }]);
-      }
-      setScoreDrafts(p => { const n = { ...p }; delete n[key]; return n; });
-      toast.success(`${student.name} ${subject} ${score}점 저장됨 (${entryYear} ${entrySemester}학기 ${entryType === 'midterm' ? '중간' : entryType === 'final' ? '기말' : '수행'})`);
-    } catch (e: any) {
-      toast.error(`저장 실패: ${e.message || e}`);
-    } finally {
-      setSavingKeys(p => { const n = { ...p }; delete n[key]; return n; });
-    }
   }
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const today = getTodayKST();
-      const windowStart = format(subDays(parseISO(today), FOLLOWUP_WINDOW_DAYS), 'yyyy-MM-dd');
-      const [stuRes, ciRes, tRes, resRes, arcRes, schRes, repRes, courseRes] = await Promise.all([
+      const windowStart = format(subDays(parseISO(nowKST), FOLLOWUP_WINDOW_DAYS), 'yyyy-MM-dd');
+      const [stuRes, ciRes, tRes, resRes, arcRes, schRes, evtRes, repRes, courseRes] = await Promise.all([
         supabase.from('students')
           .select('id, name, grade, school, school_level, grade_year')
           .in('enrollment_status', ['재학', '재등원']).order('name'),
@@ -226,7 +148,11 @@ export function TeacherExamBoard() {
         supabase.from('school_schedules')
           .select('school_name, schedule_type, title, start_date, end_date, grade, subject')
           .in('schedule_type', ['exam', 'performance'])
-          .gte('start_date', windowStart), // 지난 30일 시험(팔로업용) + 미래 일정
+          .gte('start_date', windowStart),
+        supabase.from('academy_events')
+          .select('title, start_at, end_at')
+          .eq('category', 'exam')
+          .gte('start_at', `${windowStart}T00:00:00`),
         supabase.from('exam_analysis_reports')
           .select('school_name, grade, subject, exam_year, exam_period, is_published'),
         supabase.from('exam_prep_courses').select('id, subject').is('deleted_at', null),
@@ -243,9 +169,9 @@ export function TeacherExamBoard() {
       setResults(resultRows);
       setArchives(((arcRes.data || []) as any[]).map(a => ({ ...a, school_name: normalizeSchool(a.school_name) })));
       setSchedules(((schRes.data || []) as any[]).map(s => ({ ...s, school_name: normalizeSchool(s.school_name) })));
+      setEvents((evtRes.data as EventRow[]) || []);
       setReports(((repRes.data || []) as any[]).map(r => ({ ...r, school_name: normalizeSchool(r.school_name) })));
 
-      // 최근 결과에 대한 채점/리뷰 상태 (팔로업용)
       const recentIds = resultRows
         .filter(r => (r.submitted_at || '').slice(0, 10) >= windowStart || (r.exam_date || '') >= windowStart)
         .map(r => r.id);
@@ -265,12 +191,79 @@ export function TeacherExamBoard() {
       }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── 성적 저장 (시트·수정모드 공용) ──
+  async function persistScore(
+    student: StudentRow, subject: string, score: number,
+    meta: { year: number; period: string; examType: 'midterm' | 'final' | 'performance' },
+  ): Promise<boolean> {
+    try {
+      const existing = (resultsByStudent.get(student.id) || []).find(r =>
+        r.subject === subject && r.exam_year === meta.year
+        && r.exam_period === meta.period && r.exam_type === meta.examType);
+      if (existing) {
+        const { data, error } = await supabase.functions.invoke('student-exam-results', {
+          body: { action: 'staff_update', result_id: existing.id, patch: { actual_score: score } },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message);
+        setResults(prev => prev.map(r => (r.id === existing.id ? { ...r, actual_score: score } : r)));
+      } else {
+        const { data: created, error: cErr } = await supabase.functions.invoke('student-exam-results', {
+          body: {
+            action: 'staff_create',
+            student_id: student.id,
+            school_name: student.school || '학교 미지정',
+            subject,
+            exam_type: meta.examType,
+            exam_year: meta.year,
+            exam_period: meta.period,
+            exam_date: nowKST,
+          },
+        });
+        if (cErr || created?.error || !created?.id) throw new Error(created?.error || cErr?.message || '생성 실패');
+        const { data: upd, error: uErr } = await supabase.functions.invoke('student-exam-results', {
+          body: { action: 'staff_update', result_id: created.id, patch: { actual_score: score } },
+        });
+        if (uErr || upd?.error) throw new Error(upd?.error || uErr?.message);
+        setResults(prev => [...prev, {
+          id: created.id, student_id: student.id, subject,
+          exam_type: meta.examType, exam_year: meta.year, exam_period: meta.period,
+          actual_score: score, exam_date: nowKST, submitted_at: new Date().toISOString(),
+        }]);
+      }
+      const label = examResultLabel(
+        { exam_year: meta.year, exam_period: meta.period, exam_type: meta.examType },
+        student.grade_year, currentYear,
+      );
+      toast.success(`${student.name} ${subject} ${score}점 — ${label} 저장됨`);
+      return true;
+    } catch (e: any) {
+      toast.error(`저장 실패: ${e.message || e}`);
+      return false;
+    }
+  }
+
+  async function saveScore(student: StudentRow, subject: string) {
+    const key = draftKey(student.id, subject);
+    const raw = scoreDrafts[key];
+    if (raw == null || raw.trim() === '') return;
+    const score = Number(raw);
+    if (Number.isNaN(score) || score < 0 || score > 100) {
+      toast.error('0~100 사이 점수를 입력해주세요.');
+      return;
+    }
+    setSavingKeys(p => ({ ...p, [key]: true }));
+    const ok = await persistScore(student, subject, score, { year: entryYear, period: entryPeriod, examType: entryType });
+    setSavingKeys(p => { const n = { ...p }; delete n[key]; return n; });
+    if (ok) setScoreDrafts(p => { const n = { ...p }; delete n[key]; return n; });
+  }
 
   const isTeacherRole = role === 'teacher';
   const effectiveTeacherId = isTeacherRole ? (user?.id ?? '') : teacherFilter;
 
-  // 담당학생 스코핑: 학생 → 담당 과목 집합
+  // ── 담당학생 스코핑 ──
   const scopedSubjectsByStudent = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const ci of classInfos) {
@@ -288,7 +281,6 @@ export function TeacherExamBoard() {
     return Array.from(s).sort();
   }, [scopedSubjectsByStudent]);
 
-  // 학생×과목 → 담당 선생님 이름 (표 모드 '담당' 열, 선생님별 정렬용)
   const teacherNameByStudentSubject = useMemo(() => {
     const nameById = new Map(teachers.map(t => [t.id, t.full_name]));
     const m = new Map<string, string>();
@@ -324,10 +316,17 @@ export function TeacherExamBoard() {
     return m;
   }, [results]);
 
-  const today = useMemo(() => parseISO(getTodayKST()), []);
-  const todayStr = getTodayKST();
+  const today = useMemo(() => parseISO(nowKST), [nowKST]);
 
-  // ── 학교별 그룹: 다가오는/최근 지난 시험 + 수행 ──
+  // ── 시험 사이클 감지 (3원 병합 — 학원 캘린더 포함!) ──
+  const cycleExams = useMemo(() => {
+    const schoolNames = Array.from(new Set(
+      scopedStudents.map(s => normalizeSchool(s.school)).filter(Boolean)
+    ));
+    return detectCycleExams({ archives, schedules, events, schoolNames });
+  }, [archives, schedules, events, scopedStudents]);
+
+  // ── 학교별 그룹 ──
   const schoolGroups = useMemo(() => {
     const groups = new Map<string, StudentRow[]>();
     for (const s of scopedStudents) {
@@ -336,41 +335,115 @@ export function TeacherExamBoard() {
       groups.get(key)!.push(s);
     }
     const list = Array.from(groups.entries()).map(([school, studs]) => {
-      const examEntries = [
-        ...schedules
-          .filter(s => s.school_name === school && s.schedule_type === 'exam' && s.start_date)
-          .map(s => ({ title: s.title, date: s.start_date!, dday: differenceInDays(parseISO(s.start_date!), today) })),
-        ...archives
-          .filter(a => a.school_name === school && a.exam_date_start)
-          .map(a => ({
-            title: `${a.semester || ''} ${a.exam_type || '시험'}`.trim(),
-            date: a.exam_date_start!,
-            dday: differenceInDays(parseISO(a.exam_date_start!), today),
-          })),
-      ];
-      const upcoming = examEntries.filter(e => e.dday >= 0).sort((a, b) => a.dday - b.dday)[0] || null;
-      const recentPast = examEntries
-        .filter(e => e.dday < 0 && e.dday >= -FOLLOWUP_WINDOW_DAYS)
-        .sort((a, b) => b.dday - a.dday)[0] || null;
+      const exams = cycleExams.get(school) || [];
+      const upcomingList = exams
+        .filter(e => e.start >= nowKST)
+        .map(e => ({ ...e, dday: differenceInDays(parseISO(e.start), today) }));
+      const upcoming = upcomingList[0] || null;
+      const past = exams
+        .filter(e => e.end < nowKST && differenceInDays(today, parseISO(e.end)) <= FOLLOWUP_WINDOW_DAYS)
+        .sort((a, b) => b.end.localeCompare(a.end));
+      const recentPast = past[0] || null;
       const perfs = schedules
-        .filter(s => s.school_name === school && s.schedule_type === 'performance' && s.start_date)
+        .filter(s => s.school_name === school && s.schedule_type === 'performance' && s.start_date && s.start_date >= nowKST)
         .map(s => ({ title: s.title, subject: s.subject, dday: differenceInDays(parseISO(s.start_date!), today) }))
-        .filter(p => p.dday >= 0 && p.dday <= 45)
+        .filter(p => p.dday <= 45)
         .sort((a, b) => a.dday - b.dday);
+      studs.sort((a, b) => (a.grade_year ?? 9) - (b.grade_year ?? 9) || a.name.localeCompare(b.name, 'ko'));
       return { school, students: studs, upcoming, recentPast, perfs };
     });
-    list.sort((a, b) => (a.upcoming?.dday ?? 9999) - (b.upcoming?.dday ?? 9999) || a.school.localeCompare(b.school, 'ko'));
+    list.sort((a, b) => ((a.upcoming?.dday ?? 9999) - (b.upcoming?.dday ?? 9999)) || a.school.localeCompare(b.school, 'ko'));
     return list;
-  }, [scopedStudents, schedules, archives, today]);
+  }, [scopedStudents, cycleExams, schedules, today, nowKST]);
+
+  // ── 성적 수집 할 일: 종료(또는 진행 중) 시험 × 담당 학생 ──
+  type CollectTask = {
+    exam: CycleExam; school: string; total: number; done: number;
+    daysSinceEnd: number; ongoing: boolean;
+  };
+  const collectTasks = useMemo<CollectTask[]>(() => {
+    const tasks: CollectTask[] = [];
+    for (const g of schoolGroups) {
+      const exams = cycleExams.get(g.school) || [];
+      for (const exam of exams) {
+        const ended = exam.end < nowKST;
+        const ongoing = exam.start <= nowKST && exam.end >= nowKST;
+        const daysSinceEnd = ended ? differenceInDays(today, parseISO(exam.end)) : 0;
+        if (!ongoing && (!ended || daysSinceEnd > COLLECT_WINDOW_DAYS)) continue;
+        let total = 0, done = 0;
+        for (const s of g.students) {
+          const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
+          for (const subject of subj) {
+            if (subjectFilter !== 'all' && subject !== subjectFilter) continue;
+            total += 1;
+            const has = (resultsByStudent.get(s.id) || []).some(r =>
+              r.subject === subject && r.exam_year === exam.year
+              && r.exam_period === exam.period && r.exam_type === exam.examType
+              && r.actual_score != null);
+            if (has) done += 1;
+          }
+        }
+        if (total > 0) tasks.push({ exam, school: g.school, total, done, daysSinceEnd, ongoing });
+      }
+    }
+    // 미완료 먼저, 종료 오래된 순
+    tasks.sort((a, b) =>
+      Number(a.done === a.total) - Number(b.done === b.total)
+      || b.daysSinceEnd - a.daysSinceEnd);
+    return tasks;
+  }, [schoolGroups, cycleExams, scopedSubjectsByStudent, resultsByStudent, subjectFilter, nowKST, today]);
+
+  // ── 입력 시트 행 생성 ──
+  const sheetRows = useMemo<EntryRow[]>(() => {
+    if (!sheetExam) return [];
+    const rows: EntryRow[] = [];
+    const examKey = periodSortKey(sheetExam.year, sheetExam.period, null);
+    for (const s of scopedStudents) {
+      if (normalizeSchool(s.school) !== sheetExam.school) continue;
+      const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
+      for (const subject of subj) {
+        if (subjectFilter !== 'all' && subject !== subjectFilter) continue;
+        const all = (resultsByStudent.get(s.id) || []).filter(r => r.subject === subject);
+        const existing = all.find(r =>
+          r.exam_year === sheetExam.year && r.exam_period === sheetExam.period
+          && r.exam_type === sheetExam.examType && r.actual_score != null);
+        const prevRow = all
+          .filter(r => (r.exam_type === 'midterm' || r.exam_type === 'final')
+            && r.actual_score != null
+            && periodSortKey(r.exam_year, r.exam_period, null) < examKey)
+          .pop();
+        rows.push({
+          studentId: s.id,
+          studentName: s.name,
+          gradeLabel: s.grade || (s.grade_year ? `${s.school_level || ''}${s.grade_year}` : ''),
+          subject,
+          prev: prevRow?.actual_score != null ? Number(prevRow.actual_score) : null,
+          existing: existing?.actual_score != null ? Number(existing.actual_score) : null,
+        });
+      }
+    }
+    rows.sort((a, b) => a.subject.localeCompare(b.subject, 'ko') || a.studentName.localeCompare(b.studentName, 'ko'));
+    return rows;
+  }, [sheetExam, scopedStudents, scopedSubjectsByStudent, resultsByStudent, subjectFilter]);
+
+  const studentById = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
+
+  async function handleSheetSave(row: EntryRow, score: number): Promise<boolean> {
+    if (!sheetExam) return false;
+    const student = studentById.get(row.studentId);
+    if (!student) return false;
+    return persistScore(student, row.subject, score, {
+      year: sheetExam.year, period: sheetExam.period, examType: sheetExam.examType,
+    });
+  }
 
   // ── 학생 카드 데이터 ──
-  function cardData(student: StudentRow, group: { upcoming: any; recentPast: any }) {
+  function cardData(student: StudentRow, group: { upcoming: any; recentPast: CycleExam | null }) {
     const school = normalizeSchool(student.school);
     const subjSet = scopedSubjectsByStudent.get(student.id) || new Set<string>();
     const targets = subjectFilter !== 'all' ? [subjectFilter] : Array.from(subjSet).sort();
     const all = resultsByStudent.get(student.id) || [];
 
-    // 과목별 추세 + 하락 경보
     const subjects = targets.map(subject => {
       const rows = all.filter(r => r.subject === subject);
       const lineRows = rows.filter(r => r.exam_type === 'midterm' || r.exam_type === 'final');
@@ -380,12 +453,11 @@ export function TeacherExamBoard() {
       const delta = line.length >= 2 ? line[line.length - 1] - line[line.length - 2] : null;
       const delta2 = line.length >= 3 ? line[line.length - 2] - line[line.length - 3] : null;
       const doubleDrop = delta != null && delta < 0 && delta2 != null && delta2 < 0;
-      // 이번 시험 범위
       const scopeRows = archives
         .filter(a => a.school_name === school && a.subject?.startsWith(subject)
           && (a.grade_year == null || a.grade_year === student.grade_year) && a.exam_scope)
         .sort((a, b) => (a.exam_date_start || '9999').localeCompare(b.exam_date_start || '9999'));
-      const scopeRow = scopeRows.find(r => (r.exam_date_start || '') >= todayStr) || scopeRows[scopeRows.length - 1];
+      const scopeRow = scopeRows.find(r => (r.exam_date_start || '') >= nowKST) || scopeRows[scopeRows.length - 1];
       return {
         subject, line: line.slice(-6), perf: perf.slice(-6), last, delta, doubleDrop,
         scope: scopeRow?.exam_scope || null,
@@ -395,7 +467,6 @@ export function TeacherExamBoard() {
     const anyDrop = subjects.some(s => s.delta != null && s.delta < 0);
     const anyDoubleDrop = subjects.some(s => s.doubleDrop);
 
-    // 준비 체크 (다가오는 시험이 있을 때)
     let prep: { scopeOk: boolean; reportOk: boolean; prepEnrolled: boolean } | null = null;
     if (group.upcoming) {
       const scopeOk = subjects.some(s => !!s.scope);
@@ -405,14 +476,13 @@ export function TeacherExamBoard() {
       prep = { scopeOk, reportOk, prepEnrolled: enrolledStudentIds.has(student.id) };
     }
 
-    // 시험 후 팔로업 (최근 지난 시험이 있을 때): 성적 입력 → 리뷰 → 공개
     let followup: { hasResult: boolean; reviewed: boolean; published: boolean } | null = null;
     if (group.recentPast) {
+      const rp = group.recentPast;
       const recent = all.filter(r =>
         targets.includes(r.subject)
-        && ((r.exam_date || '') >= group.recentPast.date
-          || (r.submitted_at || '').slice(0, 10) >= group.recentPast.date));
-      const hasResult = recent.length > 0;
+        && r.exam_year === rp.year && r.exam_period === rp.period && r.exam_type === rp.examType);
+      const hasResult = recent.some(r => r.actual_score != null);
       const revs = recent.map(r => reviews.get(r.id)).filter(Boolean) as ReviewRow[];
       followup = {
         hasResult,
@@ -423,23 +493,6 @@ export function TeacherExamBoard() {
 
     return { subjects, anyDrop, anyDoubleDrop, prep, followup };
   }
-
-  // MISSING-2026-V1: 2026년부터는 성적 미입력을 상단에 표시
-  const missingCurrent = useMemo(() => {
-    const items: { student: StudentRow; subject: string }[] = [];
-    for (const s of scopedStudents) {
-      const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
-      const targets = subjectFilter !== 'all' ? [subjectFilter] : Array.from(subj).sort();
-      for (const subject of targets) {
-        const has = (resultsByStudent.get(s.id) || []).some(r =>
-          r.subject === subject && (r.exam_year ?? 0) >= 2026
-          && (r.exam_type === 'midterm' || r.exam_type === 'final')
-          && r.actual_score != null);
-        if (!has) items.push({ student: s, subject });
-      }
-    }
-    return items;
-  }, [scopedStudents, scopedSubjectsByStudent, resultsByStudent, subjectFilter]);
 
   // ── 표(엑셀) 모드: 학생×과목 평면 행 ──
   type FlatRow = {
@@ -459,7 +512,7 @@ export function TeacherExamBoard() {
             student: s,
             school: g.school,
             dday: g.upcoming?.dday ?? null,
-            examTitle: g.upcoming?.title ?? (g.recentPast ? `${g.recentPast.title} 종료` : null),
+            examTitle: g.upcoming ? examTitleLabel(g.upcoming) : (g.recentPast ? `${examTitleLabel(g.recentPast)} 종료` : null),
             subject: sub.subject,
             teacher: teacherNameByStudentSubject.get(`${s.id}|${sub.subject}`) || '—',
             last: sub.last, delta: sub.delta,
@@ -498,12 +551,15 @@ export function TeacherExamBoard() {
     return (
       <div className="space-y-4 p-1">
         <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-24 w-full" />
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-48 w-full" />)}
+          {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-44 w-full" />)}
         </div>
       </div>
     );
   }
+
+  const pendingTasks = collectTasks.filter(t => t.done < t.total);
 
   return (
     <div className="space-y-5">
@@ -515,7 +571,7 @@ export function TeacherExamBoard() {
         <span className="text-sm text-muted-foreground">
           {isTeacherRole ? '내 담당 학생' : '담당 학생 기준'} · {scopedStudents.length}명
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
           {!isTeacherRole && (
             <Select value={teacherFilter || 'all'} onValueChange={v => setTeacherFilter(v === 'all' ? '' : v)}>
               <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="선생님 전체" /></SelectTrigger>
@@ -532,7 +588,6 @@ export function TeacherExamBoard() {
               {mySubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          {/* 보기 전환: 카드 ↔ 표 */}
           <div className="flex rounded-md border overflow-hidden">
             <Button
               variant={viewMode === 'card' ? 'default' : 'ghost'} size="sm"
@@ -556,11 +611,82 @@ export function TeacherExamBoard() {
         </div>
       </div>
 
-      {/* 수정 모드: 입력 대상 시기 선택 바 */}
+      {/* ═══ 내신 할 일 (시험 사이클 자동 생성) ═══ */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold flex items-center gap-1.5">
+          <Inbox className="w-4 h-4" />
+          내신 할 일
+          {pendingTasks.length > 0 && <Badge variant="destructive" className="text-[11px]">{pendingTasks.length}건</Badge>}
+          <span className="text-xs font-normal text-muted-foreground">시험 일정에서 자동 생성</span>
+        </h2>
+
+        {collectTasks.length === 0 && (
+          <p className="text-sm text-muted-foreground border rounded-md px-4 py-3 bg-muted/20">
+            최근 {COLLECT_WINDOW_DAYS}일 안에 종료된 시험이 없어요. 시험이 끝나면 성적 입력 할 일이 여기 자동으로 뜹니다.
+            (시험 일정이 안 잡혀 있다면 내신 자료실에서 등록해주세요.)
+          </p>
+        )}
+
+        {collectTasks.map(t => {
+          const complete = t.done === t.total;
+          return (
+            <div
+              key={`${t.school}-${t.exam.period}-${t.exam.year}`}
+              className={`flex items-center gap-3 rounded-lg border bg-card px-4 py-3 ${complete ? 'opacity-60' : 'cursor-pointer hover:shadow-sm'} transition-shadow`}
+              onClick={() => !complete && setSheetExam(t.exam)}
+            >
+              <span className={`w-1 self-stretch rounded ${complete ? 'bg-green-500' : t.daysSinceEnd >= 5 ? 'bg-red-500' : 'bg-amber-500'}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold tracking-wide text-muted-foreground">
+                  {t.ongoing ? '시험 진행 중' : `성적 수집 · 종료 ${t.daysSinceEnd}일째`}
+                </p>
+                <p className="font-semibold text-sm">
+                  {t.school} {examTitleLabel(t.exam)} — 성적 입력
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 max-w-56 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className={`h-full ${complete ? 'bg-green-500' : 'bg-primary'} transition-all`}
+                      style={{ width: `${(t.done / t.total) * 100}%` }} />
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums">{t.done}/{t.total}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    시행 {t.exam.start.slice(5).replace('-', '/')}{t.exam.end !== t.exam.start ? `–${t.exam.end.slice(5).replace('-', '/')}` : ''}
+                  </span>
+                </div>
+              </div>
+              {complete ? (
+                <Badge variant="secondary" className="gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />완료</Badge>
+              ) : (
+                <Button size="sm" onClick={e => { e.stopPropagation(); setSheetExam(t.exam); }}>입력 시트</Button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* 다가오는 시험·수행 요약 줄 */}
+        {schoolGroups.some(g => (g.upcoming && g.upcoming.dday <= PREP_WINDOW_DAYS) || g.perfs.length > 0) && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {schoolGroups.filter(g => g.upcoming && g.upcoming.dday <= PREP_WINDOW_DAYS).map(g => (
+              <Badge key={g.school} variant={g.upcoming!.dday <= 7 ? 'destructive' : 'secondary'} className="gap-1">
+                <CalendarClock className="w-3 h-3" />
+                {g.school} {examTitleLabel(g.upcoming!)} D-{g.upcoming!.dday === 0 ? 'Day' : g.upcoming!.dday}
+              </Badge>
+            ))}
+            {schoolGroups.flatMap(g => g.perfs.map((p, i) => (
+              <Badge key={`${g.school}-p${i}`} variant="outline" className="gap-1 border-amber-400 text-amber-700">
+                <AlertTriangle className="w-3 h-3" />
+                {g.school} 수행{p.subject ? `(${p.subject})` : ''} D-{p.dday === 0 ? 'Day' : p.dday}
+              </Badge>
+            )))}
+          </div>
+        )}
+      </section>
+
+      {/* 수정 모드: 입력 대상 시기 선택 바 (시험 시트 밖 자유 입력용) */}
       {editMode && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
           <Pencil className="w-4 h-4 text-muted-foreground" />
-          <span className="font-medium">입력 대상:</span>
+          <span className="font-medium">자유 입력 대상:</span>
           <Select value={String(entryYear)} onValueChange={v => setEntryYear(Number(v))}>
             <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -583,25 +709,7 @@ export function TeacherExamBoard() {
               <SelectItem value="performance">수행평가</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">점수 입력 후 저장 아이콘(💾)을 누르면 이 시기로 기록됩니다.</span>
-        </div>
-      )}
-
-      {/* 2026년~ 성적 미입력 알림 */}
-      {missingCurrent.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span className="font-medium">2026년 내신 성적 미입력 {missingCurrent.length}건</span>
-          <span className="text-xs truncate max-w-[50%]">
-            {missingCurrent.slice(0, 5).map(m => `${m.student.name}(${m.subject})`).join(', ')}
-            {missingCurrent.length > 5 ? ` 외 ${missingCurrent.length - 5}건` : ''}
-          </span>
-          {!editMode && (
-            <Button variant="outline" size="sm" className="h-7 ml-auto border-amber-400 text-amber-900"
-              onClick={() => setEditMode(true)}>
-              <Pencil className="w-3.5 h-3.5 mr-1" />바로 입력
-            </Button>
-          )}
+          <span className="text-xs text-muted-foreground">과거 성적 소급 입력용 — 최근 시험은 위의 할 일 카드에서 입력하는 게 빨라요.</span>
         </div>
       )}
 
@@ -621,21 +729,15 @@ export function TeacherExamBoard() {
             {g.upcoming ? (
               <Badge variant={g.upcoming.dday <= 7 ? 'destructive' : g.upcoming.dday <= 21 ? 'default' : 'secondary'} className="gap-1">
                 <CalendarClock className="w-3 h-3" />
-                {g.upcoming.title} D-{g.upcoming.dday === 0 ? 'Day' : g.upcoming.dday}
+                {examTitleLabel(g.upcoming)} D-{g.upcoming.dday === 0 ? 'Day' : g.upcoming.dday}
               </Badge>
             ) : g.recentPast ? (
               <Badge variant="outline" className="gap-1 text-muted-foreground">
-                {g.recentPast.title} 종료 ({-g.recentPast.dday}일 전) — 팔로업
+                {examTitleLabel(g.recentPast)} 종료 — 팔로업
               </Badge>
             ) : (
               <Badge variant="outline" className="text-muted-foreground">예정 시험 미등록</Badge>
             )}
-            {g.perfs.map((p, i) => (
-              <Badge key={i} variant="outline" className="gap-1 border-amber-400 text-amber-700">
-                <AlertTriangle className="w-3 h-3" />
-                수행 {p.subject ? `(${p.subject}) ` : ''}D-{p.dday === 0 ? 'Day' : p.dday}
-              </Badge>
-            ))}
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {g.students
@@ -653,7 +755,6 @@ export function TeacherExamBoard() {
                   onClick={() => setDetailStudent(s)}
                 >
                   <CardContent className="p-4 space-y-2.5">
-                    {/* 이름 + 경보 */}
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{s.name}</span>
                       <span className="text-xs text-muted-foreground">
@@ -671,7 +772,6 @@ export function TeacherExamBoard() {
                       )}
                     </div>
 
-                    {/* 과목별 점수 + 추세 (+수정 모드 입력) */}
                     <div className="space-y-1.5">
                       {d.subjects.filter(sub => editMode || sub.last != null || sub.perf.length > 0).map(sub => (
                         <div key={sub.subject} className="flex items-center gap-2">
@@ -714,7 +814,6 @@ export function TeacherExamBoard() {
                       )}
                     </div>
 
-                    {/* 준비 체크 (시험 전) / 팔로업 (시험 후) */}
                     {d.prep && (
                       <div className="flex flex-wrap gap-1 pt-1 border-t">
                         <PrepBadge ok={d.prep.scopeOk} label="시험범위" />
@@ -730,7 +829,6 @@ export function TeacherExamBoard() {
                       </div>
                     )}
 
-                    {/* 시험 범위 (한 줄) */}
                     {d.prep && d.subjects.some(sub => sub.scope) && (
                       <p className="text-[11px] text-muted-foreground truncate"
                         title={d.subjects.filter(sub => sub.scope).map(sub => `${sub.subject}: ${sub.scope}`).join(' / ')}>
@@ -744,7 +842,7 @@ export function TeacherExamBoard() {
         </section>
       ))}
 
-      {/* 표(엑셀) 모드 — 학생×과목 1행, 열 머리글 클릭으로 정렬 */}
+      {/* 표(엑셀) 모드 */}
       {viewMode === 'table' && scopedStudents.length > 0 && (
         <Card>
           <CardContent className="p-0 overflow-x-auto">
@@ -865,6 +963,15 @@ export function TeacherExamBoard() {
         </Button>
       </div>
 
+      {/* 시험 단위 성적 입력 시트 */}
+      <ScoreEntrySheet
+        open={!!sheetExam}
+        onOpenChange={o => !o && setSheetExam(null)}
+        exam={sheetExam}
+        rows={sheetRows}
+        onSave={handleSheetSave}
+      />
+
       {/* 학생 상세: 과목별 성적 이력 */}
       <Dialog open={!!detailStudent} onOpenChange={o => !o && setDetailStudent(null)}>
         <DialogContent className="max-w-lg">
@@ -890,17 +997,15 @@ export function TeacherExamBoard() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>시기</TableHead>
-                          <TableHead>유형</TableHead>
+                          <TableHead>시험</TableHead>
                           <TableHead className="text-right">점수</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {rows.slice().reverse().map((r, i) => (
                           <TableRow key={i}>
-                            <TableCell className="text-sm">{periodLabel(r.exam_year, r.exam_period, r.exam_type)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {r.exam_type === 'midterm' ? '중간' : r.exam_type === 'final' ? '기말' : r.exam_type === 'performance' ? '수행' : '기타'}
+                            <TableCell className="text-sm">
+                              {examResultLabel(r, detailStudent.grade_year, currentYear)}
                             </TableCell>
                             <TableCell className="text-right font-medium">{r.actual_score}</TableCell>
                           </TableRow>
