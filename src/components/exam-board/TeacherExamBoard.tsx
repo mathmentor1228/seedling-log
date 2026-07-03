@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, School as SchoolIcon,
   TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, CircleDashed,
+  LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 
 type StudentRow = {
@@ -120,6 +121,20 @@ export function TeacherExamBoard() {
   const [teacherFilter, setTeacherFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [detailStudent, setDetailStudent] = useState<StudentRow | null>(null);
+  // VIEW-MODE-V1: 카드 ↔ 표 보기 전환 (localStorage에 기억)
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(
+    () => (localStorage.getItem('examBoard.viewMode') === 'table' ? 'table' : 'card')
+  );
+  const [tableSort, setTableSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'dday', dir: 1 });
+
+  function switchView(mode: 'card' | 'table') {
+    setViewMode(mode);
+    localStorage.setItem('examBoard.viewMode', mode);
+  }
+
+  function toggleSort(key: string) {
+    setTableSort(prev => (prev.key === key ? { key, dir: prev.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  }
 
   useEffect(() => {
     (async () => {
@@ -200,6 +215,21 @@ export function TeacherExamBoard() {
     scopedSubjectsByStudent.forEach(subj => subj.forEach(v => s.add(v)));
     return Array.from(s).sort();
   }, [scopedSubjectsByStudent]);
+
+  // 학생×과목 → 담당 선생님 이름 (표 모드 '담당' 열, 선생님별 정렬용)
+  const teacherNameByStudentSubject = useMemo(() => {
+    const nameById = new Map(teachers.map(t => [t.id, t.full_name]));
+    const m = new Map<string, string>();
+    for (const ci of classInfos) {
+      if (!ci.subject || !ci.teacher_id) continue;
+      const key = `${ci.student_id}|${ci.subject}`;
+      const name = nameById.get(ci.teacher_id);
+      if (!name) continue;
+      const prev = m.get(key);
+      m.set(key, prev && !prev.includes(name) ? `${prev}, ${name}` : name);
+    }
+    return m;
+  }, [classInfos, teachers]);
 
   const scopedStudents = useMemo(
     () => students.filter(s => {
@@ -322,6 +352,59 @@ export function TeacherExamBoard() {
     return { subjects, anyDrop, anyDoubleDrop, prep, followup };
   }
 
+  // ── 표(엑셀) 모드: 학생×과목 평면 행 ──
+  type FlatRow = {
+    student: StudentRow; school: string; dday: number | null; examTitle: string | null;
+    subject: string; teacher: string; last: number | null; delta: number | null;
+    line: number[]; perf: number[]; scope: string | null;
+    prep: ReturnType<typeof cardData>['prep']; followup: ReturnType<typeof cardData>['followup'];
+    doubleDrop: boolean;
+  };
+  const flatRows = useMemo<FlatRow[]>(() => {
+    const rows: FlatRow[] = [];
+    for (const g of schoolGroups) {
+      for (const s of g.students) {
+        const d = cardData(s, g);
+        for (const sub of d.subjects) {
+          rows.push({
+            student: s,
+            school: g.school,
+            dday: g.upcoming?.dday ?? null,
+            examTitle: g.upcoming?.title ?? (g.recentPast ? `${g.recentPast.title} 종료` : null),
+            subject: sub.subject,
+            teacher: teacherNameByStudentSubject.get(`${s.id}|${sub.subject}`) || '—',
+            last: sub.last, delta: sub.delta,
+            line: sub.line, perf: sub.perf, scope: sub.scope,
+            prep: d.prep, followup: d.followup, doubleDrop: sub.doubleDrop,
+          });
+        }
+      }
+    }
+    const dir = tableSort.dir;
+    const key = tableSort.key;
+    rows.sort((a, b) => {
+      const v = (r: FlatRow): string | number => {
+        switch (key) {
+          case 'name': return r.student.name;
+          case 'school': return r.school;
+          case 'dday': return r.dday ?? 9999;
+          case 'subject': return r.subject;
+          case 'teacher': return r.teacher;
+          case 'last': return r.last ?? -1;
+          case 'delta': return r.delta ?? 999;
+          default: return 0;
+        }
+      };
+      const av = v(a), bv = v(b);
+      const cmp = typeof av === 'string' && typeof bv === 'string'
+        ? av.localeCompare(bv, 'ko')
+        : Number(av) - Number(bv);
+      return cmp * dir || a.student.name.localeCompare(b.student.name, 'ko');
+    });
+    return rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolGroups, teacherNameByStudentSubject, tableSort, reports, enrolledStudentIds, reviews]);
+
   if (loading) {
     return (
       <div className="space-y-4 p-1">
@@ -360,6 +443,21 @@ export function TeacherExamBoard() {
               {mySubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+          {/* 보기 전환: 카드 ↔ 표 */}
+          <div className="flex rounded-md border overflow-hidden">
+            <Button
+              variant={viewMode === 'card' ? 'default' : 'ghost'} size="sm"
+              className="h-8 rounded-none px-2.5" onClick={() => switchView('card')}
+            >
+              <LayoutGrid className="w-4 h-4 mr-1" />카드
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm"
+              className="h-8 rounded-none px-2.5" onClick={() => switchView('table')}
+            >
+              <Table2 className="w-4 h-4 mr-1" />표
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -370,7 +468,7 @@ export function TeacherExamBoard() {
       )}
 
       {/* 학교 섹션 → 학생 카드 그리드 */}
-      {schoolGroups.map(g => (
+      {viewMode === 'card' && schoolGroups.map(g => (
         <section key={g.school}>
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <SchoolIcon className="w-4 h-4 text-muted-foreground" />
@@ -483,6 +581,96 @@ export function TeacherExamBoard() {
         </section>
       ))}
 
+      {/* 표(엑셀) 모드 — 학생×과목 1행, 열 머리글 클릭으로 정렬 */}
+      {viewMode === 'table' && scopedStudents.length > 0 && (
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortableHead label="학생" k="name" sort={tableSort} onSort={toggleSort} />
+                  <SortableHead label="학교" k="school" sort={tableSort} onSort={toggleSort} />
+                  <SortableHead label="시험" k="dday" sort={tableSort} onSort={toggleSort} />
+                  <SortableHead label="과목" k="subject" sort={tableSort} onSort={toggleSort} />
+                  <SortableHead label="담당" k="teacher" sort={tableSort} onSort={toggleSort} />
+                  <SortableHead label="최근" k="last" sort={tableSort} onSort={toggleSort} className="text-right" />
+                  <SortableHead label="등락" k="delta" sort={tableSort} onSort={toggleSort} className="text-right" />
+                  <TableHead>추세</TableHead>
+                  <TableHead>체크</TableHead>
+                  <TableHead>시험 범위</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {flatRows.map((r, i) => (
+                  <TableRow
+                    key={`${r.student.id}-${r.subject}-${i}`}
+                    className="cursor-pointer"
+                    onClick={() => setDetailStudent(r.student)}
+                  >
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {r.student.name}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {r.student.grade || (r.student.grade_year ? `${r.student.school_level || ''}${r.student.grade_year}` : '')}
+                      </span>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{r.school}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {r.dday != null ? (
+                        <Badge variant={r.dday <= 7 ? 'destructive' : 'secondary'} className="text-[11px]">
+                          D-{r.dday === 0 ? 'Day' : r.dday}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">{r.examTitle || '—'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm font-medium"
+                      style={{ color: SUBJECT_COLORS[r.subject] || DEFAULT_LINE_COLOR }}>
+                      {r.subject}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{r.teacher}</TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {r.last != null ? r.last : <span className="text-xs font-normal text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">
+                      {r.delta != null ? (
+                        <span className={`inline-flex items-center gap-0.5 text-xs ${r.delta > 0 ? 'text-green-600' : r.delta < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                          {r.delta > 0 ? <TrendingUp className="w-3 h-3" /> : r.delta < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+                          {r.delta !== 0 && (r.delta > 0 ? `+${r.delta}` : r.delta)}
+                          {r.doubleDrop && <AlertTriangle className="w-3 h-3 text-red-500" />}
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      <ScoreSparkline line={r.line} perf={r.perf} color={SUBJECT_COLORS[r.subject] || DEFAULT_LINE_COLOR} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap space-x-1">
+                      {r.prep && (
+                        <>
+                          <PrepBadge ok={r.prep.scopeOk} label="범위" />
+                          <PrepBadge ok={r.prep.reportOk} label="분석지" />
+                          <PrepBadge ok={r.prep.prepEnrolled} label="특강" />
+                        </>
+                      )}
+                      {!r.prep && r.followup && (
+                        <>
+                          <PrepBadge ok={r.followup.hasResult} label="성적" failLabel="성적 미입력" />
+                          <PrepBadge ok={r.followup.reviewed} label="리뷰" failLabel="리뷰 대기" />
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[200px]">
+                      <span className="text-xs text-muted-foreground truncate block" title={r.scope || ''}>
+                        {r.scope || '—'}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 하단 바로가기 */}
       <div className="flex gap-2">
         <Button asChild variant="outline" size="sm">
@@ -543,6 +731,29 @@ export function TeacherExamBoard() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// 정렬 가능한 표 머리글
+function SortableHead({ label, k, sort, onSort, className }: {
+  label: string; k: string;
+  sort: { key: string; dir: 1 | -1 };
+  onSort: (key: string) => void;
+  className?: string;
+}) {
+  const active = sort.key === k;
+  return (
+    <TableHead
+      className={`cursor-pointer select-none whitespace-nowrap hover:text-foreground ${className || ''}`}
+      onClick={() => onSort(k)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        {active
+          ? (sort.dir === 1 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)
+          : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+      </span>
+    </TableHead>
   );
 }
 
