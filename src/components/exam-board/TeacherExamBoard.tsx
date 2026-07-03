@@ -10,14 +10,16 @@ import { differenceInDays, parseISO, subDays, format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, School as SchoolIcon,
   TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2, CircleDashed,
-  LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown,
+  LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, Pencil, Save,
 } from 'lucide-react';
 
 type StudentRow = {
@@ -134,6 +136,76 @@ export function TeacherExamBoard() {
 
   function toggleSort(key: string) {
     setTableSort(prev => (prev.key === key ? { key, dir: prev.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  }
+
+  // EDIT-MODE-V1: 보드에서 성적 직접 입력
+  const nowKST = getTodayKST(); // 'yyyy-MM-dd'
+  const nowMonth = Number(nowKST.slice(5, 7));
+  const [editMode, setEditMode] = useState(false);
+  const [entryYear, setEntryYear] = useState<number>(Number(nowKST.slice(0, 4)));
+  const [entrySemester, setEntrySemester] = useState<'1' | '2'>(nowMonth >= 8 || nowMonth <= 1 ? '2' : '1');
+  const [entryType, setEntryType] = useState<'midterm' | 'final' | 'performance'>(
+    [3, 4, 9, 10].includes(nowMonth) ? 'midterm' : 'final'
+  );
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
+  const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({});
+  const entryPeriod = `${entrySemester}-${entryType === 'midterm' ? 'a' : 'b'}`;
+
+  function draftKey(studentId: string, subject: string) {
+    return `${studentId}|${subject}`;
+  }
+
+  async function saveScore(student: StudentRow, subject: string) {
+    const key = draftKey(student.id, subject);
+    const raw = scoreDrafts[key];
+    if (raw == null || raw.trim() === '') return;
+    const score = Number(raw);
+    if (Number.isNaN(score) || score < 0 || score > 100) {
+      toast.error('0~100 사이 점수를 입력해주세요.');
+      return;
+    }
+    setSavingKeys(p => ({ ...p, [key]: true }));
+    try {
+      const existing = (resultsByStudent.get(student.id) || []).find(r =>
+        r.subject === subject && r.exam_year === entryYear
+        && r.exam_period === entryPeriod && r.exam_type === entryType);
+      if (existing) {
+        const { data, error } = await supabase.functions.invoke('student-exam-results', {
+          body: { action: 'staff_update', result_id: existing.id, patch: { actual_score: score } },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message);
+        setResults(prev => prev.map(r => (r.id === existing.id ? { ...r, actual_score: score } : r)));
+      } else {
+        const { data: created, error: cErr } = await supabase.functions.invoke('student-exam-results', {
+          body: {
+            action: 'staff_create',
+            student_id: student.id,
+            school_name: student.school || '학교 미지정',
+            subject,
+            exam_type: entryType,
+            exam_year: entryYear,
+            exam_period: entryPeriod,
+            exam_date: nowKST,
+          },
+        });
+        if (cErr || created?.error || !created?.id) throw new Error(created?.error || cErr?.message || '생성 실패');
+        const { data: upd, error: uErr } = await supabase.functions.invoke('student-exam-results', {
+          body: { action: 'staff_update', result_id: created.id, patch: { actual_score: score } },
+        });
+        if (uErr || upd?.error) throw new Error(upd?.error || uErr?.message);
+        setResults(prev => [...prev, {
+          id: created.id, student_id: student.id, subject,
+          exam_type: entryType, exam_year: entryYear, exam_period: entryPeriod,
+          actual_score: score, exam_date: nowKST, submitted_at: new Date().toISOString(),
+        }]);
+      }
+      setScoreDrafts(p => { const n = { ...p }; delete n[key]; return n; });
+      toast.success(`${student.name} ${subject} ${score}점 저장됨 (${entryYear} ${entrySemester}학기 ${entryType === 'midterm' ? '중간' : entryType === 'final' ? '기말' : '수행'})`);
+    } catch (e: any) {
+      toast.error(`저장 실패: ${e.message || e}`);
+    } finally {
+      setSavingKeys(p => { const n = { ...p }; delete n[key]; return n; });
+    }
   }
 
   useEffect(() => {
@@ -352,6 +424,23 @@ export function TeacherExamBoard() {
     return { subjects, anyDrop, anyDoubleDrop, prep, followup };
   }
 
+  // MISSING-2026-V1: 2026년부터는 성적 미입력을 상단에 표시
+  const missingCurrent = useMemo(() => {
+    const items: { student: StudentRow; subject: string }[] = [];
+    for (const s of scopedStudents) {
+      const subj = scopedSubjectsByStudent.get(s.id) || new Set<string>();
+      const targets = subjectFilter !== 'all' ? [subjectFilter] : Array.from(subj).sort();
+      for (const subject of targets) {
+        const has = (resultsByStudent.get(s.id) || []).some(r =>
+          r.subject === subject && (r.exam_year ?? 0) >= 2026
+          && (r.exam_type === 'midterm' || r.exam_type === 'final')
+          && r.actual_score != null);
+        if (!has) items.push({ student: s, subject });
+      }
+    }
+    return items;
+  }, [scopedStudents, scopedSubjectsByStudent, resultsByStudent, subjectFilter]);
+
   // ── 표(엑셀) 모드: 학생×과목 평면 행 ──
   type FlatRow = {
     student: StudentRow; school: string; dday: number | null; examTitle: string | null;
@@ -458,8 +547,63 @@ export function TeacherExamBoard() {
               <Table2 className="w-4 h-4 mr-1" />표
             </Button>
           </div>
+          <Button
+            variant={editMode ? 'default' : 'outline'} size="sm" className="h-8"
+            onClick={() => setEditMode(v => !v)}
+          >
+            <Pencil className="w-4 h-4 mr-1" />{editMode ? '수정 모드 끄기' : '수정 모드'}
+          </Button>
         </div>
       </div>
+
+      {/* 수정 모드: 입력 대상 시기 선택 바 */}
+      {editMode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          <Pencil className="w-4 h-4 text-muted-foreground" />
+          <span className="font-medium">입력 대상:</span>
+          <Select value={String(entryYear)} onValueChange={v => setEntryYear(Number(v))}>
+            <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[entryYear - 1, entryYear, entryYear + 1].filter((v, i, a) => a.indexOf(v) === i).map(y =>
+                <SelectItem key={y} value={String(y)}>{y}년</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={entrySemester} onValueChange={v => setEntrySemester(v as '1' | '2')}>
+            <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1학기</SelectItem>
+              <SelectItem value="2">2학기</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={entryType} onValueChange={v => setEntryType(v as any)}>
+            <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="midterm">중간고사</SelectItem>
+              <SelectItem value="final">기말고사</SelectItem>
+              <SelectItem value="performance">수행평가</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">점수 입력 후 저장 아이콘(💾)을 누르면 이 시기로 기록됩니다.</span>
+        </div>
+      )}
+
+      {/* 2026년~ 성적 미입력 알림 */}
+      {missingCurrent.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="font-medium">2026년 내신 성적 미입력 {missingCurrent.length}건</span>
+          <span className="text-xs truncate max-w-[50%]">
+            {missingCurrent.slice(0, 5).map(m => `${m.student.name}(${m.subject})`).join(', ')}
+            {missingCurrent.length > 5 ? ` 외 ${missingCurrent.length - 5}건` : ''}
+          </span>
+          {!editMode && (
+            <Button variant="outline" size="sm" className="h-7 ml-auto border-amber-400 text-amber-900"
+              onClick={() => setEditMode(true)}>
+              <Pencil className="w-3.5 h-3.5 mr-1" />바로 입력
+            </Button>
+          )}
+        </div>
+      )}
 
       {scopedStudents.length === 0 && (
         <Card><CardContent className="py-10 text-center text-muted-foreground text-sm">
@@ -527,15 +671,15 @@ export function TeacherExamBoard() {
                       )}
                     </div>
 
-                    {/* 과목별 점수 + 추세 */}
+                    {/* 과목별 점수 + 추세 (+수정 모드 입력) */}
                     <div className="space-y-1.5">
-                      {d.subjects.filter(sub => sub.last != null || sub.perf.length > 0).map(sub => (
+                      {d.subjects.filter(sub => editMode || sub.last != null || sub.perf.length > 0).map(sub => (
                         <div key={sub.subject} className="flex items-center gap-2">
                           <span className="text-xs font-medium w-7 shrink-0" style={{ color: SUBJECT_COLORS[sub.subject] || DEFAULT_LINE_COLOR }}>
                             {sub.subject}
                           </span>
                           <span className="text-lg font-bold leading-none w-12 text-right">
-                            {sub.last != null ? sub.last : <span className="text-xs font-normal text-muted-foreground">수행만</span>}
+                            {sub.last != null ? sub.last : <span className="text-xs font-normal text-muted-foreground">{sub.perf.length > 0 ? '수행만' : '—'}</span>}
                           </span>
                           {sub.delta != null ? (
                             <span className={`flex items-center text-xs w-10 ${sub.delta > 0 ? 'text-green-600' : sub.delta < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
@@ -543,10 +687,29 @@ export function TeacherExamBoard() {
                               {sub.delta !== 0 && (sub.delta > 0 ? `+${sub.delta}` : sub.delta)}
                             </span>
                           ) : <span className="w-10" />}
-                          <ScoreSparkline line={sub.line} perf={sub.perf} color={SUBJECT_COLORS[sub.subject] || DEFAULT_LINE_COLOR} />
+                          {editMode ? (
+                            <span className="flex items-center gap-1 ml-auto" onClick={e => e.stopPropagation()}>
+                              <Input
+                                type="number" min={0} max={100} placeholder="점수"
+                                className="h-7 w-16 text-sm"
+                                value={scoreDrafts[draftKey(s.id, sub.subject)] ?? ''}
+                                onChange={e => setScoreDrafts(p => ({ ...p, [draftKey(s.id, sub.subject)]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') saveScore(s, sub.subject); }}
+                              />
+                              <Button
+                                size="sm" variant="ghost" className="h-7 w-7 p-0"
+                                disabled={savingKeys[draftKey(s.id, sub.subject)] || !(scoreDrafts[draftKey(s.id, sub.subject)] ?? '').trim()}
+                                onClick={() => saveScore(s, sub.subject)}
+                              >
+                                <Save className="w-4 h-4" />
+                              </Button>
+                            </span>
+                          ) : (
+                            <ScoreSparkline line={sub.line} perf={sub.perf} color={SUBJECT_COLORS[sub.subject] || DEFAULT_LINE_COLOR} />
+                          )}
                         </div>
                       ))}
-                      {d.subjects.every(sub => sub.last == null && sub.perf.length === 0) && (
+                      {!editMode && d.subjects.every(sub => sub.last == null && sub.perf.length === 0) && (
                         <p className="text-xs text-muted-foreground">등록된 성적 없음</p>
                       )}
                     </div>
@@ -596,6 +759,7 @@ export function TeacherExamBoard() {
                   <SortableHead label="최근" k="last" sort={tableSort} onSort={toggleSort} className="text-right" />
                   <SortableHead label="등락" k="delta" sort={tableSort} onSort={toggleSort} className="text-right" />
                   <TableHead>추세</TableHead>
+                  {editMode && <TableHead>점수 입력</TableHead>}
                   <TableHead>체크</TableHead>
                   <TableHead>시험 범위</TableHead>
                 </TableRow>
@@ -643,6 +807,26 @@ export function TeacherExamBoard() {
                     <TableCell>
                       <ScoreSparkline line={r.line} perf={r.perf} color={SUBJECT_COLORS[r.subject] || DEFAULT_LINE_COLOR} />
                     </TableCell>
+                    {editMode && (
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <span className="flex items-center gap-1">
+                          <Input
+                            type="number" min={0} max={100} placeholder="점수"
+                            className="h-7 w-16 text-sm"
+                            value={scoreDrafts[draftKey(r.student.id, r.subject)] ?? ''}
+                            onChange={e => setScoreDrafts(p => ({ ...p, [draftKey(r.student.id, r.subject)]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') saveScore(r.student, r.subject); }}
+                          />
+                          <Button
+                            size="sm" variant="ghost" className="h-7 w-7 p-0"
+                            disabled={savingKeys[draftKey(r.student.id, r.subject)] || !(scoreDrafts[draftKey(r.student.id, r.subject)] ?? '').trim()}
+                            onClick={() => saveScore(r.student, r.subject)}
+                          >
+                            <Save className="w-4 h-4" />
+                          </Button>
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell className="whitespace-nowrap space-x-1">
                       {r.prep && (
                         <>
