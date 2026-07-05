@@ -377,6 +377,26 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     toast.success(`${sorted.length}개 챕터를 하나로 묶었어요`);
   }
 
+  // 여러 개 챕터를 targetIdx 위치로 한꺼번에 이동 (targetIdx = 이동 후 첫 항목이 들어갈 슬롯)
+  function moveGoalsToIndex(indices: number[], targetIdx: number) {
+    const sorted = Array.from(new Set(indices)).sort((a, b) => a - b);
+    if (sorted.length === 0) return;
+    setGoals(prev => {
+      const picked = sorted.map(i => prev[i]).filter(Boolean);
+      const remaining = prev.filter((_, i) => !sorted.includes(i));
+      // 원본 인덱스 기준 targetIdx → remaining 배열에서의 위치 보정
+      const removedBefore = sorted.filter(i => i < targetIdx).length;
+      const insertAt = Math.max(0, Math.min(remaining.length, targetIdx - removedBefore));
+      const next = [...remaining];
+      next.splice(insertAt, 0, ...picked);
+      return next;
+    });
+    // 이동 후 선택 유지 (새 위치로 재계산)
+    const removedBefore = sorted.filter(i => i < targetIdx).length;
+    const insertAt = Math.max(0, targetIdx - removedBefore);
+    setMergePicks(sorted.map((_, k) => insertAt + k));
+  }
+
 
   async function extractTocFromImage(file: File) {
     if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드해주세요.'); return; }
