@@ -3544,6 +3544,41 @@ export type Database = {
           },
         ]
       }
+      plan_planner_prints: {
+        Row: {
+          design_id: string
+          id: string
+          period_month: string
+          printed_at: string
+          printed_by: string | null
+          snapshot_updated_at: string | null
+        }
+        Insert: {
+          design_id: string
+          id?: string
+          period_month: string
+          printed_at?: string
+          printed_by?: string | null
+          snapshot_updated_at?: string | null
+        }
+        Update: {
+          design_id?: string
+          id?: string
+          period_month?: string
+          printed_at?: string
+          printed_by?: string | null
+          snapshot_updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_planner_prints_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_queue: {
         Row: {
           assignee: string
