@@ -97,14 +97,55 @@ function PlanHome() {
                       `${DAY_LABELS[Number(day)]} ${ROLE_LABELS[role] || role}`).join(' · ')}
                     {d.target_date && <span className="text-muted-foreground">· ~{d.target_date}</span>}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    수업 당일 화면은 다음 업데이트에서 열립니다 — 설계는 지금부터 유효.
-                  </p>
+                  {(extMap[d.id]?.intensives?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {extMap[d.id].intensives.map(it => (
+                        <Badge key={it.id} variant="outline" className="border-primary/50 text-primary">
+                          <Sparkles className="w-3 h-3 mr-1" />{it.label} · {it.added_sessions}회 ({it.start_date}~{it.end_date})
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {(extMap[d.id]?.coTeachers?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {extMap[d.id].coTeachers.map(c => (
+                        <Badge key={c.id} variant="outline">
+                          <Users className="w-3 h-3 mr-1" />{c.teacher_name} ({c.start_date}~{c.end_date})
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button size="sm" variant="outline" onClick={() => setIntensiveDesignId(d.id)}>
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />특강 추가
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setCoTeacherDesign({ id: d.id, teacher_id: d.teacher_id })}>
+                      <Users className="w-3.5 h-3.5 mr-1" />공동 선생님
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
         </div>
+      )}
+
+      {intensiveDesignId && (
+        <IntensiveModal
+          open={!!intensiveDesignId}
+          designId={intensiveDesignId}
+          onClose={() => setIntensiveDesignId(null)}
+          onDone={load}
+        />
+      )}
+      {coTeacherDesign && (
+        <CoTeacherModal
+          open={!!coTeacherDesign}
+          designId={coTeacherDesign.id}
+          defaultTeacherId={coTeacherDesign.teacher_id}
+          onClose={() => setCoTeacherDesign(null)}
+          onDone={load}
+        />
       )}
     </div>
   );
