@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2, Save, ListChecks, FileText } from 'lucide-react';
 import {
   PlanTrack, PlanGoal, GoalInput, TeachingMode, StudentType, SessionRole,
   fetchTracks, fetchGoals, createTrackWithGoals, createDesign,
