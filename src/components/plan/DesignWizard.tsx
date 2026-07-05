@@ -42,11 +42,22 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Q0 반
+  // Q0 반 — 'existing' 기존 반 선택 / 'compose' 학생 골라 즉석 구성
+  const [rosterMode, setRosterMode] = useState<'existing' | 'compose'>('existing');
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState<string>('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
+
+  // Compose 모드 전용
+  const [poolStudents, setPoolStudents] = useState<StudentRow[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const [studentFilter, setStudentFilter] = useState('');
+  const [composeSubject, setComposeSubject] = useState<string>('');
+  const [composeGroupName, setComposeGroupName] = useState<string>('');
+  const [composeDays, setComposeDays] = useState<number[]>([]);
+
 
   // Q1 트랙
   const [tracks, setTracks] = useState<PlanTrack[]>([]);
