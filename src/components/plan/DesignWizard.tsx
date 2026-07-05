@@ -42,11 +42,22 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Q0 반
+  // Q0 반 — 'existing' 기존 반 선택 / 'compose' 학생 골라 즉석 구성
+  const [rosterMode, setRosterMode] = useState<'existing' | 'compose'>('existing');
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [classId, setClassId] = useState<string>('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
+
+  // Compose 모드 전용
+  const [poolStudents, setPoolStudents] = useState<StudentRow[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const [studentFilter, setStudentFilter] = useState('');
+  const [composeSubject, setComposeSubject] = useState<string>('');
+  const [composeGroupName, setComposeGroupName] = useState<string>('');
+  const [composeDays, setComposeDays] = useState<number[]>([]);
+
 
   // Q1 트랙
   const [tracks, setTracks] = useState<PlanTrack[]>([]);
@@ -120,6 +131,67 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
+  // Compose 모드 진입 시 담당 학생 풀 로드
+  useEffect(() => {
+    if (rosterMode !== 'compose' || !user?.id) return;
+    if (poolStudents.length > 0) return;
+    (async () => {
+      setPoolLoading(true);
+      try {
+        let ids: string[] | null = null;
+        if (role === 'teacher') {
+          const [linkRes, sstRes] = await Promise.all([
+            supabase.from('teacher_student_links').select('student_id').eq('teacher_id', user.id),
+            supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id),
+          ]);
+          const set = new Set<string>();
+          ((linkRes.data || []) as any[]).forEach(r => r.student_id && set.add(r.student_id));
+          ((sstRes.data || []) as any[]).forEach(r => r.student_id && set.add(r.student_id));
+          ids = Array.from(set);
+        }
+        let q = supabase.from('students').select('id, name, grade').order('name');
+        if (ids !== null) {
+          if (ids.length === 0) { setPoolStudents([]); setPoolLoading(false); return; }
+          q = q.in('id', ids);
+        }
+        const { data } = await q;
+        setPoolStudents(((data || []) as any[]).map(s => ({ id: s.id, name: s.name, grade: s.grade })));
+      } finally { setPoolLoading(false); }
+    })();
+  }, [rosterMode, user?.id, role, poolStudents.length]);
+
+  // Compose: 선택한 학생/요일/과목 → students·scheduleDays·rhythm·트랙에 반영
+  useEffect(() => {
+    if (rosterMode !== 'compose') return;
+    const studs = poolStudents
+      .filter(s => pickedIds.includes(s.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    setStudents(studs);
+    setStudentTypes(prev => {
+      const next: Record<string, StudentType> = {};
+      studs.forEach(s => { next[s.id] = prev[s.id] || 'B'; });
+      return next;
+    });
+  }, [rosterMode, pickedIds, poolStudents]);
+
+  useEffect(() => {
+    if (rosterMode !== 'compose') return;
+    const days = [...composeDays].sort();
+    setScheduleDays(days);
+    setRhythm(prev => {
+      const next: Record<string, SessionRole> = {};
+      days.forEach(d => { next[String(d)] = prev[String(d)] || 'progress'; });
+      return next;
+    });
+  }, [rosterMode, composeDays]);
+
+  useEffect(() => {
+    if (rosterMode !== 'compose' || !composeSubject) return;
+    fetchTracks(composeSubject).then(setTracks).catch(() => setTracks([]));
+  }, [rosterMode, composeSubject]);
+
+
+
   useEffect(() => {
     if (trackChoice === 'new') { setExistingGoals([]); return; }
     fetchGoals(trackChoice).then(setExistingGoals).catch(() => setExistingGoals([]));
@@ -157,9 +229,19 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
 
   const STEPS = ['반 선택', '무엇을', '어떻게', '확인은', '미달 관리', '리듬·기한'];
 
+  // Compose 모드용 파생값
+  const composeSubjectResolved = rosterMode === 'compose' ? composeSubject : (selectedClass?.subject || '');
+  const composeReady = rosterMode === 'compose'
+    && pickedIds.length > 0
+    && !!composeSubject
+    && composeDays.length > 0;
+
   function canNext(): boolean {
     switch (step) {
-      case 0: return !!classId && students.length > 0;
+      case 0:
+        return rosterMode === 'existing'
+          ? !!classId && students.length > 0
+          : composeReady;
       case 1: return trackChoice !== 'new'
         ? existingGoals.length > 0
         : goals.filter(g => g.title.trim()).length > 0 && !!trackTitle.trim();
@@ -170,16 +252,26 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   }
 
   async function save() {
-    if (!user || !selectedClass) return;
+    if (!user) return;
+    if (rosterMode === 'existing' && !selectedClass) return;
+    if (rosterMode === 'compose' && !composeReady) { toast.error('학생·과목·요일을 채워주세요.'); return; }
     if (!targetDate) { toast.error('기한을 정해주세요.'); return; }
     if (endGoalIdx < 0) { toast.error('끝점 목표를 선택해주세요.'); return; }
+    const subject = rosterMode === 'existing' ? selectedClass!.subject : composeSubject;
+    const contextName = rosterMode === 'existing'
+      ? selectedClass!.name
+      : (composeGroupName.trim() || `내 그룹 (${students.length}명)`);
+    const teacherIdForDesign = rosterMode === 'existing'
+      ? (selectedClass!.teacher_id || user.id)
+      : user.id;
+    const classIdForDesign = rosterMode === 'existing' ? classId : null;
     setSaving(true);
     try {
       // 1) 트랙 확보
       let trackId: string; let goalRows: PlanGoal[];
       if (trackChoice === 'new') {
         const created = await createTrackWithGoals(
-          trackTitle.trim(), selectedClass.subject, textbook, goals.filter(g => g.title.trim()), user.id);
+          trackTitle.trim(), subject, textbook, goals.filter(g => g.title.trim()), user.id);
         trackId = created.track.id; goalRows = created.goals;
       } else {
         trackId = trackChoice; goalRows = existingGoals;
@@ -188,9 +280,9 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       // 2) 설계 저장
       const designId = await createDesign({
         track_id: trackId,
-        class_id: classId,
-        teacher_id: selectedClass.teacher_id || user.id,
-        title: `${selectedClass.name} — ${trackTitle || tracks.find(t => t.id === trackChoice)?.title || ''}`.trim(),
+        class_id: classIdForDesign,
+        teacher_id: teacherIdForDesign,
+        title: `${contextName} — ${trackTitle || tracks.find(t => t.id === trackChoice)?.title || ''}`.trim(),
         teaching_mode: mode,
         type_concepts: mode === 'abc' ? concepts : {},
         angle_mode: mode === 'abc' ? angleMode : 'off',
@@ -210,12 +302,14 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       toast.success('수업 설계 저장 완료 — 이제 매 수업이 자동으로 준비됩니다.');
       onDone();
       void designId;
+      void composeSubjectResolved;
     } catch (e: any) {
       toast.error(`저장 실패: ${e.message || e}`);
     } finally {
       setSaving(false);
     }
   }
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -240,29 +334,123 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-bold">어느 반의 수업을 설계할까요?</h2>
-                <p className="text-sm text-muted-foreground">학생·시간표는 반에서 자동으로 가져옵니다.</p>
+                <h2 className="text-lg font-bold">어느 아이들과 함께할 설계인가요?</h2>
+                <p className="text-sm text-muted-foreground">기존 반을 그대로 쓰거나, 담당 학생들을 골라 즉석 그룹으로 시작하세요.</p>
               </div>
-              <Select value={classId} onValueChange={setClassId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="반 선택" /></SelectTrigger>
-                <SelectContent>
-                  {classes.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} · {c.subject}{c.teacher_name ? ` · ${c.teacher_name}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {classId && (
-                <div className="rounded-lg bg-muted/40 p-4 text-sm space-y-1">
-                  <p><b>학생 {students.length}명</b> — {students.map(s => s.name).join(', ') || '없음'}</p>
-                  <p className="text-muted-foreground">
-                    수업 요일: {scheduleDays.length > 0 ? scheduleDays.map(d => DAY_LABELS[d]).join(' · ') : '시간표 미등록 (Q5에서 수동 지정 불가 — 시간표에 등록해주세요)'}
-                  </p>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant={rosterMode === 'existing' ? 'default' : 'outline'}
+                  onClick={() => setRosterMode('existing')}>기존 반 선택</Button>
+                <Button size="sm" variant={rosterMode === 'compose' ? 'default' : 'outline'}
+                  onClick={() => setRosterMode('compose')}>학생 골라서 반 구성</Button>
+              </div>
+
+              {rosterMode === 'existing' && (
+                <>
+                  <Select value={classId} onValueChange={setClassId}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="반 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {classes.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} · {c.subject}{c.teacher_name ? ` · ${c.teacher_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {classId && (
+                    <div className="rounded-lg bg-muted/40 p-4 text-sm space-y-1">
+                      <p><b>학생 {students.length}명</b> — {students.map(s => s.name).join(', ') || '없음'}</p>
+                      <p className="text-muted-foreground">
+                        수업 요일: {scheduleDays.length > 0 ? scheduleDays.map(d => DAY_LABELS[d]).join(' · ') : '시간표 미등록 (Q5에서 수동 지정 불가 — 시간표에 등록해주세요)'}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {rosterMode === 'compose' && (
+                <div className="space-y-4">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input placeholder="그룹 이름 (선택 · 예: 중2 목요 A조)"
+                      value={composeGroupName} onChange={e => setComposeGroupName(e.target.value)} />
+                    <Select value={composeSubject} onValueChange={setComposeSubject}>
+                      <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {['수학', '영어', '국어', '과학', '사회', '기타'].map(s => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground mb-1.5">수업 요일 (여러 개 선택)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[1, 2, 3, 4, 5, 6, 0].map(d => {
+                        const on = composeDays.includes(d);
+                        return (
+                          <button key={d} type="button"
+                            onClick={() => setComposeDays(p => on ? p.filter(x => x !== d) : [...p, d])}
+                            className={`w-10 h-10 rounded-full border text-sm font-bold transition ${
+                              on ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted'
+                            }`}>
+                            {DAY_LABELS[d]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-muted-foreground">
+                        내가 담당하는 학생 {poolStudents.length > 0 && `· ${poolStudents.length}명`}
+                      </p>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        선택 <b className="text-primary">{pickedIds.length}</b>명
+                      </span>
+                    </div>
+                    <Input placeholder="이름·학년으로 검색"
+                      value={studentFilter} onChange={e => setStudentFilter(e.target.value)} />
+                    <div className="rounded-lg border max-h-72 overflow-y-auto divide-y">
+                      {poolLoading && <p className="p-4 text-sm text-muted-foreground">불러오는 중…</p>}
+                      {!poolLoading && poolStudents.length === 0 && (
+                        <p className="p-4 text-sm text-muted-foreground">담당 학생이 없어요 — 학생 관리에서 배정을 확인해주세요.</p>
+                      )}
+                      {poolStudents
+                        .filter(s => !studentFilter.trim()
+                          || s.name.includes(studentFilter.trim())
+                          || (s.grade || '').includes(studentFilter.trim()))
+                        .map(s => {
+                          const on = pickedIds.includes(s.id);
+                          return (
+                            <label key={s.id}
+                              className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer ${on ? 'bg-primary/5' : ''}`}>
+                              <Checkbox checked={on}
+                                onCheckedChange={c => setPickedIds(p => c ? [...p, s.id] : p.filter(x => x !== s.id))} />
+                              <span className="font-medium">{s.name}</span>
+                              {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
+                            </label>
+                          );
+                        })}
+                    </div>
+                    {pickedIds.length > 0 && (
+                      <div className="flex gap-1.5 flex-wrap">
+                        {students.map(s => (
+                          <Badge key={s.id} variant="secondary" className="cursor-pointer"
+                            onClick={() => setPickedIds(p => p.filter(x => x !== s.id))}>
+                            {s.name} ✕
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           )}
+
+
 
           {/* ── Q1 트랙 ── */}
           {step === 1 && (
