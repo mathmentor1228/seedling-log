@@ -524,7 +524,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   </div>
                   <div className="rounded-lg border divide-y">
                     {goals.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2">
+                      <div key={i} className="flex items-center gap-1.5 p-2">
                         <span className="w-6 text-right text-xs font-bold text-muted-foreground shrink-0">{i + 1}</span>
                         <Input
                           className="flex-1 h-8" placeholder="목표 (예: 원과 현 — 수직이등분선)"
@@ -536,26 +536,56 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                           }}
                         />
                         <Input
-                          className="w-28 h-8" placeholder="p.52–58"
+                          className="w-24 h-8" placeholder="p.52–58"
                           value={g.pages}
                           onChange={e => setGoals(p => p.map((x, xi) => xi === i ? { ...x, pages: e.target.value } : x))}
                         />
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0"
-                          onClick={() => setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center shrink-0">
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="위로"
+                            disabled={i === 0} onClick={() => moveGoal(i, -1)}>
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="아래로"
+                            disabled={i === goals.length - 1} onClick={() => moveGoal(i, 1)}>
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="아래에 차시 추가"
+                            onClick={() => insertGoalBelow(i)}>
+                            <CornerDownRight className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="삭제"
+                            onClick={() => setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <Button variant="outline" size="sm" onClick={() => setGoals(p => [...p, { title: '', pages: '' }])}>
                       <Plus className="w-4 h-4 mr-1" />목표 추가
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => toast.info('교재 목차 AI 추출은 다음 업데이트에서 연결됩니다 — 지금은 여러 줄 복사해서 첫 칸에 붙여넣기 하세요 ("제목 | p.10-17" 형식)')}>
-                      <Sparkles className="w-4 h-4 mr-1" />목차에서 AI 생성
+                    <label>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) extractTocFromImage(f);
+                          e.target.value = '';
+                        }} />
+                      <span className={`inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium border cursor-pointer transition ${tocExtracting ? 'opacity-60 pointer-events-none' : 'hover:bg-accent'}`}>
+                        {tocExtracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {tocExtracting ? 'AI 분석 중…' : '목차 이미지 업로드 (AI 추출)'}
+                      </span>
+                    </label>
+                    <Button variant="ghost" size="sm" disabled
+                      title='"제목 | p.10-17" 형식 여러 줄을 첫 칸에 붙여넣기 하세요'>
+                      <Sparkles className="w-4 h-4 mr-1" />붙여넣기도 OK
                     </Button>
-                    <span className="text-xs text-muted-foreground self-center">💡 목록을 통째로 복사해 첫 칸에 붙여넣으면 자동으로 나뉩니다</span>
+                    <span className="text-xs text-muted-foreground w-full">
+                      💡 목차 사진을 올리면 챕터·페이지를 자동 정리 → 화살표로 순서 조정, ↳ 로 그 아래 차시 추가
+                    </span>
                   </div>
+
                 </div>
               ) : (
                 <div className="rounded-lg border divide-y max-h-64 overflow-y-auto">
