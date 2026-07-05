@@ -8,7 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { NotebookPen, Plus, CalendarClock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { NotebookPen, Plus, CalendarClock, Play } from 'lucide-react';
 
 function PlanHome() {
   const [designs, setDesigns] = useState<any[]>([]);
@@ -82,9 +83,11 @@ function PlanHome() {
                       `${DAY_LABELS[Number(day)]} ${ROLE_LABELS[role] || role}`).join(' · ')}
                     {d.target_date && <span className="text-muted-foreground">· ~{d.target_date}</span>}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    수업 당일 화면은 다음 업데이트에서 열립니다 — 설계는 지금부터 유효.
-                  </p>
+                  <Button asChild size="sm" className="mt-1">
+                    <Link to={`/plan/${d.id}/today`}>
+                      <Play className="w-4 h-4 mr-1" />오늘 수업 열기
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             );
