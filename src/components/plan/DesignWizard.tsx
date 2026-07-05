@@ -89,6 +89,8 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [targetDate, setTargetDate] = useState('');
   const [tocExtracting, setTocExtracting] = useState(false);
   const [mergePicks, setMergePicks] = useState<number[]>([]);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
 
   // 임시저장 (localStorage) — user별 다수의 초안 관리
   type Draft = {
