@@ -8,7 +8,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { NotebookPen, Plus, CalendarClock } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Sparkles, Users } from 'lucide-react';
+import { IntensiveModal } from '@/components/plan/IntensiveModal';
+import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
+import { fetchIntensives, fetchCoTeachers, PlanIntensive, PlanCoTeacher } from '@/components/plan/planApi';
 
 function PlanHome() {
   const [designs, setDesigns] = useState<any[]>([]);
