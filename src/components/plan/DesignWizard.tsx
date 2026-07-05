@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2, Save, ListChecks, FileText } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2, Save, ListChecks, FileText, Merge } from 'lucide-react';
 import {
   PlanTrack, PlanGoal, GoalInput, TeachingMode, StudentType, SessionRole,
   fetchTracks, fetchGoals, createTrackWithGoals, createDesign,
@@ -88,6 +88,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [endGoalIdx, setEndGoalIdx] = useState<number>(-1); // goals 배열 index (신규) 또는 existingGoals index
   const [targetDate, setTargetDate] = useState('');
   const [tocExtracting, setTocExtracting] = useState(false);
+  const [mergePicks, setMergePicks] = useState<number[]>([]);
 
   // 임시저장 (localStorage) — user별 다수의 초안 관리
   type Draft = {
@@ -335,7 +336,45 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       next.splice(i + 1, 0, { title: '', pages: '' });
       return next;
     });
+    setMergePicks([]);
   }
+
+  // 페이지 범위 병합 — "p.10-15" + "p.16-20" → "p.10-20", 형식 다르면 콤마로 나열
+  function mergePages(list: string[]): string {
+    const vals = list.map(s => s.trim()).filter(Boolean);
+    if (vals.length === 0) return '';
+    const nums: number[] = [];
+    let prefix = '';
+    let ok = true;
+    for (const v of vals) {
+      const m = v.match(/^(p\.?\s*)?(\d+)\s*[-–~]\s*(\d+)$/i);
+      if (!m) { ok = false; break; }
+      if (!prefix) prefix = m[1] || '';
+      nums.push(Number(m[2]), Number(m[3]));
+    }
+    if (ok && nums.length > 0) {
+      return `${prefix || 'p.'}${Math.min(...nums)}-${Math.max(...nums)}`;
+    }
+    return vals.join(', ');
+  }
+
+  function mergeGoalsByIndices(indices: number[]) {
+    const sorted = [...indices].sort((a, b) => a - b);
+    if (sorted.length < 2) return;
+    setGoals(p => {
+      const picked = sorted.map(i => p[i]).filter(Boolean);
+      const merged: GoalInput = {
+        title: picked.map(g => g.title.trim()).filter(Boolean).join(' + '),
+        pages: mergePages(picked.map(g => g.pages || '')),
+      };
+      const next = p.filter((_, i) => !sorted.includes(i));
+      next.splice(sorted[0], 0, merged);
+      return next;
+    });
+    setMergePicks([]);
+    toast.success(`${sorted.length}개 챕터를 하나로 묶었어요`);
+  }
+
 
   async function extractTocFromImage(file: File) {
     if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드해주세요.'); return; }
@@ -619,8 +658,19 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   </div>
                   <div className="rounded-lg border divide-y">
                     {goals.map((g, i) => (
-                      <div key={i} className="flex items-center gap-1.5 p-2">
+                      <div key={i} className={`flex items-center gap-1.5 p-2 ${mergePicks.includes(i) ? 'bg-primary/5' : ''}`}>
+                        <Checkbox
+                          checked={mergePicks.includes(i)}
+                          onCheckedChange={(v) => {
+                            setMergePicks(prev => {
+                              if (v) return [...prev, i].sort((a, b) => a - b).slice(-3);
+                              return prev.filter(x => x !== i);
+                            });
+                          }}
+                          aria-label="병합 선택"
+                        />
                         <span className="w-6 text-right text-xs font-bold text-muted-foreground shrink-0">{i + 1}</span>
+
                         <Input
                           className="flex-1 h-8" placeholder="목표 (예: 원과 현 — 수직이등분선)"
                           value={g.title}
@@ -672,13 +722,27 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                         {tocExtracting ? 'AI 분석 중…' : '목차 이미지 업로드 (AI 추출)'}
                       </span>
                     </label>
+                    <Button
+                      variant={mergePicks.length >= 2 ? 'default' : 'outline'}
+                      size="sm"
+                      disabled={mergePicks.length < 2}
+                      onClick={() => mergeGoalsByIndices(mergePicks)}
+                      title="체크한 2~3개 챕터를 하나로 묶습니다"
+                    >
+                      <Merge className="w-4 h-4 mr-1" />
+                      {mergePicks.length >= 2 ? `선택한 ${mergePicks.length}개 묶기` : '챕터 묶기'}
+                    </Button>
+                    {mergePicks.length > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setMergePicks([])}>선택 해제</Button>
+                    )}
                     <Button variant="ghost" size="sm" disabled
                       title='"제목 | p.10-17" 형식 여러 줄을 첫 칸에 붙여넣기 하세요'>
                       <Sparkles className="w-4 h-4 mr-1" />붙여넣기도 OK
                     </Button>
                     <span className="text-xs text-muted-foreground w-full">
-                      💡 목차 사진을 올리면 챕터·페이지를 자동 정리 → 화살표로 순서 조정, ↳ 로 그 아래 차시 추가
+                      💡 목차 사진 → 자동 정리 · 화살표로 순서 · ↳ 로 아래 차시 추가 · ☑ 체크 후 "묶기"로 2~3개 합치기
                     </span>
+
                   </div>
 
                 </div>
