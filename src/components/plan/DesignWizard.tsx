@@ -658,8 +658,19 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   </div>
                   <div className="rounded-lg border divide-y">
                     {goals.map((g, i) => (
-                      <div key={i} className="flex items-center gap-1.5 p-2">
+                      <div key={i} className={`flex items-center gap-1.5 p-2 ${mergePicks.includes(i) ? 'bg-primary/5' : ''}`}>
+                        <Checkbox
+                          checked={mergePicks.includes(i)}
+                          onCheckedChange={(v) => {
+                            setMergePicks(prev => {
+                              if (v) return [...prev, i].sort((a, b) => a - b).slice(-3);
+                              return prev.filter(x => x !== i);
+                            });
+                          }}
+                          aria-label="병합 선택"
+                        />
                         <span className="w-6 text-right text-xs font-bold text-muted-foreground shrink-0">{i + 1}</span>
+
                         <Input
                           className="flex-1 h-8" placeholder="목표 (예: 원과 현 — 수직이등분선)"
                           value={g.title}
