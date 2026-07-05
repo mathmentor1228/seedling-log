@@ -46,6 +46,11 @@ export function TodaySession() {
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [memo, setMemo] = useState<{ id: string; content: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // 특강·투트랙 (INTENSIVE-COTEACH-V1)
+  const [sessionMeta, setSessionMeta] = useState<{ intensive_id: string | null; assigned_teacher_id: string | null }>({ intensive_id: null, assigned_teacher_id: null });
+  const [intensiveExtra, setIntensiveExtra] = useState(0); // 기한 내 남은 특강 회차 (정규 요일과 안 겹치는 것)
+  const [coTeachers, setCoTeachers] = useState<{ teacher_id: string; name: string; start_date: string; end_date: string }[]>([]);
+  const [mainTeacherName, setMainTeacherName] = useState('');
 
   const [step, setStep] = useState(1);
   const [absent, setAbsent] = useState<Set<string>>(new Set());
@@ -95,17 +100,43 @@ export function TodaySession() {
         setQueue(qRes.data || []);
         if ((memoRes.data || []).length > 0) setMemo(memoRes.data[0]);
 
-        // 오늘 세션 확보 (있으면 재사용)
+        // 오늘 세션 확보 (있으면 재사용 — 특강으로 미리 생성된 세션 포함)
         const role: SessionRole = (d.rhythm || {})[String(new Date().getDay())] || 'progress';
         const { data: existing } = await db.from('plan_sessions')
-          .select('id, note').eq('design_id', designId).eq('session_date', todayStr).maybeSingle();
-        if (existing) { setSessionId(existing.id); setNote(existing.note || ''); }
-        else {
+          .select('id, note, intensive_id, assigned_teacher_id')
+          .eq('design_id', designId).eq('session_date', todayStr).maybeSingle();
+        if (existing) {
+          setSessionId(existing.id); setNote(existing.note || '');
+          setSessionMeta({ intensive_id: existing.intensive_id || null, assigned_teacher_id: existing.assigned_teacher_id || null });
+        } else {
           const { data: created, error } = await db.from('plan_sessions')
             .insert({ design_id: designId, session_date: todayStr, role }).select().single();
           if (error) throw error;
           setSessionId(created.id);
         }
+
+        // 특강: 기한 내 남은 특강 회차 → 페이스 분모에 합산 (정규 요일과 겹치지 않는 날만)
+        const progressDays = Object.entries(d.rhythm || {})
+          .filter(([, r]) => r !== 'test_day').map(([k]) => Number(k));
+        const { data: futureIntensive } = await db.from('plan_sessions')
+          .select('session_date').eq('design_id', designId)
+          .not('intensive_id', 'is', null)
+          .gt('session_date', todayStr)
+          .lte('session_date', d.target_date || '9999-12-31');
+        setIntensiveExtra(((futureIntensive || []) as any[])
+          .filter(r => !progressDays.includes(new Date(r.session_date + 'T12:00:00').getDay())).length);
+
+        // 투트랙: 공동 선생님 + 이름
+        const { data: cos } = await db.from('plan_co_teachers')
+          .select('teacher_id, start_date, end_date').eq('design_id', designId).eq('status', 'active');
+        const teacherIds = Array.from(new Set([d.teacher_id, ...((cos || []) as any[]).map((c: any) => c.teacher_id)]));
+        const { data: profs } = await db.from('profiles').select('id, full_name').in('id', teacherIds);
+        const nameOf = new Map(((profs || []) as any[]).map((p: any) => [p.id, p.full_name]));
+        setMainTeacherName(nameOf.get(d.teacher_id) || '담당');
+        setCoTeachers(((cos || []) as any[]).map((c: any) => ({
+          teacher_id: c.teacher_id, name: nameOf.get(c.teacher_id) || '공동T',
+          start_date: c.start_date, end_date: c.end_date,
+        })));
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
@@ -146,8 +177,8 @@ export function TodaySession() {
 
   const remainCount = trackGoals.length - 1 - groupPosIdx + (partialCarry ? 0.5 : 0);
   const remainSessions = useMemo(
-    () => (design ? countProgressSessions(design.rhythm || {}, design.target_date) : 0),
-    [design]
+    () => (design ? countProgressSessions(design.rhythm || {}, design.target_date) + intensiveExtra : 0),
+    [design, intensiveExtra]
   );
   const pace = remainSessions > 0 ? remainCount / remainSessions : null;
   const todayCount = pace != null ? Math.max(1, Math.round(pace)) : 1;
@@ -343,7 +374,31 @@ export function TodaySession() {
         <span className="text-sm text-muted-foreground">
           {todayStr.slice(5).replace('-', '/')} · {ROLE_LABELS[((design.rhythm || {})[String(new Date().getDay())] || 'progress') as SessionRole]}
           {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
+          {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회 반영)`}
         </span>
+        {sessionMeta.intensive_id && (
+          <Badge variant="outline" className="border-primary/60 text-primary text-[11px]">✨ 특강 회차</Badge>
+        )}
+        {coTeachers.length > 0 && (
+          <select
+            className="h-7 rounded-md border bg-background px-2 text-xs font-medium"
+            value={sessionMeta.assigned_teacher_id || design.teacher_id}
+            onChange={async e => {
+              const tid = e.target.value;
+              try {
+                await db.from('plan_sessions').update({ assigned_teacher_id: tid === design.teacher_id ? null : tid }).eq('id', sessionId);
+                setSessionMeta(p => ({ ...p, assigned_teacher_id: tid === design.teacher_id ? null : tid }));
+                toast.success('오늘 수업 담당이 지정됐어요');
+              } catch (err: any) { toast.error(err.message || String(err)); }
+            }}
+            title="오늘 수업 담당 선생님"
+          >
+            <option value={design.teacher_id}>오늘 담당: {mainTeacherName}</option>
+            {coTeachers
+              .filter(c => c.start_date <= todayStr && c.end_date >= todayStr)
+              .map(c => <option key={c.teacher_id} value={c.teacher_id}>오늘 담당: {c.name} (공동)</option>)}
+          </select>
+        )}
         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => navigate('/plan')}>
           <Undo2 className="w-4 h-4 mr-1" />목록
         </Button>
