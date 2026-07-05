@@ -438,6 +438,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
         student_type: mode === 'abc' ? (studentTypes[s.id] || 'B') : null,
       })));
       toast.success('수업 설계 저장 완료 — 이제 매 수업이 자동으로 준비됩니다.');
+      removeCurrentDraftOnFinalize();
       onDone();
       void designId;
       void composeSubjectResolved;
