@@ -1,102 +1,105 @@
+# 특강 추가 · 투트랙 공동지도 확장안
 
-# 수업일지 입력 부담 감소 시스템
-
-목표: 매일 학생별로 똑같은 내용을 반복 타이핑하는 부담을 없애고, 주간리포트 품질은 오히려 더 좋게 만든다.
-
-## 1. 반 단위 일괄입력 화면 (A)
-
-새 페이지/탭: **"오늘 수업 한번에 기록"** (선생님 대시보드 + Lessons 탭 진입)
-
-- 좌측: 오늘 내 수업 슬롯 리스트 (시간 + 반 + 과목 + 학생 N명)
-- 슬롯 클릭 → 우측에 한 장의 "수업 카드" 펼침
-  - **공통란(한 번만 입력, 모든 학생에 적용)**
-    - 진도/단원 (curriculum_map에서 자동 제안)
-    - 수업 내용 (lesson_range)
-    - 과제 부여 내용
-  - **학생별 빠른 입력 (행당 3초)**
-    - 학생 이름 | 이해도 1-5 (탭/슬라이더) | 숙제 상태 (✅/△/✗) | 짧은 코멘트 (선택)
-- 한 번에 저장 → 학생 N명 lesson_records가 동일한 공통란 + 개별 평가로 생성
-
-기존 `NewLessonEntryDialog` 일괄 생성 + `BatchLessonModal`을 합쳐 **"공통란 + 학생별 평가" 단일 화면**으로 재구성. 빈 레코드 생성 후 다시 채우는 2-스텝 흐름 제거.
-
-## 2. 이전 회차 자동 채움 (B)
-
-수업 카드 열릴 때 자동 prefill:
-- **진도**: 같은 (teacher_id, class_id 또는 student set, subject)의 가장 최근 lesson_record의 `lesson_range` + curriculum_map의 다음 단원 제안
-- **과제 부여**: 직전 회차의 과제 그대로 + "오늘 같은 과제 연장" 토글
-- **이해도**: 학생별 최근 평균을 회색 placeholder로 표시 (덮어쓰기 전까지 저장 안됨)
-- **숙제 상태**: `homework_submissions`/`homework_assignments`에 이미 제출 데이터가 있으면 자동 매핑 (기존 sync hook 재활용)
-
-"이전 회차 그대로" 버튼 한 번이면 공통란이 통째로 채워짐.
-
-## 3. 일일 필수항목 최소화 + 주간 필수 free-text (D)
-
-`lesson_records` 폼을 두 레벨로 분리:
-
-- **일일 필수 (매 회차)**: 이해도, 숙제 상태, 진도 (공통란에서 1회 입력)
-- **주간 필수 (학생당 주 1회)**: "이번 주 핵심 코멘트" free-text 한 단락
-  - 일요일 23:59 마감 알림
-  - 미작성 학생 리스트가 선생님 대시보드 상단에 위젯으로 노출 (PrepLectureProposalsWidget 옆)
-- **AI 주간 종합**: `generate-weekly-reports` 함수가 다음을 입력으로 받음
-  - 한 주의 일일 lesson_records (이해도/숙제/진도)
-  - 주간 필수 코멘트 한 단락
-  - 시험/숙제 평가 결과
-  → 학부모 리포트 본문 자동 작성, 선생님은 검수/수정만
-
-## 4. 음성 메모 모드 (C, 선택 기능)
-
-선생님이 본인 계정에서 옵션 ON 가능 (개인 설정):
-- 수업 카드 우상단 🎙 버튼
-- 1-2분 녹음 → ElevenLabs Scribe(`scribe_v2`)로 STT → Lovable AI(`google/gemini-2.5-flash`)가 학생별 초안 생성
-  - 출력: `{학생ID: {이해도, 짧은 코멘트, 숙제 상태}}` JSON
-- 선생님이 수업 카드에서 검수/수정 후 저장
-
-ElevenLabs는 standard connector로 연결, 키는 서버에만. 음성 파일은 처리 후 즉시 폐기 (저장 안함).
-
-## 5. 학부모 주간리포트 보장 장치
-
-- 주간 필수 코멘트 미작성이면 AI 리포트 생성 차단 + 알림
-- AI는 일일 데이터 + 주간 코멘트 모두 인용. 일일 데이터만으로는 절대 학부모 발송 불가
-- 기존 `weekly_reports` 흐름/검수 단계 유지 — 자동 발송 아님
+수업 설계(plan_designs)에 두 가지 확장을 얹습니다. 기존 설계는 그대로 두고, "확장(Extension)" 레이어를 새로 추가하는 방식이라 원래 커리큘럼이 오염되지 않습니다.
 
 ---
 
-## 기술 변경 요약
+## 1. 특강 추가 (Intensive Add-on)
 
-**DB 마이그레이션**
-- `lesson_records`에 컬럼 추가:
-  - `weekly_summary` (text, nullable) — 주간 필수 코멘트
-  - `weekly_summary_week` (date) — 해당 주 월요일
-  - `is_common_entry` (boolean, default false) — 일괄 입력 출처 표시
-- 인덱스: `(teacher_id, student_id, weekly_summary_week)`
+**개념**: 이미 굴러가는 설계에 "방학특강 8회"처럼 **기간 한정 추가 시수**를 얹으면, 해당 기간 동안 진도 세션 수가 늘어나고 커리큘럼(목표 배분)이 자동으로 다시 계산됩니다.
 
-**프론트엔드**
-- 신규: `src/components/lessons/UnifiedLessonCard.tsx` — 공통란+학생별 평가 단일 화면
-- 신규: `src/components/lessons/WeeklySummaryWidget.tsx` — 미작성 학생 리스트 (대시보드)
-- 신규: `src/components/lessons/VoiceMemoCapture.tsx` — 녹음/STT/AI 초안 UI (옵션 ON시 표시)
-- 신규: `src/pages/UnifiedLessonEntryPage.tsx` (또는 Lessons 탭 추가)
-- 수정: `NewLessonEntryDialog`, `BatchLessonModal` — 신규 화면으로 라우팅
-- 수정: `TeacherDashboard.tsx` — WeeklySummaryWidget 추가
+**흐름**
+1. 설계 카드에서 `+ 특강 추가` 클릭
+2. 모달에서 입력:
+   - 라벨 (예: "여름방학 특강")
+   - 시작일 · 종료일
+   - 추가 시수 (예: 8회)
+   - 추가 요일/시간 리듬 (기존과 다르게: 예 "월·수·금 오전")
+   - 대상: 그룹 전체 또는 특정 학생만
+3. 저장 시 해당 기간의 세션이 기존 리듬 위에 합쳐지고, `countProgressSessions`가 특강 세션까지 포함해 재계산 → 목표 배분 자동 갱신
+4. 특강 종료일 이후에는 원래 리듬으로 복귀
 
-**Edge Functions**
-- 신규: `transcribe-lesson-memo` (ElevenLabs Scribe STT)
-- 신규: `draft-lesson-from-memo` (Lovable AI로 학생별 초안 생성)
-- 수정: `generate-weekly-reports` — `weekly_summary` 입력 추가, 미작성시 차단
-
-**Connectors**
-- ElevenLabs 연결 (음성 메모 옵션에만 필요)
+**표기**: 세션 목록에서 특강 세션은 배지(`특강`)로 구분
 
 ---
 
-## 단계별 진행
+## 2. 투트랙 공동지도 (Co-Teacher Assignment)
 
-이 작업은 크니까 두 단계로 나눠서 작업할게요:
+**개념**: 한 설계를 두 선생님이 함께 운영. 합류 선생님은 **기간 한정**으로 참여하며, 그 기간 내 세션별로 어떤 개념을 어느 선생님이 맡을지 지정.
 
-**1단계 (먼저 실행)** — A + B + D
-- 일괄입력 화면, 이전 회차 자동채움, 주간 필수 코멘트, AI 주간 종합 보강
+**흐름**
+1. 설계 카드에서 `+ 공동 선생님` 클릭
+2. 모달에서:
+   - 합류 선생님 선택
+   - 참여 기간 (시작일~종료일)
+   - 역할 메모 (예: "심화 개념 담당")
+3. 저장 후, 해당 기간 세션 목록에서 각 세션별로 담당 선생님 드롭다운이 활성화 → 세션별 담당자 지정
+4. 담당자 미지정 세션은 기본 담당(원래 teacher_id)로 표시
 
-**2단계 (1단계 검증 후)** — C 음성 메모
-- ElevenLabs 연결, 녹음/STT/초안 생성 흐름 추가
-- 선생님 개인 설정에서 ON/OFF
+**표기**: 세션 카드에 담당 선생님 이름 뱃지, 공동지도 기간에는 두 선생님 아바타 모두 노출
 
-승인하시면 1단계부터 바로 시작합니다.
+---
+
+## 데이터 모델
+
+신규 `plan_*` 테이블 3개 (기존 스키마 원칙 유지, 교직원 전체 접근):
+
+```text
+plan_intensives            여름/겨울/시험대비 등 특강 정의
+ ├ design_id (FK)
+ ├ label, start_date, end_date
+ ├ added_sessions (int)     추가 시수
+ ├ rhythm (jsonb)           특강 요일-시간 리듬
+ └ scope ('all' | 'subset')
+
+plan_intensive_students    특강 대상이 서브셋일 때 학생 매핑
+ ├ intensive_id (FK)
+ └ student_id
+
+plan_co_teachers           공동지도 참여 등록
+ ├ design_id (FK)
+ ├ teacher_id
+ ├ start_date, end_date
+ ├ role_note
+ └ status ('active' | 'ended')
+```
+
+`plan_sessions`에 컬럼 두 개 추가:
+- `intensive_id uuid NULL` — 특강 세션 표시
+- `assigned_teacher_id uuid NULL` — 세션별 담당자 오버라이드
+
+모두 `Staff full access` RLS + service_role GRANT.
+
+---
+
+## UI 변경 지점
+
+- `src/pages/PlanPage.tsx` — 설계 카드에 `특강 추가` · `공동 선생님` 버튼
+- `src/components/plan/IntensiveModal.tsx` (신규) — 특강 추가 폼
+- `src/components/plan/CoTeacherModal.tsx` (신규) — 공동지도 참여 폼
+- `src/components/plan/SessionAssignmentList.tsx` (신규) — 기간 내 세션별 담당자 지정 리스트
+- `src/components/plan/planApi.ts` — `addIntensive`, `addCoTeacher`, `assignSessionTeacher`, `recomputeGoalDistribution` 헬퍼
+
+`DesignWizard.tsx`는 건드리지 않고, 설계 완료 이후 "확장" 액션으로만 접근.
+
+---
+
+## 커리큘럼 재계산 규칙
+
+특강이 추가되면:
+1. 원래 리듬 세션 수 + 특강 세션 수 = 총 진도 슬롯
+2. 남은 목표(plan_goals) 개수를 총 슬롯에 균등 배분
+3. 이미 완료된 세션(`plan_goal_progress`에 기록된 것)은 건너뛰고 앞으로의 세션만 재분배
+
+이 계산은 클라이언트 헬퍼로 순수 함수화(테스트 가능).
+
+---
+
+## 진행 순서
+1. 마이그레이션 (테이블 3개 + plan_sessions 2컬럼)
+2. planApi 헬퍼 추가
+3. IntensiveModal / CoTeacherModal / SessionAssignmentList 구현
+4. PlanPage 카드에 진입점 버튼
+5. 세션 목록 화면에 특강/공동지도 배지 표기
+
+승인해주시면 마이그레이션부터 진행하겠습니다.

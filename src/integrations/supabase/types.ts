@@ -3197,6 +3197,50 @@ export type Database = {
           },
         ]
       }
+      plan_co_teachers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          design_id: string
+          end_date: string
+          id: string
+          role_note: string | null
+          start_date: string
+          status: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          design_id: string
+          end_date: string
+          id?: string
+          role_note?: string | null
+          start_date: string
+          status?: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          design_id?: string
+          end_date?: string
+          id?: string
+          role_note?: string | null
+          start_date?: string
+          status?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_co_teachers_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_designs: {
         Row: {
           angle_mode: string
@@ -3424,6 +3468,82 @@ export type Database = {
           },
         ]
       }
+      plan_intensive_students: {
+        Row: {
+          id: string
+          intensive_id: string
+          student_id: string
+        }
+        Insert: {
+          id?: string
+          intensive_id: string
+          student_id: string
+        }
+        Update: {
+          id?: string
+          intensive_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_intensive_students_intensive_id_fkey"
+            columns: ["intensive_id"]
+            isOneToOne: false
+            referencedRelation: "plan_intensives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_intensives: {
+        Row: {
+          added_sessions: number
+          created_at: string
+          created_by: string | null
+          design_id: string
+          end_date: string
+          id: string
+          label: string
+          note: string | null
+          rhythm: Json
+          scope: string
+          start_date: string
+        }
+        Insert: {
+          added_sessions?: number
+          created_at?: string
+          created_by?: string | null
+          design_id: string
+          end_date: string
+          id?: string
+          label: string
+          note?: string | null
+          rhythm?: Json
+          scope?: string
+          start_date: string
+        }
+        Update: {
+          added_sessions?: number
+          created_at?: string
+          created_by?: string | null
+          design_id?: string
+          end_date?: string
+          id?: string
+          label?: string
+          note?: string | null
+          rhythm?: Json
+          scope?: string
+          start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_intensives_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_queue: {
         Row: {
           assignee: string
@@ -3490,9 +3610,12 @@ export type Database = {
       }
       plan_sessions: {
         Row: {
+          assigned_teacher_id: string | null
           created_at: string
           design_id: string
+          goal_id: string | null
           id: string
+          intensive_id: string | null
           note: string | null
           role: string
           saved_at: string | null
@@ -3500,9 +3623,12 @@ export type Database = {
           status: string
         }
         Insert: {
+          assigned_teacher_id?: string | null
           created_at?: string
           design_id: string
+          goal_id?: string | null
           id?: string
+          intensive_id?: string | null
           note?: string | null
           role?: string
           saved_at?: string | null
@@ -3510,9 +3636,12 @@ export type Database = {
           status?: string
         }
         Update: {
+          assigned_teacher_id?: string | null
           created_at?: string
           design_id?: string
+          goal_id?: string | null
           id?: string
+          intensive_id?: string | null
           note?: string | null
           role?: string
           saved_at?: string | null
@@ -3525,6 +3654,20 @@ export type Database = {
             columns: ["design_id"]
             isOneToOne: false
             referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_sessions_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_sessions_intensive_id_fkey"
+            columns: ["intensive_id"]
+            isOneToOne: false
+            referencedRelation: "plan_intensives"
             referencedColumns: ["id"]
           },
         ]
