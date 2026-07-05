@@ -8,16 +8,31 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { NotebookPen, Plus, CalendarClock } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Sparkles, Users } from 'lucide-react';
+import { IntensiveModal } from '@/components/plan/IntensiveModal';
+import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
+import { fetchIntensives, fetchCoTeachers, PlanIntensive, PlanCoTeacher } from '@/components/plan/planApi';
 
 function PlanHome() {
   const [designs, setDesigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
+  const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
+  const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
 
   async function load() {
     setLoading(true);
-    try { setDesigns(await fetchDesigns()); } catch { setDesigns([]); }
+    try {
+      const list = await fetchDesigns();
+      setDesigns(list);
+      const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
+      await Promise.all(list.map(async (d: any) => {
+        const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
+        map[d.id] = { intensives: ints, coTeachers: cos };
+      }));
+      setExtMap(map);
+    } catch { setDesigns([]); }
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -82,14 +97,55 @@ function PlanHome() {
                       `${DAY_LABELS[Number(day)]} ${ROLE_LABELS[role] || role}`).join(' · ')}
                     {d.target_date && <span className="text-muted-foreground">· ~{d.target_date}</span>}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    수업 당일 화면은 다음 업데이트에서 열립니다 — 설계는 지금부터 유효.
-                  </p>
+                  {(extMap[d.id]?.intensives?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {extMap[d.id].intensives.map(it => (
+                        <Badge key={it.id} variant="outline" className="border-primary/50 text-primary">
+                          <Sparkles className="w-3 h-3 mr-1" />{it.label} · {it.added_sessions}회 ({it.start_date}~{it.end_date})
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {(extMap[d.id]?.coTeachers?.length || 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {extMap[d.id].coTeachers.map(c => (
+                        <Badge key={c.id} variant="outline">
+                          <Users className="w-3 h-3 mr-1" />{c.teacher_name} ({c.start_date}~{c.end_date})
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button size="sm" variant="outline" onClick={() => setIntensiveDesignId(d.id)}>
+                      <Sparkles className="w-3.5 h-3.5 mr-1" />특강 추가
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setCoTeacherDesign({ id: d.id, teacher_id: d.teacher_id })}>
+                      <Users className="w-3.5 h-3.5 mr-1" />공동 선생님
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
         </div>
+      )}
+
+      {intensiveDesignId && (
+        <IntensiveModal
+          open={!!intensiveDesignId}
+          designId={intensiveDesignId}
+          onClose={() => setIntensiveDesignId(null)}
+          onDone={load}
+        />
+      )}
+      {coTeacherDesign && (
+        <CoTeacherModal
+          open={!!coTeacherDesign}
+          designId={coTeacherDesign.id}
+          defaultTeacherId={coTeacherDesign.teacher_id}
+          onClose={() => setCoTeacherDesign(null)}
+          onDone={load}
+        />
       )}
     </div>
   );
