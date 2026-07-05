@@ -405,6 +405,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     const removedBefore = sorted.filter(i => i < targetIdx).length;
     const insertAt = Math.max(0, targetIdx - removedBefore);
     setMergePicks(sorted.map((_, k) => insertAt + k));
+    invalidateEndGoal(); // 순서가 바뀌면 끝점 재선택 필요
   }
 
 
