@@ -335,7 +335,45 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       next.splice(i + 1, 0, { title: '', pages: '' });
       return next;
     });
+    setMergePicks([]);
   }
+
+  // 페이지 범위 병합 — "p.10-15" + "p.16-20" → "p.10-20", 형식 다르면 콤마로 나열
+  function mergePages(list: string[]): string {
+    const vals = list.map(s => s.trim()).filter(Boolean);
+    if (vals.length === 0) return '';
+    const nums: number[] = [];
+    let prefix = '';
+    let ok = true;
+    for (const v of vals) {
+      const m = v.match(/^(p\.?\s*)?(\d+)\s*[-–~]\s*(\d+)$/i);
+      if (!m) { ok = false; break; }
+      if (!prefix) prefix = m[1] || '';
+      nums.push(Number(m[2]), Number(m[3]));
+    }
+    if (ok && nums.length > 0) {
+      return `${prefix || 'p.'}${Math.min(...nums)}-${Math.max(...nums)}`;
+    }
+    return vals.join(', ');
+  }
+
+  function mergeGoalsByIndices(indices: number[]) {
+    const sorted = [...indices].sort((a, b) => a - b);
+    if (sorted.length < 2) return;
+    setGoals(p => {
+      const picked = sorted.map(i => p[i]).filter(Boolean);
+      const merged: GoalInput = {
+        title: picked.map(g => g.title.trim()).filter(Boolean).join(' + '),
+        pages: mergePages(picked.map(g => g.pages || '')),
+      };
+      const next = p.filter((_, i) => !sorted.includes(i));
+      next.splice(sorted[0], 0, merged);
+      return next;
+    });
+    setMergePicks([]);
+    toast.success(`${sorted.length}개 챕터를 하나로 묶었어요`);
+  }
+
 
   async function extractTocFromImage(file: File) {
     if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드해주세요.'); return; }
