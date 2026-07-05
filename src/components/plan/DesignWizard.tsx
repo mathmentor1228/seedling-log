@@ -451,7 +451,9 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
 
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto grid gap-4 lg:grid-cols-[1fr_260px]">
+      <div className="space-y-4 min-w-0">
+
       {/* 진행 표시 */}
       <div className="flex items-center gap-1.5">
         {STEPS.map((label, i) => (
