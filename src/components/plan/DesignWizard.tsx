@@ -689,17 +689,46 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                     <Input placeholder="교재 (예: 개념원리)" value={textbook} onChange={e => setTextbook(e.target.value)} />
                   </div>
                   <div className="rounded-lg border divide-y">
-                    {goals.map((g, i) => (
-                      <div key={i} className={`flex items-center gap-1.5 p-2 ${mergePicks.includes(i) ? 'bg-primary/5' : ''}`}>
+                    {goals.map((g, i) => {
+                      const isPicked = mergePicks.includes(i);
+                      const isDragging = draggingIdx === i || (draggingIdx !== null && mergePicks.includes(draggingIdx) && isPicked);
+                      return (
+                      <div
+                        key={i}
+                        className={`relative flex items-center gap-1.5 p-2 transition ${isPicked ? 'bg-primary/5' : ''} ${isDragging ? 'opacity-40' : ''} ${dragOverIdx === i ? 'border-t-2 border-t-primary' : ''}`}
+                        onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                        onDragLeave={() => setDragOverIdx(prev => prev === i ? null : prev)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          if (draggingIdx === null) return;
+                          const moving = mergePicks.includes(draggingIdx) && mergePicks.length > 1 ? mergePicks : [draggingIdx];
+                          moveGoalsToIndex(moving, i);
+                          setDragOverIdx(null);
+                          setDraggingIdx(null);
+                        }}
+                      >
+                        <span
+                          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0"
+                          draggable
+                          onDragStart={e => {
+                            setDraggingIdx(i);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', String(i));
+                          }}
+                          onDragEnd={() => { setDraggingIdx(null); setDragOverIdx(null); }}
+                          title={isPicked && mergePicks.length > 1 ? `선택한 ${mergePicks.length}개 함께 드래그` : '드래그해서 이동'}
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </span>
                         <Checkbox
-                          checked={mergePicks.includes(i)}
+                          checked={isPicked}
                           onCheckedChange={(v) => {
                             setMergePicks(prev => {
-                              if (v) return [...prev, i].sort((a, b) => a - b).slice(-3);
+                              if (v) return [...prev, i].sort((a, b) => a - b);
                               return prev.filter(x => x !== i);
                             });
                           }}
-                          aria-label="병합 선택"
+                          aria-label="선택"
                         />
                         <span className="w-6 text-right text-xs font-bold text-muted-foreground shrink-0">{i + 1}</span>
 
@@ -736,7 +765,21 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
+                    {/* 맨 아래로 이동용 드롭 존 */}
+                    <div
+                      className={`h-6 ${dragOverIdx === goals.length ? 'bg-primary/10 border-t-2 border-t-primary' : ''}`}
+                      onDragOver={e => { e.preventDefault(); setDragOverIdx(goals.length); }}
+                      onDragLeave={() => setDragOverIdx(prev => prev === goals.length ? null : prev)}
+                      onDrop={e => {
+                        e.preventDefault();
+                        if (draggingIdx === null) return;
+                        const moving = mergePicks.includes(draggingIdx) && mergePicks.length > 1 ? mergePicks : [draggingIdx];
+                        moveGoalsToIndex(moving, goals.length);
+                        setDragOverIdx(null); setDraggingIdx(null);
+                      }}
+                    />
                   </div>
                   <div className="flex gap-2 flex-wrap items-center">
                     <Button variant="outline" size="sm" onClick={() => setGoals(p => [...p, { title: '', pages: '' }])}>
