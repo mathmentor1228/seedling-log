@@ -134,6 +134,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     {
       label: '수업',
       items: [
+        { label: '수업 계획', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
         { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
         { label: '단어시험관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },

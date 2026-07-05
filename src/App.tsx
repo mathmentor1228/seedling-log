@@ -50,6 +50,7 @@ const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
 const VocabTestGeneratorPage = lazy(() => import("./pages/VocabTestGeneratorPage"));
 const SchoolExamArchivePage = lazy(() => import("./pages/SchoolExamArchivePage"));
 const ExamBoardPage = lazy(() => import("./pages/ExamBoardPage"));
+const PlanPage = lazy(() => import("./pages/PlanPage"));
 const MathConceptPage = lazy(() => import("./pages/MathConceptPage"));
 const ExamPrepPage = lazy(() => import("./pages/ExamPrepPage"));
 const StudySessionPage = lazy(() => import("./pages/StudySessionPage"));
@@ -184,6 +185,7 @@ const App = () => (
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
+                <Route path="/plan" element={<PlanPage />} />
                 <Route path="/exam-board" element={<ExamBoardPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
