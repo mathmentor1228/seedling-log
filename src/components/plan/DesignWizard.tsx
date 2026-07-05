@@ -334,29 +334,123 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-bold">어느 반의 수업을 설계할까요?</h2>
-                <p className="text-sm text-muted-foreground">학생·시간표는 반에서 자동으로 가져옵니다.</p>
+                <h2 className="text-lg font-bold">어느 아이들과 함께할 설계인가요?</h2>
+                <p className="text-sm text-muted-foreground">기존 반을 그대로 쓰거나, 담당 학생들을 골라 즉석 그룹으로 시작하세요.</p>
               </div>
-              <Select value={classId} onValueChange={setClassId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="반 선택" /></SelectTrigger>
-                <SelectContent>
-                  {classes.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} · {c.subject}{c.teacher_name ? ` · ${c.teacher_name}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {classId && (
-                <div className="rounded-lg bg-muted/40 p-4 text-sm space-y-1">
-                  <p><b>학생 {students.length}명</b> — {students.map(s => s.name).join(', ') || '없음'}</p>
-                  <p className="text-muted-foreground">
-                    수업 요일: {scheduleDays.length > 0 ? scheduleDays.map(d => DAY_LABELS[d]).join(' · ') : '시간표 미등록 (Q5에서 수동 지정 불가 — 시간표에 등록해주세요)'}
-                  </p>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant={rosterMode === 'existing' ? 'default' : 'outline'}
+                  onClick={() => setRosterMode('existing')}>기존 반 선택</Button>
+                <Button size="sm" variant={rosterMode === 'compose' ? 'default' : 'outline'}
+                  onClick={() => setRosterMode('compose')}>학생 골라서 반 구성</Button>
+              </div>
+
+              {rosterMode === 'existing' && (
+                <>
+                  <Select value={classId} onValueChange={setClassId}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="반 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {classes.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} · {c.subject}{c.teacher_name ? ` · ${c.teacher_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {classId && (
+                    <div className="rounded-lg bg-muted/40 p-4 text-sm space-y-1">
+                      <p><b>학생 {students.length}명</b> — {students.map(s => s.name).join(', ') || '없음'}</p>
+                      <p className="text-muted-foreground">
+                        수업 요일: {scheduleDays.length > 0 ? scheduleDays.map(d => DAY_LABELS[d]).join(' · ') : '시간표 미등록 (Q5에서 수동 지정 불가 — 시간표에 등록해주세요)'}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {rosterMode === 'compose' && (
+                <div className="space-y-4">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input placeholder="그룹 이름 (선택 · 예: 중2 목요 A조)"
+                      value={composeGroupName} onChange={e => setComposeGroupName(e.target.value)} />
+                    <Select value={composeSubject} onValueChange={setComposeSubject}>
+                      <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {['수학', '영어', '국어', '과학', '사회', '기타'].map(s => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-muted-foreground mb-1.5">수업 요일 (여러 개 선택)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[1, 2, 3, 4, 5, 6, 0].map(d => {
+                        const on = composeDays.includes(d);
+                        return (
+                          <button key={d} type="button"
+                            onClick={() => setComposeDays(p => on ? p.filter(x => x !== d) : [...p, d])}
+                            className={`w-10 h-10 rounded-full border text-sm font-bold transition ${
+                              on ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted'
+                            }`}>
+                            {DAY_LABELS[d]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-muted-foreground">
+                        내가 담당하는 학생 {poolStudents.length > 0 && `· ${poolStudents.length}명`}
+                      </p>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        선택 <b className="text-primary">{pickedIds.length}</b>명
+                      </span>
+                    </div>
+                    <Input placeholder="이름·학년으로 검색"
+                      value={studentFilter} onChange={e => setStudentFilter(e.target.value)} />
+                    <div className="rounded-lg border max-h-72 overflow-y-auto divide-y">
+                      {poolLoading && <p className="p-4 text-sm text-muted-foreground">불러오는 중…</p>}
+                      {!poolLoading && poolStudents.length === 0 && (
+                        <p className="p-4 text-sm text-muted-foreground">담당 학생이 없어요 — 학생 관리에서 배정을 확인해주세요.</p>
+                      )}
+                      {poolStudents
+                        .filter(s => !studentFilter.trim()
+                          || s.name.includes(studentFilter.trim())
+                          || (s.grade || '').includes(studentFilter.trim()))
+                        .map(s => {
+                          const on = pickedIds.includes(s.id);
+                          return (
+                            <label key={s.id}
+                              className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer ${on ? 'bg-primary/5' : ''}`}>
+                              <Checkbox checked={on}
+                                onCheckedChange={c => setPickedIds(p => c ? [...p, s.id] : p.filter(x => x !== s.id))} />
+                              <span className="font-medium">{s.name}</span>
+                              {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
+                            </label>
+                          );
+                        })}
+                    </div>
+                    {pickedIds.length > 0 && (
+                      <div className="flex gap-1.5 flex-wrap">
+                        {students.map(s => (
+                          <Badge key={s.id} variant="secondary" className="cursor-pointer"
+                            onClick={() => setPickedIds(p => p.filter(x => x !== s.id))}>
+                            {s.name} ✕
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           )}
+
+
 
           {/* ── Q1 트랙 ── */}
           {step === 1 && (
