@@ -229,9 +229,19 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
 
   const STEPS = ['반 선택', '무엇을', '어떻게', '확인은', '미달 관리', '리듬·기한'];
 
+  // Compose 모드용 파생값
+  const composeSubjectResolved = rosterMode === 'compose' ? composeSubject : (selectedClass?.subject || '');
+  const composeReady = rosterMode === 'compose'
+    && pickedIds.length > 0
+    && !!composeSubject
+    && composeDays.length > 0;
+
   function canNext(): boolean {
     switch (step) {
-      case 0: return !!classId && students.length > 0;
+      case 0:
+        return rosterMode === 'existing'
+          ? !!classId && students.length > 0
+          : composeReady;
       case 1: return trackChoice !== 'new'
         ? existingGoals.length > 0
         : goals.filter(g => g.title.trim()).length > 0 && !!trackTitle.trim();
@@ -242,16 +252,26 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   }
 
   async function save() {
-    if (!user || !selectedClass) return;
+    if (!user) return;
+    if (rosterMode === 'existing' && !selectedClass) return;
+    if (rosterMode === 'compose' && !composeReady) { toast.error('학생·과목·요일을 채워주세요.'); return; }
     if (!targetDate) { toast.error('기한을 정해주세요.'); return; }
     if (endGoalIdx < 0) { toast.error('끝점 목표를 선택해주세요.'); return; }
+    const subject = rosterMode === 'existing' ? selectedClass!.subject : composeSubject;
+    const contextName = rosterMode === 'existing'
+      ? selectedClass!.name
+      : (composeGroupName.trim() || `내 그룹 (${students.length}명)`);
+    const teacherIdForDesign = rosterMode === 'existing'
+      ? (selectedClass!.teacher_id || user.id)
+      : user.id;
+    const classIdForDesign = rosterMode === 'existing' ? classId : null;
     setSaving(true);
     try {
       // 1) 트랙 확보
       let trackId: string; let goalRows: PlanGoal[];
       if (trackChoice === 'new') {
         const created = await createTrackWithGoals(
-          trackTitle.trim(), selectedClass.subject, textbook, goals.filter(g => g.title.trim()), user.id);
+          trackTitle.trim(), subject, textbook, goals.filter(g => g.title.trim()), user.id);
         trackId = created.track.id; goalRows = created.goals;
       } else {
         trackId = trackChoice; goalRows = existingGoals;
@@ -260,9 +280,9 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       // 2) 설계 저장
       const designId = await createDesign({
         track_id: trackId,
-        class_id: classId,
-        teacher_id: selectedClass.teacher_id || user.id,
-        title: `${selectedClass.name} — ${trackTitle || tracks.find(t => t.id === trackChoice)?.title || ''}`.trim(),
+        class_id: classIdForDesign,
+        teacher_id: teacherIdForDesign,
+        title: `${contextName} — ${trackTitle || tracks.find(t => t.id === trackChoice)?.title || ''}`.trim(),
         teaching_mode: mode,
         type_concepts: mode === 'abc' ? concepts : {},
         angle_mode: mode === 'abc' ? angleMode : 'off',
@@ -282,12 +302,14 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       toast.success('수업 설계 저장 완료 — 이제 매 수업이 자동으로 준비됩니다.');
       onDone();
       void designId;
+      void composeSubjectResolved;
     } catch (e: any) {
       toast.error(`저장 실패: ${e.message || e}`);
     } finally {
       setSaving(false);
     }
   }
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
