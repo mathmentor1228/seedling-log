@@ -6,6 +6,7 @@ const db = supabase as any;
 
 export type PlanTrack = {
   id: string; title: string; subject: string; textbook: string | null; created_at: string;
+  created_by?: string | null; creator_name?: string | null;
 };
 export type PlanGoal = {
   id: string; track_id: string; order_index: number; title: string; pages: string | null;
