@@ -909,8 +909,11 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       </Card>
 
       {/* 네비게이션 */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Button variant="ghost" onClick={onCancel}>취소</Button>
+        <Button variant="outline" onClick={saveDraft}>
+          <Save className="w-4 h-4 mr-1" />임시저장
+        </Button>
         <div className="flex-1" />
         {step > 0 && (
           <Button variant="outline" onClick={() => setStep(s => s - 1)}>
@@ -927,6 +930,56 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           </Button>
         )}
       </div>
+      </div>
+
+      {/* 사이드 셋리스트 — 임시저장된 설계 */}
+      <aside className="lg:sticky lg:top-4 lg:self-start">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ListChecks className="w-4 h-4 text-primary" />
+              <h3 className="font-bold text-sm">임시저장 셋리스트</h3>
+              <Badge variant="secondary" className="ml-auto text-xs">{drafts.length}</Badge>
+            </div>
+            <Button size="sm" variant="outline" className="w-full" onClick={saveDraft}>
+              <Save className="w-3.5 h-3.5 mr-1" />
+              {currentDraftId ? '현재 진행 덮어쓰기' : '지금 상태 임시저장'}
+            </Button>
+            {drafts.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                아직 임시저장이 없어요.<br />중간에 쉬어도 언제든 이어서 작업하세요.
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-[60vh] overflow-y-auto">
+                {drafts.map(d => (
+                  <div key={d.id}
+                    className={`rounded-md border p-2 text-xs space-y-1 ${
+                      currentDraftId === d.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'
+                    }`}>
+                    <div className="flex items-start gap-1.5">
+                      <FileText className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                      <span className="font-medium line-clamp-2 flex-1">{d.label}</span>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0"
+                        onClick={() => deleteDraft(d.id)} title="삭제">
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Q{d.step + 1} · {STEPS[d.step]}</span>
+                      <span>{new Date(d.savedAt).toLocaleDateString('ko', { month: 'numeric', day: 'numeric' })} {new Date(d.savedAt).toLocaleTimeString('ko', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <Button size="sm" variant="secondary" className="w-full h-7 text-xs"
+                      onClick={() => loadDraft(d)}>
+                      이어서 시작
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </aside>
     </div>
   );
 }
+
