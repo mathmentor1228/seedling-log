@@ -131,6 +131,67 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
+  // Compose 모드 진입 시 담당 학생 풀 로드
+  useEffect(() => {
+    if (rosterMode !== 'compose' || !user?.id) return;
+    if (poolStudents.length > 0) return;
+    (async () => {
+      setPoolLoading(true);
+      try {
+        let ids: string[] | null = null;
+        if (role === 'teacher') {
+          const [linkRes, sstRes] = await Promise.all([
+            supabase.from('teacher_student_links').select('student_id').eq('teacher_id', user.id),
+            supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id),
+          ]);
+          const set = new Set<string>();
+          ((linkRes.data || []) as any[]).forEach(r => r.student_id && set.add(r.student_id));
+          ((sstRes.data || []) as any[]).forEach(r => r.student_id && set.add(r.student_id));
+          ids = Array.from(set);
+        }
+        let q = supabase.from('students').select('id, name, grade').order('name');
+        if (ids !== null) {
+          if (ids.length === 0) { setPoolStudents([]); setPoolLoading(false); return; }
+          q = q.in('id', ids);
+        }
+        const { data } = await q;
+        setPoolStudents(((data || []) as any[]).map(s => ({ id: s.id, name: s.name, grade: s.grade })));
+      } finally { setPoolLoading(false); }
+    })();
+  }, [rosterMode, user?.id, role, poolStudents.length]);
+
+  // Compose: 선택한 학생/요일/과목 → students·scheduleDays·rhythm·트랙에 반영
+  useEffect(() => {
+    if (rosterMode !== 'compose') return;
+    const studs = poolStudents
+      .filter(s => pickedIds.includes(s.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    setStudents(studs);
+    setStudentTypes(prev => {
+      const next: Record<string, StudentType> = {};
+      studs.forEach(s => { next[s.id] = prev[s.id] || 'B'; });
+      return next;
+    });
+  }, [rosterMode, pickedIds, poolStudents]);
+
+  useEffect(() => {
+    if (rosterMode !== 'compose') return;
+    const days = [...composeDays].sort();
+    setScheduleDays(days);
+    setRhythm(prev => {
+      const next: Record<string, SessionRole> = {};
+      days.forEach(d => { next[String(d)] = prev[String(d)] || 'progress'; });
+      return next;
+    });
+  }, [rosterMode, composeDays]);
+
+  useEffect(() => {
+    if (rosterMode !== 'compose' || !composeSubject) return;
+    fetchTracks(composeSubject).then(setTracks).catch(() => setTracks([]));
+  }, [rosterMode, composeSubject]);
+
+
+
   useEffect(() => {
     if (trackChoice === 'new') { setExistingGoals([]); return; }
     fetchGoals(trackChoice).then(setExistingGoals).catch(() => setExistingGoals([]));
