@@ -321,6 +321,14 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     return true;
   }
 
+  // 목표 목록이 바뀌면(묶기·삭제·순서변경) 끝점 인덱스가 어긋날 수 있어 재선택을 요구한다
+  function invalidateEndGoal() {
+    setEndGoalIdx(prev => {
+      if (prev >= 0) toast.info('목표 목록이 바뀌어 끝점을 다시 선택해주세요 (Q5)');
+      return -1;
+    });
+  }
+
   function moveGoal(i: number, dir: -1 | 1) {
     setGoals(p => {
       const j = i + dir;
@@ -329,6 +337,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+    invalidateEndGoal();
   }
   function insertGoalBelow(i: number) {
     setGoals(p => {
@@ -372,6 +381,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       return next;
     });
     setMergePicks([]);
+    invalidateEndGoal();
     toast.success(`${sorted.length}개 챕터를 하나로 묶었어요`);
   }
 
@@ -699,7 +709,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                             <CornerDownRight className="w-3.5 h-3.5" />
                           </Button>
                           <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="삭제"
-                            onClick={() => setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p)}>
+                            onClick={() => { setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p); invalidateEndGoal(); }}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
