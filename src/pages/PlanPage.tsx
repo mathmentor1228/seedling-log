@@ -23,7 +23,16 @@ function PlanHome() {
 
   async function load() {
     setLoading(true);
-    try { setDesigns(await fetchDesigns()); } catch { setDesigns([]); }
+    try {
+      const list = await fetchDesigns();
+      setDesigns(list);
+      const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
+      await Promise.all(list.map(async (d: any) => {
+        const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
+        map[d.id] = { intensives: ints, coTeachers: cos };
+      }));
+      setExtMap(map);
+    } catch { setDesigns([]); }
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
