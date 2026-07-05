@@ -722,13 +722,27 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                         {tocExtracting ? 'AI 분석 중…' : '목차 이미지 업로드 (AI 추출)'}
                       </span>
                     </label>
+                    <Button
+                      variant={mergePicks.length >= 2 ? 'default' : 'outline'}
+                      size="sm"
+                      disabled={mergePicks.length < 2}
+                      onClick={() => mergeGoalsByIndices(mergePicks)}
+                      title="체크한 2~3개 챕터를 하나로 묶습니다"
+                    >
+                      <Merge className="w-4 h-4 mr-1" />
+                      {mergePicks.length >= 2 ? `선택한 ${mergePicks.length}개 묶기` : '챕터 묶기'}
+                    </Button>
+                    {mergePicks.length > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setMergePicks([])}>선택 해제</Button>
+                    )}
                     <Button variant="ghost" size="sm" disabled
                       title='"제목 | p.10-17" 형식 여러 줄을 첫 칸에 붙여넣기 하세요'>
                       <Sparkles className="w-4 h-4 mr-1" />붙여넣기도 OK
                     </Button>
                     <span className="text-xs text-muted-foreground w-full">
-                      💡 목차 사진을 올리면 챕터·페이지를 자동 정리 → 화살표로 순서 조정, ↳ 로 그 아래 차시 추가
+                      💡 목차 사진 → 자동 정리 · 화살표로 순서 · ↳ 로 아래 차시 추가 · ☑ 체크 후 "묶기"로 2~3개 합치기
                     </span>
+
                   </div>
 
                 </div>
