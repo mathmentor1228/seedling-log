@@ -815,7 +815,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                       <Sparkles className="w-4 h-4 mr-1" />붙여넣기도 OK
                     </Button>
                     <span className="text-xs text-muted-foreground w-full">
-                      💡 목차 사진 → 자동 정리 · 화살표로 순서 · ↳ 로 아래 차시 추가 · ☑ 체크 후 "묶기"로 2~3개 합치기
+                      💡 ⋮⋮ 드래그로 순서 이동 (☑ 여러개 선택 후 하나만 드래그하면 함께 이동) · ↳ 아래 차시 추가 · ☑ 후 "묶기"로 합치기
                     </span>
 
                   </div>
