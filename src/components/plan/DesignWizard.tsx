@@ -87,6 +87,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [rhythm, setRhythm] = useState<Record<string, SessionRole>>({});
   const [endGoalIdx, setEndGoalIdx] = useState<number>(-1); // goals 배열 index (신규) 또는 existingGoals index
   const [targetDate, setTargetDate] = useState('');
+  const [tocExtracting, setTocExtracting] = useState(false);
 
   const selectedClass = classes.find(c => c.id === classId) || null;
 
