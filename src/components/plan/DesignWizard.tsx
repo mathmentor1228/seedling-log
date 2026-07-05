@@ -647,18 +647,28 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold">Q1. 이번 시즌, 어디까지 갈까요?</h2>
-                <p className="text-sm text-muted-foreground">목표 목록을 만드세요 — 페이지까지 적어야 수업지·플래너가 정확해집니다.</p>
+                <p className="text-sm text-muted-foreground">
+                  목표 목록을 만드세요 — 페이지까지 적어야 수업지·플래너가 정확해집니다.
+                </p>
+                <p className="text-xs text-primary/80 mt-1">
+                  💡 만든 트랙은 같은 과목 선생님들과 자동으로 공유됩니다.
+                </p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button variant={trackChoice === 'new' ? 'default' : 'outline'} size="sm" onClick={() => setTrackChoice('new')}>
                   <Plus className="w-4 h-4 mr-1" />새 트랙 만들기
                 </Button>
                 {tracks.map(t => (
-                  <Button key={t.id} variant={trackChoice === t.id ? 'default' : 'outline'} size="sm" onClick={() => setTrackChoice(t.id)}>
+                  <Button key={t.id} variant={trackChoice === t.id ? 'default' : 'outline'} size="sm" onClick={() => setTrackChoice(t.id)}
+                    title={t.creator_name ? `만든이: ${t.creator_name}` : undefined}>
                     {t.title}
+                    {t.creator_name && (
+                      <span className="ml-1.5 text-[10px] opacity-70">· {t.creator_name}</span>
+                    )}
                   </Button>
                 ))}
               </div>
+
 
               {trackChoice === 'new' ? (
                 <div className="space-y-3">
