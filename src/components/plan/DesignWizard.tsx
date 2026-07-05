@@ -89,7 +89,99 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [targetDate, setTargetDate] = useState('');
   const [tocExtracting, setTocExtracting] = useState(false);
 
+  // 임시저장 (localStorage) — user별 다수의 초안 관리
+  type Draft = {
+    id: string; label: string; step: number; savedAt: string;
+    state: Record<string, unknown>;
+  };
+  const draftsKey = `plan_design_drafts::${user?.id || 'anon'}`;
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+
   const selectedClass = classes.find(c => c.id === classId) || null;
+
+  function loadDraftsFromStorage() {
+    try {
+      const raw = localStorage.getItem(draftsKey);
+      setDrafts(raw ? (JSON.parse(raw) as Draft[]) : []);
+    } catch { setDrafts([]); }
+  }
+  useEffect(() => { loadDraftsFromStorage(); /* eslint-disable-next-line */ }, [user?.id]);
+
+  function snapshot(): Record<string, unknown> {
+    return {
+      rosterMode, classId, pickedIds, composeSubject, composeGroupName, composeDays,
+      trackChoice, trackTitle, textbook, goals,
+      mode, concepts, studentTypes, angleMode,
+      methods, cycle, cutline, cutlines,
+      failAction, escalateAfter,
+      rhythm, endGoalIdx, targetDate,
+    };
+  }
+  function applySnapshot(s: any) {
+    if (!s) return;
+    if (s.rosterMode) setRosterMode(s.rosterMode);
+    if (typeof s.classId === 'string') setClassId(s.classId);
+    if (Array.isArray(s.pickedIds)) setPickedIds(s.pickedIds);
+    if (typeof s.composeSubject === 'string') setComposeSubject(s.composeSubject);
+    if (typeof s.composeGroupName === 'string') setComposeGroupName(s.composeGroupName);
+    if (Array.isArray(s.composeDays)) setComposeDays(s.composeDays);
+    if (typeof s.trackChoice === 'string') setTrackChoice(s.trackChoice);
+    if (typeof s.trackTitle === 'string') setTrackTitle(s.trackTitle);
+    if (typeof s.textbook === 'string') setTextbook(s.textbook);
+    if (Array.isArray(s.goals)) setGoals(s.goals);
+    if (s.mode) setMode(s.mode);
+    if (s.concepts) setConcepts(s.concepts);
+    if (s.studentTypes) setStudentTypes(s.studentTypes);
+    if (s.angleMode) setAngleMode(s.angleMode);
+    if (Array.isArray(s.methods)) setMethods(s.methods);
+    if (typeof s.cycle === 'string') setCycle(s.cycle);
+    if (typeof s.cutline === 'number') setCutline(s.cutline);
+    if (s.cutlines) setCutlines(s.cutlines);
+    if (s.failAction) setFailAction(s.failAction);
+    if (typeof s.escalateAfter === 'number') setEscalateAfter(s.escalateAfter);
+    if (s.rhythm) setRhythm(s.rhythm);
+    if (typeof s.endGoalIdx === 'number') setEndGoalIdx(s.endGoalIdx);
+    if (typeof s.targetDate === 'string') setTargetDate(s.targetDate);
+  }
+
+  function currentDraftLabel(): string {
+    if (trackTitle.trim()) return trackTitle.trim();
+    if (composeGroupName.trim()) return composeGroupName.trim();
+    if (selectedClass) return selectedClass.name;
+    if (goals.some(g => g.title.trim())) return goals.find(g => g.title.trim())!.title.trim().slice(0, 30);
+    return '이름 없는 설계';
+  }
+
+  function saveDraft() {
+    const id = currentDraftId || (globalThis.crypto?.randomUUID?.() || String(Date.now()));
+    const draft: Draft = {
+      id, label: currentDraftLabel(), step, savedAt: new Date().toISOString(),
+      state: snapshot(),
+    };
+    const next = [draft, ...drafts.filter(d => d.id !== id)].slice(0, 20);
+    setDrafts(next);
+    localStorage.setItem(draftsKey, JSON.stringify(next));
+    setCurrentDraftId(id);
+    toast.success('임시저장 완료 — 언제든 이어서 작업하세요');
+  }
+  function loadDraft(d: Draft) {
+    applySnapshot(d.state);
+    setStep(d.step);
+    setCurrentDraftId(d.id);
+    toast.success(`"${d.label}" 이어서 시작`);
+  }
+  function deleteDraft(id: string) {
+    const next = drafts.filter(d => d.id !== id);
+    setDrafts(next);
+    localStorage.setItem(draftsKey, JSON.stringify(next));
+    if (currentDraftId === id) setCurrentDraftId(null);
+  }
+  function removeCurrentDraftOnFinalize() {
+    if (!currentDraftId) return;
+    deleteDraft(currentDraftId);
+  }
+
 
   useEffect(() => {
     (async () => {
