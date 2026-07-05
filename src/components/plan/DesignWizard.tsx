@@ -228,6 +228,51 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     return true;
   }
 
+  function moveGoal(i: number, dir: -1 | 1) {
+    setGoals(p => {
+      const j = i + dir;
+      if (j < 0 || j >= p.length) return p;
+      const next = [...p];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+  function insertGoalBelow(i: number) {
+    setGoals(p => {
+      const next = [...p];
+      next.splice(i + 1, 0, { title: '', pages: '' });
+      return next;
+    });
+  }
+
+  async function extractTocFromImage(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드해주세요.'); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error('8MB 이하 이미지만 업로드 가능해요.'); return; }
+    setTocExtracting(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke('plan-extract-toc', {
+        body: { image: base64 },
+      });
+      if (error) throw error;
+      const chapters = (data as any)?.chapters as { title: string; pages: string }[] | undefined;
+      if (!chapters || chapters.length === 0) { toast.error('목차를 인식하지 못했어요. 다른 이미지로 다시 시도해주세요.'); return; }
+      const nonEmpty = goals.filter(g => g.title.trim());
+      setGoals(nonEmpty.length === 0 ? chapters : [...nonEmpty, ...chapters]);
+      toast.success(`${chapters.length}개 챕터를 추출했어요 — 순서·페이지를 확인해주세요`);
+    } catch (e: any) {
+      toast.error(`추출 실패: ${e.message || e}`);
+    } finally {
+      setTocExtracting(false);
+    }
+  }
+
+
   const STEPS = ['반 선택', '무엇을', '어떻게', '확인은', '미달 관리', '리듬·기한'];
 
   // Compose 모드용 파생값
