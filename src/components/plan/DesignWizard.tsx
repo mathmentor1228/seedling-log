@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2 } from 'lucide-react';
 import {
   PlanTrack, PlanGoal, GoalInput, TeachingMode, StudentType, SessionRole,
   fetchTracks, fetchGoals, createTrackWithGoals, createDesign,
@@ -87,6 +87,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [rhythm, setRhythm] = useState<Record<string, SessionRole>>({});
   const [endGoalIdx, setEndGoalIdx] = useState<number>(-1); // goals 배열 index (신규) 또는 existingGoals index
   const [targetDate, setTargetDate] = useState('');
+  const [tocExtracting, setTocExtracting] = useState(false);
 
   const selectedClass = classes.find(c => c.id === classId) || null;
 
@@ -226,6 +227,51 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     toast.success(`${parsed.length}개 목표를 붙여넣었어요 — 페이지를 확인해주세요`);
     return true;
   }
+
+  function moveGoal(i: number, dir: -1 | 1) {
+    setGoals(p => {
+      const j = i + dir;
+      if (j < 0 || j >= p.length) return p;
+      const next = [...p];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+  function insertGoalBelow(i: number) {
+    setGoals(p => {
+      const next = [...p];
+      next.splice(i + 1, 0, { title: '', pages: '' });
+      return next;
+    });
+  }
+
+  async function extractTocFromImage(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드해주세요.'); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error('8MB 이하 이미지만 업로드 가능해요.'); return; }
+    setTocExtracting(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke('plan-extract-toc', {
+        body: { image: base64 },
+      });
+      if (error) throw error;
+      const chapters = (data as any)?.chapters as { title: string; pages: string }[] | undefined;
+      if (!chapters || chapters.length === 0) { toast.error('목차를 인식하지 못했어요. 다른 이미지로 다시 시도해주세요.'); return; }
+      const nonEmpty = goals.filter(g => g.title.trim());
+      setGoals(nonEmpty.length === 0 ? chapters : [...nonEmpty, ...chapters]);
+      toast.success(`${chapters.length}개 챕터를 추출했어요 — 순서·페이지를 확인해주세요`);
+    } catch (e: any) {
+      toast.error(`추출 실패: ${e.message || e}`);
+    } finally {
+      setTocExtracting(false);
+    }
+  }
+
 
   const STEPS = ['반 선택', '무엇을', '어떻게', '확인은', '미달 관리', '리듬·기한'];
 
@@ -478,7 +524,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   </div>
                   <div className="rounded-lg border divide-y">
                     {goals.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2">
+                      <div key={i} className="flex items-center gap-1.5 p-2">
                         <span className="w-6 text-right text-xs font-bold text-muted-foreground shrink-0">{i + 1}</span>
                         <Input
                           className="flex-1 h-8" placeholder="목표 (예: 원과 현 — 수직이등분선)"
@@ -490,26 +536,56 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                           }}
                         />
                         <Input
-                          className="w-28 h-8" placeholder="p.52–58"
+                          className="w-24 h-8" placeholder="p.52–58"
                           value={g.pages}
                           onChange={e => setGoals(p => p.map((x, xi) => xi === i ? { ...x, pages: e.target.value } : x))}
                         />
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0"
-                          onClick={() => setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        <div className="flex items-center shrink-0">
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="위로"
+                            disabled={i === 0} onClick={() => moveGoal(i, -1)}>
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="아래로"
+                            disabled={i === goals.length - 1} onClick={() => moveGoal(i, 1)}>
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="아래에 차시 추가"
+                            onClick={() => insertGoalBelow(i)}>
+                            <CornerDownRight className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-7 p-0" title="삭제"
+                            onClick={() => setGoals(p => p.length > 1 ? p.filter((_, xi) => xi !== i) : p)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
                     <Button variant="outline" size="sm" onClick={() => setGoals(p => [...p, { title: '', pages: '' }])}>
                       <Plus className="w-4 h-4 mr-1" />목표 추가
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => toast.info('교재 목차 AI 추출은 다음 업데이트에서 연결됩니다 — 지금은 여러 줄 복사해서 첫 칸에 붙여넣기 하세요 ("제목 | p.10-17" 형식)')}>
-                      <Sparkles className="w-4 h-4 mr-1" />목차에서 AI 생성
+                    <label>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) extractTocFromImage(f);
+                          e.target.value = '';
+                        }} />
+                      <span className={`inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium border cursor-pointer transition ${tocExtracting ? 'opacity-60 pointer-events-none' : 'hover:bg-accent'}`}>
+                        {tocExtracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {tocExtracting ? 'AI 분석 중…' : '목차 이미지 업로드 (AI 추출)'}
+                      </span>
+                    </label>
+                    <Button variant="ghost" size="sm" disabled
+                      title='"제목 | p.10-17" 형식 여러 줄을 첫 칸에 붙여넣기 하세요'>
+                      <Sparkles className="w-4 h-4 mr-1" />붙여넣기도 OK
                     </Button>
-                    <span className="text-xs text-muted-foreground self-center">💡 목록을 통째로 복사해 첫 칸에 붙여넣으면 자동으로 나뉩니다</span>
+                    <span className="text-xs text-muted-foreground w-full">
+                      💡 목차 사진을 올리면 챕터·페이지를 자동 정리 → 화살표로 순서 조정, ↳ 로 그 아래 차시 추가
+                    </span>
                   </div>
+
                 </div>
               ) : (
                 <div className="rounded-lg border divide-y max-h-64 overflow-y-auto">
