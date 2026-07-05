@@ -5,7 +5,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { DesignWizard } from '@/components/plan/DesignWizard';
 import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
+  fetchBriefings, fetchPlannerStatus,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
+  PlanBriefing, PrinterStatus,
 } from '@/components/plan/planApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck } from 'lucide-react';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
 
@@ -30,6 +32,8 @@ function PlanHome() {
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
   const [rosters, setRosters] = useState<Record<string, RosterStudent[]>>({});
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
+  const [briefings, setBriefings] = useState<Record<string, PlanBriefing>>({});
+  const [printStatus, setPrintStatus] = useState<Record<string, PrinterStatus>>({});
   // 대상 선택(전체/개인) 다이얼로그
   const [startFor, setStartFor] = useState<{ id: string; title: string; roster: RosterStudent[] } | null>(null);
   const [pickIds, setPickIds] = useState<Set<string>>(new Set());
@@ -47,6 +51,7 @@ function PlanHome() {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const todayDow = now.getDay();
+  const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   async function load() {
     setLoading(true);
@@ -54,12 +59,16 @@ function PlanHome() {
       const list = await fetchDesigns();
       setDesigns(list);
       const ids = list.map((d: any) => d.id);
-      const [rosterMap, intensiveToday] = await Promise.all([
+      const [rosterMap, intensiveToday, briefMap, printMap] = await Promise.all([
         fetchRostersFor(ids),
         fetchTodayIntensiveDesignIds(todayStr),
+        fetchBriefings(ids),
+        fetchPlannerStatus(list.map((d: any) => ({ id: d.id, updated_at: d.updated_at })), periodMonth),
       ]);
       setRosters(rosterMap);
       setTodayIntensive(intensiveToday);
+      setBriefings(briefMap);
+      setPrintStatus(printMap);
       const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
       await Promise.all(list.map(async (d: any) => {
         const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
@@ -129,6 +138,31 @@ function PlanHome() {
         </Card>
       ) : (
         <>
+          {/* 플래너 재출력 알람 */}
+          {(() => {
+            const need = designs.filter(d => printStatus[d.id] === 'never' || printStatus[d.id] === 'outdated');
+            if (need.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span className="font-bold">학생 플래너 출력 필요 {need.length}건</span>
+                  <span className="text-xs">({now.getMonth() + 1}월 · 계획 수정 반영)</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {need.map(d => (
+                    <Button key={d.id} asChild size="sm" variant="outline" className="h-7 border-amber-400 text-amber-900">
+                      <Link to={`/plan/${d.id}/planner`}>
+                        {d.title || d.plan_tracks?.title}
+                        <span className="ml-1 text-[10px]">{printStatus[d.id] === 'outdated' ? '계획변경' : '이번달 미출력'}</span>
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ═══ 오늘 수업 ═══ */}
           <section className="space-y-2.5">
             <div className="flex items-center gap-2">
@@ -172,6 +206,36 @@ function PlanHome() {
                         <p className="text-xs text-muted-foreground">
                           {roster.length}명 · 트랙: {d.plan_tracks?.title}
                         </p>
+                        {(() => {
+                          const b = briefings[d.id];
+                          if (!b) return null;
+                          const items: { label: string; names: string[]; cls: string }[] = [
+                            { label: '재시험', names: b.retest, cls: 'text-red-600' },
+                            { label: '보충', names: b.makeup, cls: 'text-amber-700' },
+                            { label: '미흡', names: b.weak, cls: 'text-amber-700' },
+                            { label: '신호 주의', names: b.flagged, cls: 'text-red-600' },
+                          ].filter(x => x.names.length > 0);
+                          if (items.length === 0) {
+                            return (
+                              <p className="text-xs text-green-700 bg-green-50 rounded-md px-2.5 py-1.5 flex items-center gap-1">
+                                <ClipboardCheck className="w-3.5 h-3.5" />오늘 특별히 확인할 것 없음 — 바로 진행
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="text-xs bg-muted/50 rounded-md px-2.5 py-1.5 space-y-0.5">
+                              <p className="font-bold flex items-center gap-1 text-muted-foreground">
+                                <ClipboardCheck className="w-3.5 h-3.5" />수업 전 확인
+                              </p>
+                              {items.map(it => (
+                                <p key={it.label}>
+                                  <span className={`font-bold ${it.cls}`}>{it.label} {it.names.length}</span>
+                                  <span className="text-muted-foreground"> — {it.names.join(', ')}</span>
+                                </p>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
                             <Link to={`/plan/${d.id}/today`}>
@@ -180,6 +244,9 @@ function PlanHome() {
                           </Button>
                           <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
                             <UserCheck className="w-4 h-4" />
+                          </Button>
+                          <Button asChild variant="outline" title="학생 플래너 인쇄">
+                            <Link to={`/plan/${d.id}/planner`}><Printer className="w-4 h-4" /></Link>
                           </Button>
                         </div>
                       </CardContent>

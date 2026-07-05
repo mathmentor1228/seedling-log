@@ -137,6 +137,69 @@ export async function fetchTodayIntensiveDesignIds(todayStr: string): Promise<Se
   return new Set(((data || []) as any[]).map((r: any) => r.design_id));
 }
 
+// 수업 시작 전 브리핑: 설계별 '오늘 확인할 것' 요약 (열린 큐 + 미흡 이력 + 학습신호 주의)
+export type PlanBriefing = {
+  retest: string[];   // 재시험 대상 학생명
+  makeup: string[];   // 보충/재학습 대상 학생명
+  weak: string[];     // 최근 확인에서 미흡(verified_weak)인 학생명
+  flagged: string[];  // 학습신호 플래그(원장 에스컬레이션) 학생명
+};
+export async function fetchBriefings(designIds: string[]): Promise<Record<string, PlanBriefing>> {
+  const out: Record<string, PlanBriefing> = {};
+  if (designIds.length === 0) return out;
+  designIds.forEach(id => { out[id] = { retest: [], makeup: [], weak: [], flagged: [] }; });
+
+  const [qRes, pgRes, flRes] = await Promise.all([
+    db.from('plan_queue').select('design_id, student_id, kind').in('design_id', designIds).eq('status', 'open'),
+    db.from('plan_goal_progress').select('design_id, student_id, status').in('design_id', designIds).eq('status', 'verified_weak'),
+    db.from('plan_flags').select('design_id, student_id, status').in('design_id', designIds).eq('status', 'open'),
+  ]);
+  const rows = [...(qRes.data || []), ...(pgRes.data || []), ...(flRes.data || [])] as any[];
+  const sids = Array.from(new Set(rows.map(r => r.student_id)));
+  const { data: studs } = sids.length > 0
+    ? await supabase.from('students').select('id, name').in('id', sids)
+    : { data: [] as any[] };
+  const nameOf = new Map(((studs || []) as any[]).map((s: any) => [s.id, s.name]));
+  const pushUniq = (arr: string[], n: string) => { if (n && !arr.includes(n)) arr.push(n); };
+
+  ((qRes.data || []) as any[]).forEach(r => {
+    const b = out[r.design_id]; const n = nameOf.get(r.student_id);
+    if (r.kind === 'retest') pushUniq(b.retest, n); else pushUniq(b.makeup, n);
+  });
+  ((pgRes.data || []) as any[]).forEach(r => pushUniq(out[r.design_id].weak, nameOf.get(r.student_id)));
+  ((flRes.data || []) as any[]).forEach(r => pushUniq(out[r.design_id].flagged, nameOf.get(r.student_id)));
+  return out;
+}
+
+// PLANNER-PRINT-V1: 플래너 출력 이력 → 재출력 필요 판정
+export type PrinterStatus = 'never' | 'outdated' | 'ok';
+export async function fetchPlannerStatus(
+  designs: { id: string; updated_at?: string | null }[], periodMonth: string,
+): Promise<Record<string, PrinterStatus>> {
+  const out: Record<string, PrinterStatus> = {};
+  designs.forEach(d => { out[d.id] = 'never'; });
+  if (designs.length === 0) return out;
+  try {
+    const { data } = await db.from('plan_planner_prints')
+      .select('design_id, snapshot_updated_at')
+      .in('design_id', designs.map(d => d.id))
+      .eq('period_month', periodMonth);
+    const printMap = new Map(((data || []) as any[]).map((r: any) => [r.design_id, r.snapshot_updated_at]));
+    for (const d of designs) {
+      if (!printMap.has(d.id)) { out[d.id] = 'never'; continue; }
+      const snap = printMap.get(d.id);
+      out[d.id] = (d.updated_at && snap && new Date(d.updated_at) > new Date(snap)) ? 'outdated' : 'ok';
+    }
+  } catch { /* 테이블 미생성 시 조용히 never 유지 */ }
+  return out;
+}
+export async function markPlannerPrinted(designId: string, periodMonth: string, updatedAt: string | null, userId: string) {
+  await db.from('plan_planner_prints').upsert({
+    design_id: designId, period_month: periodMonth,
+    printed_at: new Date().toISOString(), printed_by: userId, snapshot_updated_at: updatedAt,
+  }, { onConflict: 'design_id,period_month' });
+}
+
 export const DAY_LABELS: Record<number, string> = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
 
 export const ROLE_LABELS: Record<SessionRole, string> = {
