@@ -88,6 +88,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
   const [endGoalIdx, setEndGoalIdx] = useState<number>(-1); // goals 배열 index (신규) 또는 existingGoals index
   const [targetDate, setTargetDate] = useState('');
   const [tocExtracting, setTocExtracting] = useState(false);
+  const [mergePicks, setMergePicks] = useState<number[]>([]);
 
   // 임시저장 (localStorage) — user별 다수의 초안 관리
   type Draft = {
