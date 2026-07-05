@@ -11,8 +11,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Link } from 'react-router-dom';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check } from 'lucide-react';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
 
@@ -20,6 +21,7 @@ const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
 function PlanHome() {
+  const navigate = useNavigate();
   const [designs, setDesigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -28,6 +30,19 @@ function PlanHome() {
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
   const [rosters, setRosters] = useState<Record<string, RosterStudent[]>>({});
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
+  // 대상 선택(전체/개인) 다이얼로그
+  const [startFor, setStartFor] = useState<{ id: string; title: string; roster: RosterStudent[] } | null>(null);
+  const [pickIds, setPickIds] = useState<Set<string>>(new Set());
+
+  function openStart(d: any) {
+    setPickIds(new Set());
+    setStartFor({ id: d.id, title: d.title || d.plan_tracks?.title, roster: rosters[d.id] || [] });
+  }
+  function goStart(individual: boolean) {
+    if (!startFor) return;
+    const only = individual && pickIds.size > 0 ? `?only=${Array.from(pickIds).join(',')}` : '';
+    navigate(`/plan/${startFor.id}/today${only}`);
+  }
 
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
@@ -115,11 +130,14 @@ function PlanHome() {
       ) : (
         <>
           {/* ═══ 오늘 수업 ═══ */}
-          <section className="space-y-2">
-            <h2 className="text-sm font-bold flex items-center gap-1.5">
-              <Sun className="w-4 h-4 text-amber-500" />오늘 수업
+          <section className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-600">
+                <Sun className="w-4.5 h-4.5" />
+              </div>
+              <h2 className="font-bold">오늘 수업</h2>
               {todayDesigns.length > 0 && <Badge className="text-[11px]">{todayDesigns.length}개 반</Badge>}
-            </h2>
+            </div>
             {todayDesigns.length === 0 ? (
               <p className="text-sm text-muted-foreground border rounded-lg px-4 py-3 bg-muted/20">
                 오늘({WEEK_KO[todayDow]}) 예정된 수업이 없습니다. 아래 전체 설계에서 아무 반이나 "오늘 수업 열기"로 임시 수업을 시작할 수 있어요.
@@ -154,11 +172,16 @@ function PlanHome() {
                         <p className="text-xs text-muted-foreground">
                           {roster.length}명 · 트랙: {d.plan_tracks?.title}
                         </p>
-                        <Button asChild className="w-full">
-                          <Link to={`/plan/${d.id}/today`}>
-                            <Play className="w-4 h-4 mr-1" />오늘 수업 시작
-                          </Link>
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button asChild className="flex-1">
+                            <Link to={`/plan/${d.id}/today`}>
+                              <Play className="w-4 h-4 mr-1" />오늘 수업 시작
+                            </Link>
+                          </Button>
+                          <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
+                            <UserCheck className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -216,10 +239,8 @@ function PlanHome() {
                         <Button size="sm" variant="outline" onClick={() => setCoTeacherDesign({ id: d.id, teacher_id: d.teacher_id })}>
                           <Users className="w-3.5 h-3.5 mr-1" />공동T
                         </Button>
-                        <Button asChild size="sm" variant="ghost" className="ml-auto">
-                          <Link to={`/plan/${d.id}/today`}>
-                            <Play className="w-4 h-4 mr-1" />수업 열기
-                          </Link>
+                        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => openStart(d)}>
+                          <Play className="w-4 h-4 mr-1" />수업 열기
                         </Button>
                       </div>
                     </CardContent>
@@ -243,6 +264,42 @@ function PlanHome() {
           defaultTeacherId={coTeacherDesign.teacher_id}
           onClose={() => setCoTeacherDesign(null)} onDone={load} />
       )}
+
+      {/* 수업 대상 선택: 전체 그룹 / 개인만 */}
+      <Dialog open={!!startFor} onOpenChange={o => !o && setStartFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{startFor?.title} — 누구와 수업할까요?</DialogTitle>
+          </DialogHeader>
+          <button
+            className="w-full rounded-xl border-2 border-primary/40 bg-primary/5 p-4 text-left hover:bg-primary/10 transition"
+            onClick={() => goStart(false)}>
+            <p className="font-bold flex items-center gap-1.5"><Users className="w-4 h-4" />전체 그룹</p>
+            <p className="text-sm text-muted-foreground">{startFor?.roster.length}명 전원과 수업</p>
+          </button>
+          <div className="space-y-1.5">
+            <p className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5" />개인만 — 온 학생만 골라서 (보충·개별)
+            </p>
+            <div className="max-h-56 overflow-y-auto rounded-lg border divide-y">
+              {(startFor?.roster || []).map(s => {
+                const picked = pickIds.has(s.id);
+                return (
+                  <button key={s.id}
+                    className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left ${picked ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
+                    onClick={() => setPickIds(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; })}>
+                    <span>{s.name}{s.type && <span className={`ml-1 text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}</span>
+                    {picked && <Check className="w-4 h-4 text-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+            <Button className="w-full" disabled={pickIds.size === 0} onClick={() => goStart(true)}>
+              선택한 {pickIds.size}명과 개인 수업 시작
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

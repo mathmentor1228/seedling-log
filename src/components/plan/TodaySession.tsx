@@ -1,7 +1,7 @@
 // LESSON-PLAN-CORE-V1: 수업 당일 3단계 화면 — 설계가 만들어주는 오늘 수업
 // 1. 수업 시작(포스트잇·출결·쪽지 채점·과제) → 2. 진도(다 나감/일부/미루기) → 3. 마무리(요약·메모·저장)
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ArrowRight, Check, StickyNote, Save,
-  AlertTriangle, UserX, Undo2, UserPlus, Search,
+  AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck,
 } from 'lucide-react';
 import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions } from './planApi';
 
@@ -35,8 +35,15 @@ const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky
 
 export function TodaySession() {
   const { designId } = useParams<{ designId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // 개인만 수업: ?only=id1,id2 → 그 학생들만 대상 (보충·개별 수업)
+  const onlyIds = useMemo(() => {
+    const raw = searchParams.get('only');
+    return raw ? new Set(raw.split(',').filter(Boolean)) : null;
+  }, [searchParams]);
 
   const [loading, setLoading] = useState(true);
   const [design, setDesign] = useState<Design | null>(null);
@@ -97,9 +104,11 @@ export function TodaySession() {
         ]);
         setGoals(gRes.data || []);
         const typeMap = new Map(((psRes.data || []) as any[]).map((r: any) => [r.student_id, r.student_type]));
-        const studs: StudentInfo[] = ((stuRes.data || []) as any[])
+        const studsAll: StudentInfo[] = ((stuRes.data || []) as any[])
           .map((s: any) => ({ id: s.id, name: s.name, grade: s.grade, type: typeMap.get(s.id) || null }))
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        // 개인만 수업이면 대상 학생으로 좁힘
+        const studs = onlyIds ? studsAll.filter(s => onlyIds.has(s.id)) : studsAll;
         setStudents(studs);
         setProgress(pgRes.data || []);
         setRecentChecks(ckRes.data || []);
@@ -392,43 +401,60 @@ export function TodaySession() {
     { n: 3, t: '마무리', s: '메모 · 저장' },
   ];
 
+  const todayRole = ((design.rhythm || {})[String(new Date().getDay())] || 'progress') as SessionRole;
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      {/* 헤더 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className="text-xs">오늘 수업</Badge>
-        <h1 className="text-lg font-bold">{design.title}</h1>
-        <span className="text-sm text-muted-foreground">
-          {todayStr.slice(5).replace('-', '/')} · {ROLE_LABELS[((design.rhythm || {})[String(new Date().getDay())] || 'progress') as SessionRole]}
-          {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
-          {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회 반영)`}
-        </span>
-        {sessionMeta.intensive_id && (
-          <Badge variant="outline" className="border-primary/60 text-primary text-[11px]">✨ 특강 회차</Badge>
+      {/* 헤더 카드 */}
+      <div className="rounded-2xl border bg-gradient-to-br from-primary/8 to-transparent p-5">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              <Badge className="text-[11px]">{onlyIds ? '개인 수업' : '오늘 수업'}</Badge>
+              {sessionMeta.intensive_id && (
+                <Badge variant="outline" className="border-primary/60 text-primary text-[11px]">✨ 특강 회차</Badge>
+              )}
+              <Badge variant="secondary" className="text-[11px]">{ROLE_LABELS[todayRole]}</Badge>
+            </div>
+            <h1 className="text-xl font-extrabold tracking-tight leading-tight">{design.title}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {new Date().getMonth() + 1}월 {new Date().getDate()}일 · {students.length}명
+              {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
+              {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회)`}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/plan')}>
+              <Undo2 className="w-4 h-4 mr-1" />목록
+            </Button>
+            {coTeachers.length > 0 && (
+              <select
+                className="h-8 rounded-md border bg-background px-2 text-xs font-medium"
+                value={sessionMeta.assigned_teacher_id || design.teacher_id}
+                onChange={async e => {
+                  const tid = e.target.value;
+                  try {
+                    await db.from('plan_sessions').update({ assigned_teacher_id: tid === design.teacher_id ? null : tid }).eq('id', sessionId);
+                    setSessionMeta(p => ({ ...p, assigned_teacher_id: tid === design.teacher_id ? null : tid }));
+                    toast.success('오늘 수업 담당이 지정됐어요');
+                  } catch (err: any) { toast.error(err.message || String(err)); }
+                }}
+                title="오늘 수업 담당 선생님"
+              >
+                <option value={design.teacher_id}>담당: {mainTeacherName}</option>
+                {coTeachers
+                  .filter(c => c.start_date <= todayStr && c.end_date >= todayStr)
+                  .map(c => <option key={c.teacher_id} value={c.teacher_id}>담당: {c.name} (공동)</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+        {onlyIds && (
+          <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4" />
+            개인 수업 — {students.map(s => s.name).join(', ') || '대상 없음'}만 진행합니다. 반 전체 진도에는 영향을 주지 않아요.
+          </div>
         )}
-        {coTeachers.length > 0 && (
-          <select
-            className="h-7 rounded-md border bg-background px-2 text-xs font-medium"
-            value={sessionMeta.assigned_teacher_id || design.teacher_id}
-            onChange={async e => {
-              const tid = e.target.value;
-              try {
-                await db.from('plan_sessions').update({ assigned_teacher_id: tid === design.teacher_id ? null : tid }).eq('id', sessionId);
-                setSessionMeta(p => ({ ...p, assigned_teacher_id: tid === design.teacher_id ? null : tid }));
-                toast.success('오늘 수업 담당이 지정됐어요');
-              } catch (err: any) { toast.error(err.message || String(err)); }
-            }}
-            title="오늘 수업 담당 선생님"
-          >
-            <option value={design.teacher_id}>오늘 담당: {mainTeacherName}</option>
-            {coTeachers
-              .filter(c => c.start_date <= todayStr && c.end_date >= todayStr)
-              .map(c => <option key={c.teacher_id} value={c.teacher_id}>오늘 담당: {c.name} (공동)</option>)}
-          </select>
-        )}
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => navigate('/plan')}>
-          <Undo2 className="w-4 h-4 mr-1" />목록
-        </Button>
       </div>
 
       {/* 3단계 스테퍼 */}
@@ -436,7 +462,7 @@ export function TodaySession() {
         {stepDefs.map(sd => (
           <button key={sd.n}
             className={`rounded-xl border-2 p-3 text-left transition
-              ${step === sd.n ? 'border-primary bg-primary/5' : sd.n < step ? 'border-green-300 bg-green-50' : 'border-border'}`}
+              ${step === sd.n ? 'border-primary bg-primary/5 shadow-sm' : sd.n < step ? 'border-green-300 bg-green-50' : 'border-border hover:border-muted-foreground/30'}`}
             onClick={() => setStep(sd.n)}>
             <p className={`font-extrabold text-sm ${step === sd.n ? 'text-primary' : sd.n < step ? 'text-green-700' : 'text-muted-foreground'}`}>
               {sd.n < step ? '✓ ' : `${sd.n}. `}{sd.t}
