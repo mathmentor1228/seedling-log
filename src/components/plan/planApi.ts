@@ -45,7 +45,14 @@ export async function fetchTracks(subject?: string): Promise<PlanTrack[]> {
   if (subject) q = q.eq('subject', subject);
   const { data, error } = await q;
   if (error) throw error;
-  return data || [];
+  const tracks = (data || []) as PlanTrack[];
+  const creatorIds = Array.from(new Set(tracks.map(t => t.created_by).filter(Boolean))) as string[];
+  if (creatorIds.length > 0) {
+    const { data: profs } = await db.from('profiles').select('id, full_name').in('id', creatorIds);
+    const nameMap = new Map<string, string>((profs || []).map((p: any) => [p.id, p.full_name]));
+    tracks.forEach(t => { t.creator_name = t.created_by ? (nameMap.get(t.created_by) || null) : null; });
+  }
+  return tracks;
 }
 
 export async function fetchGoals(trackId: string): Promise<PlanGoal[]> {
