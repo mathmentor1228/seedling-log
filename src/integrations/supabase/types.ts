@@ -3133,6 +3133,569 @@ export type Database = {
           },
         ]
       }
+      plan_checks: {
+        Row: {
+          created_at: string
+          cutline: number | null
+          design_id: string
+          error_type: string | null
+          goal_id: string | null
+          id: string
+          method: string
+          passed: boolean | null
+          score: number | null
+          session_id: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          cutline?: number | null
+          design_id: string
+          error_type?: string | null
+          goal_id?: string | null
+          id?: string
+          method?: string
+          passed?: boolean | null
+          score?: number | null
+          session_id?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          cutline?: number | null
+          design_id?: string
+          error_type?: string | null
+          goal_id?: string | null
+          id?: string
+          method?: string
+          passed?: boolean | null
+          score?: number | null
+          session_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_checks_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_checks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_checks_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_designs: {
+        Row: {
+          angle_mode: string
+          check_cycle: string
+          check_methods: Json
+          class_id: string | null
+          created_at: string
+          cutline_by_type: Json
+          cutline_default: number
+          end_goal_id: string | null
+          escalate_after: number
+          fail_action: string
+          id: string
+          pace_alert_sessions: number
+          rhythm: Json
+          status: string
+          target_date: string | null
+          teacher_id: string
+          teaching_mode: string
+          title: string
+          track_id: string
+          type_concepts: Json
+          updated_at: string
+        }
+        Insert: {
+          angle_mode?: string
+          check_cycle?: string
+          check_methods?: Json
+          class_id?: string | null
+          created_at?: string
+          cutline_by_type?: Json
+          cutline_default?: number
+          end_goal_id?: string | null
+          escalate_after?: number
+          fail_action?: string
+          id?: string
+          pace_alert_sessions?: number
+          rhythm?: Json
+          status?: string
+          target_date?: string | null
+          teacher_id: string
+          teaching_mode?: string
+          title: string
+          track_id: string
+          type_concepts?: Json
+          updated_at?: string
+        }
+        Update: {
+          angle_mode?: string
+          check_cycle?: string
+          check_methods?: Json
+          class_id?: string | null
+          created_at?: string
+          cutline_by_type?: Json
+          cutline_default?: number
+          end_goal_id?: string | null
+          escalate_after?: number
+          fail_action?: string
+          id?: string
+          pace_alert_sessions?: number
+          rhythm?: Json
+          status?: string
+          target_date?: string | null
+          teacher_id?: string
+          teaching_mode?: string
+          title?: string
+          track_id?: string
+          type_concepts?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_designs_end_goal_id_fkey"
+            columns: ["end_goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_designs_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_flags: {
+        Row: {
+          created_at: string
+          design_id: string
+          id: string
+          kind: string
+          level: string
+          message: string
+          resolved_at: string | null
+          status: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          id?: string
+          kind: string
+          level?: string
+          message: string
+          resolved_at?: string | null
+          status?: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          id?: string
+          kind?: string
+          level?: string
+          message?: string
+          resolved_at?: string | null
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_flags_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_goal_progress: {
+        Row: {
+          advanced_at: string | null
+          design_id: string
+          goal_id: string
+          id: string
+          partial_upto: string | null
+          session_id: string | null
+          status: string
+          student_id: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          advanced_at?: string | null
+          design_id: string
+          goal_id: string
+          id?: string
+          partial_upto?: string | null
+          session_id?: string | null
+          status?: string
+          student_id: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          advanced_at?: string | null
+          design_id?: string
+          goal_id?: string
+          id?: string
+          partial_upto?: string | null
+          session_id?: string | null
+          status?: string
+          student_id?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_goal_progress_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_goal_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_goal_progress_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_goals: {
+        Row: {
+          created_at: string
+          id: string
+          order_index: number
+          pages: string | null
+          title: string
+          track_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_index: number
+          pages?: string | null
+          title: string
+          track_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_index?: number
+          pages?: string | null
+          title?: string
+          track_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_goals_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_queue: {
+        Row: {
+          assignee: string
+          created_at: string
+          design_id: string
+          goal_id: string | null
+          id: string
+          kind: string
+          resolved_at: string | null
+          source_check_id: string | null
+          status: string
+          student_id: string
+          title: string
+        }
+        Insert: {
+          assignee?: string
+          created_at?: string
+          design_id: string
+          goal_id?: string | null
+          id?: string
+          kind: string
+          resolved_at?: string | null
+          source_check_id?: string | null
+          status?: string
+          student_id: string
+          title: string
+        }
+        Update: {
+          assignee?: string
+          created_at?: string
+          design_id?: string
+          goal_id?: string | null
+          id?: string
+          kind?: string
+          resolved_at?: string | null
+          source_check_id?: string | null
+          status?: string
+          student_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_queue_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_queue_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_queue_source_check_id_fkey"
+            columns: ["source_check_id"]
+            isOneToOne: false
+            referencedRelation: "plan_checks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_sessions: {
+        Row: {
+          created_at: string
+          design_id: string
+          id: string
+          note: string | null
+          role: string
+          saved_at: string | null
+          session_date: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          id?: string
+          note?: string | null
+          role?: string
+          saved_at?: string | null
+          session_date: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          id?: string
+          note?: string | null
+          role?: string
+          saved_at?: string | null
+          session_date?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_sessions_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_student_retros: {
+        Row: {
+          change_note: string | null
+          created_at: string
+          design_id: string | null
+          id: string
+          points_awarded: number
+          replied_at: string | null
+          replied_by: string | null
+          stuck_note: string | null
+          student_id: string
+          teacher_reply: string | null
+          understanding: number | null
+          week_start: string
+        }
+        Insert: {
+          change_note?: string | null
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          points_awarded?: number
+          replied_at?: string | null
+          replied_by?: string | null
+          stuck_note?: string | null
+          student_id: string
+          teacher_reply?: string | null
+          understanding?: number | null
+          week_start: string
+        }
+        Update: {
+          change_note?: string | null
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          points_awarded?: number
+          replied_at?: string | null
+          replied_by?: string | null
+          stuck_note?: string | null
+          student_id?: string
+          teacher_reply?: string | null
+          understanding?: number | null
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_student_retros_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_students: {
+        Row: {
+          created_at: string
+          custom_end_goal_id: string | null
+          custom_target_date: string | null
+          design_id: string
+          id: string
+          student_id: string
+          student_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          custom_end_goal_id?: string | null
+          custom_target_date?: string | null
+          design_id: string
+          id?: string
+          student_id: string
+          student_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          custom_end_goal_id?: string | null
+          custom_target_date?: string | null
+          design_id?: string
+          id?: string
+          student_id?: string
+          student_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_students_custom_end_goal_id_fkey"
+            columns: ["custom_end_goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_students_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_teacher_memos: {
+        Row: {
+          content: string
+          created_at: string
+          design_id: string
+          id: string
+          session_id: string | null
+          shown: boolean
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          design_id: string
+          id?: string
+          session_id?: string | null
+          shown?: boolean
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          design_id?: string
+          id?: string
+          session_id?: string | null
+          shown?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_teacher_memos_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_teacher_memos_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_tracks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          subject: string
+          textbook: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          subject: string
+          textbook?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          subject?: string
+          textbook?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       prep_lecture_proposals: {
         Row: {
           confirmed_course_id: string | null
