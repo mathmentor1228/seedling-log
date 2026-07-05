@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  ArrowRight, Check, TrendingDown, TrendingUp, StickyNote, Save,
-  CircleDashed, AlertTriangle, UserX, Undo2,
+  ArrowRight, Check, StickyNote, Save,
+  AlertTriangle, UserX, Undo2, UserPlus, Search,
 } from 'lucide-react';
 import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions } from './planApi';
 
@@ -62,6 +63,11 @@ export function TodaySession() {
   const [nextMemo, setNextMemo] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedDone, setSavedDone] = useState(false);
+  // 게릴라(임시 참석) 학생 — 오늘만 명단에 얹기 (WALKIN-V1)
+  const [walkinIds, setWalkinIds] = useState<Set<string>>(new Set());
+  const [walkinPickerOpen, setWalkinPickerOpen] = useState(false);
+  const [walkinPool, setWalkinPool] = useState<StudentInfo[]>([]);
+  const [walkinFilter, setWalkinFilter] = useState('');
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -207,6 +213,27 @@ export function TodaySession() {
 
   const isTestDay = design && ((design.rhythm || {})[String(new Date().getDay())] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
+
+  // 게릴라 학생을 명단에 합쳐 출결·쪽지에 표시(진도 기록에는 미포함)
+  const walkinStudents = useMemo(
+    () => walkinPool.filter(s => walkinIds.has(s.id)),
+    [walkinPool, walkinIds]
+  );
+  const effectiveStudents = useMemo(
+    () => [...students, ...walkinStudents],
+    [students, walkinStudents]
+  );
+
+  async function openWalkinPicker() {
+    setWalkinPickerOpen(true);
+    if (walkinPool.length > 0) return;
+    const memberIds = new Set(students.map(s => s.id));
+    const { data } = await supabase.from('students')
+      .select('id, name, grade').in('enrollment_status', ['재학', '재등원']).order('name');
+    setWalkinPool(((data || []) as any[])
+      .filter(s => !memberIds.has(s.id))
+      .map(s => ({ id: s.id, name: s.name, grade: s.grade, type: null })));
+  }
 
   function cutlineFor(stu: StudentInfo): number {
     if (design?.teaching_mode === 'abc' && stu.type && design?.cutline_by_type?.[stu.type] != null) {
@@ -430,18 +457,35 @@ export function TodaySession() {
           )}
 
           <Card><CardContent className="p-4 space-y-3">
-            <p className="text-xs font-bold text-muted-foreground">출결 — 이름을 누르면 결석 처리 (오늘 진도에서 자동 스킵 표시)</p>
-            <div className="flex flex-wrap gap-2">
-              {students.map(s => (
-                <button key={s.id}
-                  className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition
-                    ${absent.has(s.id) ? 'border-red-300 bg-red-50 text-red-600' : 'border-green-300 bg-green-50 text-green-700'}`}
-                  onClick={() => setAbsent(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; })}>
-                  {absent.has(s.id) && <UserX className="w-3.5 h-3.5 inline mr-1" />}
-                  {s.name}{s.type && <span className={`ml-1 text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-muted-foreground">출결 — 이름을 누르면 결석 처리 (오늘 진도에서 자동 스킵 표시)</p>
+              <Button variant="outline" size="sm" className="ml-auto h-7" onClick={openWalkinPicker}>
+                <UserPlus className="w-3.5 h-3.5 mr-1" />게릴라 등록
+              </Button>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {effectiveStudents.map(s => {
+                const isWalkin = walkinIds.has(s.id);
+                return (
+                  <button key={s.id}
+                    className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition
+                      ${absent.has(s.id) ? 'border-red-300 bg-red-50 text-red-600'
+                        : isWalkin ? 'border-primary/50 bg-primary/5 text-primary'
+                        : 'border-green-300 bg-green-50 text-green-700'}`}
+                    onClick={() => setAbsent(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; })}>
+                    {absent.has(s.id) && <UserX className="w-3.5 h-3.5 inline mr-1" />}
+                    {s.name}
+                    {isWalkin && <span className="ml-1 text-[10px]">게릴라</span>}
+                    {s.type && <span className={`ml-1 text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {walkinStudents.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                게릴라 {walkinStudents.length}명은 오늘 출결·쪽지에만 반영되고, 이 반 커리큘럼 진도에는 포함되지 않습니다.
+              </p>
+            )}
           </CardContent></Card>
 
           {hasQuiz && quizTarget && (
@@ -451,7 +495,7 @@ export function TodaySession() {
                 <Badge variant="secondary" className="ml-2 text-[10px]">룰셋 자동</Badge>
               </p>
               <div className="grid gap-2 sm:grid-cols-3">
-                {students.filter(s => !absent.has(s.id)).map(s => {
+                {effectiveStudents.filter(s => !absent.has(s.id)).map(s => {
                   const saved = quizSaved[s.id];
                   const rec = recentFor(s);
                   const cut = cutlineFor(s);
@@ -604,7 +648,7 @@ export function TodaySession() {
         <div className="space-y-3">
           <Card><CardContent className="p-4 space-y-2 text-sm">
             <p className="text-xs font-bold text-muted-foreground">오늘 자동으로 기록된 것</p>
-            <p>· 출석 {students.length - absent.size}명{absent.size > 0 && ` / 결석 ${absent.size}명 (진도 스킵 표시)`}</p>
+            <p>· 출석 {effectiveStudents.length - absent.size}명{absent.size > 0 && ` / 결석 ${absent.size}명 (진도 스킵 표시)`}{walkinStudents.length > 0 && ` · 게릴라 ${walkinStudents.length}명 포함`}</p>
             <p>· 쪽지시험 {Object.keys(quizSaved).length}명 기록
               {Object.values(quizSaved).filter(v => !v.passed).length > 0 &&
                 ` — 미달 ${Object.values(quizSaved).filter(v => !v.passed).length}명 자동 큐 등록`}</p>
@@ -637,6 +681,40 @@ export function TodaySession() {
           </CardContent></Card>
         </div>
       )}
+
+      {/* 게릴라(임시 참석) 학생 선택 */}
+      <Dialog open={walkinPickerOpen} onOpenChange={setWalkinPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>게릴라 등록 — 오늘 온 학생 추가</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            원래 이 반 학생이 아니지만 오늘 온 아이를 오늘 수업에만 얹습니다. 출결·쪽지에 반영되고, 반 커리큘럼 진도에는 안 들어갑니다.
+          </p>
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <Input placeholder="이름 검색" value={walkinFilter} onChange={e => setWalkinFilter(e.target.value)} className="h-9" />
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-lg border divide-y">
+            {walkinPool
+              .filter(s => !walkinFilter || s.name.includes(walkinFilter))
+              .slice(0, 60)
+              .map(s => {
+                const picked = walkinIds.has(s.id);
+                return (
+                  <button key={s.id}
+                    className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left ${picked ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
+                    onClick={() => setWalkinIds(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; })}>
+                    <span>{s.name} <span className="text-xs text-muted-foreground">{s.grade}</span></span>
+                    {picked && <Check className="w-4 h-4 text-primary" />}
+                  </button>
+                );
+              })}
+            {walkinPool.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">불러오는 중…</p>}
+          </div>
+          <Button onClick={() => setWalkinPickerOpen(false)}>완료 ({walkinIds.size}명 선택)</Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

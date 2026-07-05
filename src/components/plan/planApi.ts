@@ -107,6 +107,36 @@ export async function fetchDesignStudents(designId: string): Promise<any[]> {
   return data || [];
 }
 
+export type RosterStudent = { id: string; name: string; grade: string | null; type: 'A' | 'B' | 'C' | null };
+
+// 여러 설계의 명단(이름 포함)을 한 번에 — design_id → 학생 배열
+export async function fetchRostersFor(designIds: string[]): Promise<Record<string, RosterStudent[]>> {
+  if (designIds.length === 0) return {};
+  const { data: ps } = await db.from('plan_students')
+    .select('design_id, student_id, student_type').in('design_id', designIds);
+  const rows = (ps || []) as any[];
+  const studentIds = Array.from(new Set(rows.map(r => r.student_id)));
+  const { data: studs } = studentIds.length > 0
+    ? await supabase.from('students').select('id, name, grade').in('id', studentIds)
+    : { data: [] as any[] };
+  const nameMap = new Map(((studs || []) as any[]).map((s: any) => [s.id, s]));
+  const out: Record<string, RosterStudent[]> = {};
+  for (const r of rows) {
+    const s = nameMap.get(r.student_id);
+    if (!s) continue;
+    (out[r.design_id] ||= []).push({ id: s.id, name: s.name, grade: s.grade, type: r.student_type || null });
+  }
+  Object.values(out).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name, 'ko')));
+  return out;
+}
+
+// 오늘 특강 세션이 있는 설계 id 집합 (materialize된 plan_sessions 기준)
+export async function fetchTodayIntensiveDesignIds(todayStr: string): Promise<Set<string>> {
+  const { data } = await db.from('plan_sessions')
+    .select('design_id').eq('session_date', todayStr).not('intensive_id', 'is', null);
+  return new Set(((data || []) as any[]).map((r: any) => r.design_id));
+}
+
 export const DAY_LABELS: Record<number, string> = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
 
 export const ROLE_LABELS: Record<SessionRole, string> = {
