@@ -60,6 +60,8 @@ function PlanHome() {
   const isRealToday = selectedDate === realTodayStr;
   const now = useMemo(() => new Date(selectedDate + 'T12:00:00'), [selectedDate]);
   const todayStr = selectedDate;
+  const todayDow = now.getDay();
+  const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   async function load() {
     setLoading(true);
