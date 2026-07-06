@@ -88,7 +88,7 @@ function PlanHome() {
     } catch { setDesigns([]); }
     setLoading(false);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [selectedDate]);
 
   // 오늘 수업 = 리듬에 오늘 요일이 있거나(정규) 오늘 특강 세션이 있는 설계
   const { todayDesigns, otherDesigns } = useMemo(() => {
