@@ -89,7 +89,12 @@ export function TodaySession() {
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 수업기록 날짜 — 기본은 오늘, 과거로 돌아가서 놓친 기입도 가능
+  const [sessionDate, setSessionDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const todayStr = sessionDate;
+  const sessionDay = useMemo(() => new Date(sessionDate + 'T12:00:00').getDay(), [sessionDate]);
+  const realTodayStr = new Date().toISOString().slice(0, 10);
+  const isPastDate = sessionDate < realTodayStr;
 
   useEffect(() => {
     if (!designId) return;
@@ -129,7 +134,7 @@ export function TodaySession() {
         if ((memoRes.data || []).length > 0) setMemo(memoRes.data[0]);
 
         // 오늘 세션 확보 (있으면 재사용 — 특강으로 미리 생성된 세션 포함)
-        const role: SessionRole = (d.rhythm || {})[String(new Date().getDay())] || 'progress';
+        const role: SessionRole = (d.rhythm || {})[String(sessionDay)] || 'progress';
         const { data: existing } = await db.from('plan_sessions')
           .select('id, note, intensive_id, assigned_teacher_id')
           .eq('design_id', designId).eq('session_date', todayStr).maybeSingle();
@@ -169,12 +174,13 @@ export function TodaySession() {
         // ── LESSON-HW-BRIDGE-V1 ── 과목, 다음 수업일, 오늘 확인해야 할 숙제 ──
         const subj = (d as any).plan_tracks?.subject || '';
         setSubject(subj);
-        // 다음 수업일: rhythm에 등록된 요일 중 오늘 이후 최초의 날짜
+        // 다음 수업일: rhythm에 등록된 요일 중 선택 날짜 이후 최초의 날짜
         const rhythmDays = Object.keys(d.rhythm || {}).map(k => Number(k));
         let nsd = '';
         if (rhythmDays.length > 0) {
+          const base = new Date(sessionDate + 'T12:00:00');
           for (let i = 1; i <= 14; i++) {
-            const dt = new Date(); dt.setDate(dt.getDate() + i);
+            const dt = new Date(base); dt.setDate(dt.getDate() + i);
             if (rhythmDays.includes(dt.getDay())) { nsd = dt.toISOString().slice(0, 10); break; }
           }
         }
@@ -201,7 +207,7 @@ export function TodaySession() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [designId]);
+  }, [designId, sessionDate]);
 
   // ── 계산: 끝점까지의 목표, 그룹 현재 위치, 오늘 분량 ──
   const endIdx = useMemo(() => {
@@ -262,7 +268,7 @@ export function TodaySession() {
     return trackGoals[groupPosIdx];
   }, [groupPosIdx, trackGoals, progress]);
 
-  const isTestDay = design && ((design.rhythm || {})[String(new Date().getDay())] === 'test_day');
+  const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
 
   // 게릴라 학생을 명단에 합쳐 출결·쪽지에 표시(진도 기록에는 미포함)
@@ -668,16 +674,20 @@ export function TodaySession() {
     { n: 3, t: '마무리', s: '메모 · 저장' },
   ];
 
-  const todayRole = ((design.rhythm || {})[String(new Date().getDay())] || 'progress') as SessionRole;
+  const todayRole = ((design.rhythm || {})[String(sessionDay)] || 'progress') as SessionRole;
+  const sessionDateObj = new Date(sessionDate + 'T12:00:00');
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       {/* 헤더 카드 */}
-      <div className="rounded-2xl border bg-gradient-to-br from-primary/8 to-transparent p-5">
+      <div className={`rounded-2xl border bg-gradient-to-br p-5 ${isPastDate ? 'from-amber-500/10 to-transparent border-amber-400/40' : 'from-primary/8 to-transparent'}`}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
-              <Badge className="text-[11px]">{onlyIds ? '개인 수업' : '오늘 수업'}</Badge>
+              <Badge className="text-[11px]">{onlyIds ? '개인 수업' : isPastDate ? '과거 날짜 기입' : '오늘 수업'}</Badge>
+              {isPastDate && (
+                <Badge variant="outline" className="border-amber-500 text-amber-700 text-[11px]">📅 {sessionDate}</Badge>
+              )}
               {sessionMeta.intensive_id && (
                 <Badge variant="outline" className="border-primary/60 text-primary text-[11px]">✨ 특강 회차</Badge>
               )}
@@ -685,12 +695,27 @@ export function TodaySession() {
             </div>
             <h1 className="text-xl font-extrabold tracking-tight leading-tight">{design.title}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {new Date().getMonth() + 1}월 {new Date().getDate()}일 · {students.length}명
+              {sessionDateObj.getMonth() + 1}월 {sessionDateObj.getDate()}일 ({['일','월','화','수','목','금','토'][sessionDay]}) · {students.length}명
               {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
               {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회)`}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                className="h-8 w-36 text-xs"
+                value={sessionDate}
+                max={realTodayStr}
+                onChange={e => { if (e.target.value) setSessionDate(e.target.value); }}
+                title="수업기록 날짜 — 과거 날짜로 돌아가서 놓친 기입 가능"
+              />
+              {isPastDate && (
+                <Button variant="ghost" size="sm" className="h-8 text-[11px]" onClick={() => setSessionDate(realTodayStr)}>
+                  오늘로
+                </Button>
+              )}
+            </div>
             <Button variant="ghost" size="sm" onClick={() => navigate('/plan')}>
               <Undo2 className="w-4 h-4 mr-1" />목록
             </Button>
@@ -716,6 +741,11 @@ export function TodaySession() {
             )}
           </div>
         </div>
+        {isPastDate && (
+          <div className="mt-3 rounded-lg bg-amber-500/10 border border-amber-400/40 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+            📅 <b>{sessionDate}</b> 수업 기록을 이어서 작성 중입니다 — 그 날 있었던 진도·쪽지·숙제를 그대로 채워넣으면 수업일지에 반영돼요.
+          </div>
+        )}
         {onlyIds && (
           <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary flex items-center gap-1.5">
             <UserCheck className="w-4 h-4" />
