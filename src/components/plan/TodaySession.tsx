@@ -248,7 +248,11 @@ export function TodaySession() {
     [design, intensiveExtra]
   );
   const pace = remainSessions > 0 ? remainCount / remainSessions : null;
-  const todayCount = pace != null ? Math.max(1, Math.round(pace)) : 1;
+  const autoTodayCount = pace != null ? Math.max(1, Math.round(pace)) : 1;
+  // 진도 페이스 수동 조정 (느리게/빠르게) — null=자동
+  const [manualTodayCount, setManualTodayCount] = useState<number | null>(null);
+  const remainGoalsAhead = Math.max(1, trackGoals.length - 1 - groupPosIdx);
+  const todayCount = Math.max(1, Math.min(manualTodayCount ?? autoTodayCount, remainGoalsAhead));
 
   const todayGoals = useMemo(() => {
     const list: { goal: PlanGoal; continueFrom?: string }[] = [];
@@ -961,19 +965,45 @@ export function TodaySession() {
             </CardContent></Card>
           ) : (
             <>
-              {/* 오늘 목표 요약 배너 */}
-              <div className="rounded-xl border-2 border-primary/40 bg-primary/5 px-4 py-3">
-                <p className="text-[11px] font-bold text-primary/80 mb-1">🎯 오늘의 목표 ({todayGoals.length}개)</p>
-                <p className="text-sm font-extrabold leading-snug">
-                  {todayGoals[0].goal.order_index}. {todayGoals[0].goal.title}
-                  {todayGoals.length > 1 && <> ~ {todayGoals[todayGoals.length - 1].goal.order_index}. {todayGoals[todayGoals.length - 1].goal.title}</>}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {todayGoals[0].goal.pages}
-                  {todayGoals.length > 1 && todayGoals[todayGoals.length - 1].goal.pages && ` → ${todayGoals[todayGoals.length - 1].goal.pages}`}
-                  {' · '}학생마다 진도가 다르면 아래에서 개별로 기록하세요
-                </p>
-              </div>
+              {/* 오늘 목표 요약 배너 — 어디부터 어디까지 + 페이스 조정 */}
+              {(() => {
+                const startPage = extractPageRange(todayGoals[0].goal.pages)?.start ?? null;
+                const endPage = extractPageRange(todayGoals[todayGoals.length - 1].goal.pages)?.end ?? null;
+                const rangeText = startPage != null && endPage != null
+                  ? `p.${startPage} 부터 → p.${endPage} 까지`
+                  : (todayGoals[0].goal.pages || '') + (todayGoals.length > 1 && todayGoals[todayGoals.length - 1].goal.pages ? ` → ${todayGoals[todayGoals.length - 1].goal.pages}` : '');
+                return (
+                  <div className="rounded-xl border-2 border-primary/40 bg-primary/5 px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-[11px] font-bold text-primary/80">🎯 오늘의 목표 ({todayGoals.length}개)</p>
+                      {/* 페이스 조정: 느리게 − / + 빠르게 */}
+                      <div className="ml-auto flex items-center gap-1">
+                        <span className="text-[10px] text-muted-foreground">분량</span>
+                        <Button size="sm" variant="outline" className="h-6 w-6 p-0"
+                          disabled={todayCount <= 1}
+                          onClick={() => setManualTodayCount(Math.max(1, todayCount - 1))} title="느리게 (분량 줄이기)">−</Button>
+                        <span className="text-xs font-bold w-4 text-center">{todayCount}</span>
+                        <Button size="sm" variant="outline" className="h-6 w-6 p-0"
+                          disabled={todayCount >= remainGoalsAhead}
+                          onClick={() => setManualTodayCount(todayCount + 1)} title="빠르게 (분량 늘리기)">+</Button>
+                        {manualTodayCount != null && (
+                          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px]"
+                            onClick={() => setManualTodayCount(null)} title="자동 페이스로">자동</Button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm font-extrabold leading-snug">
+                      {todayGoals[0].goal.order_index}. {todayGoals[0].goal.title}
+                      {todayGoals.length > 1 && <> ~ {todayGoals[todayGoals.length - 1].goal.order_index}. {todayGoals[todayGoals.length - 1].goal.title}</>}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <b className="text-foreground">{rangeText}</b>
+                      {manualTodayCount != null && <span className="ml-1 text-primary">· 수동 조정됨(자동 {autoTodayCount}개)</span>}
+                      {' · '}학생마다 진도가 다르면 아래에서 개별로 기록하세요
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* 🚀 총 도달 페이지 (권장) — 학생별로 실제 나간 페이지만 적으면 자동으로 여러 목표에 나눠 기록 */}
               {(() => {
@@ -1112,7 +1142,12 @@ export function TodaySession() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="font-extrabold">{goal.order_index}. {goal.title}</span>
-                        <span className="text-xs text-muted-foreground">{goal.pages}</span>
+                        {(() => {
+                          const r = extractPageRange(goal.pages);
+                          return <span className="text-xs text-muted-foreground">
+                            {r ? `p.${r.start} 부터 → p.${r.end} 까지` : goal.pages}
+                          </span>;
+                        })()}
                         {continueFrom && (
                           <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">
                             지난 시간 {continueFrom}까지 — 이어서
