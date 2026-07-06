@@ -31,6 +31,7 @@ function PlanHome() {
   const [wizardTrackOnly, setWizardTrackOnly] = useState(false);
   const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
   const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
+  const [rosterDesign, setRosterDesign] = useState<{ id: string; track_id: string; teaching_mode: string; title: string } | null>(null);
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
   const [rosters, setRosters] = useState<Record<string, RosterStudent[]>>({});
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
