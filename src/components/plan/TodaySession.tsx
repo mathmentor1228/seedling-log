@@ -79,6 +79,16 @@ export function TodaySession() {
   const [walkinPool, setWalkinPool] = useState<StudentInfo[]>([]);
   const [walkinFilter, setWalkinFilter] = useState('');
 
+  // LESSON-HW-BRIDGE-V1: 오늘 세션 → 수업일지·숙제 자동 연동
+  const [subject, setSubject] = useState<string>('');
+  const [nextSessionDate, setNextSessionDate] = useState<string>('');
+  type OpenHw = { id: string; student_id: string; content: string; assigned_date: string; end_date: string | null; check_status: string; result: string | null };
+  const [openHws, setOpenHws] = useState<OpenHw[]>([]);
+  const [hwChecks, setHwChecks] = useState<Record<string, { result: 'completed' | 'partial' | 'not_done'; note?: string }>>({});
+  const [nextHwBulk, setNextHwBulk] = useState<string>('');
+  const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
+  const [nextHwDue, setNextHwDue] = useState<string>('');
+
   const todayStr = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
@@ -155,6 +165,35 @@ export function TodaySession() {
           teacher_id: c.teacher_id, name: nameOf.get(c.teacher_id) || '공동T',
           start_date: c.start_date, end_date: c.end_date,
         })));
+
+        // ── LESSON-HW-BRIDGE-V1 ── 과목, 다음 수업일, 오늘 확인해야 할 숙제 ──
+        const subj = (d as any).plan_tracks?.subject || '';
+        setSubject(subj);
+        // 다음 수업일: rhythm에 등록된 요일 중 오늘 이후 최초의 날짜
+        const rhythmDays = Object.keys(d.rhythm || {}).map(k => Number(k));
+        let nsd = '';
+        if (rhythmDays.length > 0) {
+          for (let i = 1; i <= 14; i++) {
+            const dt = new Date(); dt.setDate(dt.getDate() + i);
+            if (rhythmDays.includes(dt.getDay())) { nsd = dt.toISOString().slice(0, 10); break; }
+          }
+        }
+        setNextHwDue(nsd);
+        setNextSessionDate(nsd);
+
+        // 오늘 확인해야 할 숙제: 이 반 학생들 중, 과목 일치 + (마감이 오늘 포함 이전) + 아직 미확인
+        const studentIds = studs.map(s => s.id);
+        if (subj && studentIds.length > 0) {
+          const { data: hws } = await db.from('homework_assignments')
+            .select('id, student_id, content, assigned_date, end_date, check_status, result')
+            .in('student_id', studentIds)
+            .eq('subject', subj)
+            .in('check_status', ['pending', 'assigned'])
+            .lte('assigned_date', todayStr)
+            .order('assigned_date', { ascending: false })
+            .limit(300);
+          setOpenHws((hws || []) as OpenHw[]);
+        }
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
@@ -456,6 +495,40 @@ export function TodaySession() {
     } catch (e: any) { toast.error(e.message || String(e)); }
   }
 
+  // 학생별 오늘 진도 요약 (수업일지 lesson_range 생성용)
+  function summarizeStudentToday(sid: string): {
+    range: string; nextGoalTitle: string | null; hadProgress: boolean;
+  } {
+    const donePartial: { g: PlanGoal; state: 'done' | 'partial'; upto?: string }[] = [];
+    let lastIdx = -1;
+    for (let i = todayStartIdx; i < trackGoals.length; i++) {
+      const g = trackGoals[i];
+      const local = perStudent[g.id]?.[sid];
+      const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
+      const state = local?.state
+        ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
+          : p.status === 'partial' ? 'partial' : null) : null);
+      if (state === 'done') { donePartial.push({ g, state: 'done' }); lastIdx = i; }
+      else if (state === 'partial') {
+        donePartial.push({ g, state: 'partial', upto: local?.upto || p?.partial_upto || '' });
+        lastIdx = i; break;
+      } else break;
+    }
+    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[todayStartIdx]?.title || null, hadProgress: false };
+    const first = donePartial[0].g;
+    const last = donePartial[donePartial.length - 1];
+    const startPage = extractPageRange(first.pages)?.start;
+    const endPage = last.state === 'partial'
+      ? (parsePageInput(last.upto || '') ?? extractPageRange(last.g.pages)?.end)
+      : extractPageRange(last.g.pages)?.end;
+    const goalPart = donePartial.length === 1
+      ? `${first.order_index}. ${first.title}${last.state === 'partial' ? ` (일부 ~${last.upto || `p.${endPage}`})` : ''}`
+      : `${first.order_index}. ${first.title} ~ ${last.g.order_index}. ${last.g.title}${last.state === 'partial' ? ` (일부)` : ''}`;
+    const pagePart = startPage != null && endPage != null ? ` · p.${startPage}~p.${endPage}` : '';
+    const nextGoal = trackGoals[lastIdx + 1]?.title || null;
+    return { range: `${goalPart}${pagePart}`, nextGoalTitle: nextGoal, hadProgress: true };
+  }
+
   async function saveDay() {
     if (!sessionId) return;
     setSaving(true);
@@ -469,8 +542,111 @@ export function TodaySession() {
           design_id: designId, session_id: sessionId, content: nextMemo.trim(),
         });
       }
+
+      // ── LESSON-HW-BRIDGE-V1 ── 수업일지·숙제 자동 반영 ──
+      let lrCount = 0, hwCheckCount = 0, hwNewCount = 0;
+      if (subject) {
+        const teacherId = sessionMeta.assigned_teacher_id || design.teacher_id;
+        // 1) 숙제 확인: hwChecks 반영
+        const hwCheckRows = Object.entries(hwChecks);
+        for (const [hwId, v] of hwCheckRows) {
+          const { error: hwErr } = await db.from('homework_assignments').update({
+            check_status: 'checked',
+            result: v.result,
+            checked_by: user?.id || null,
+            checked_at: new Date().toISOString(),
+            notes: v.note || null,
+          }).eq('id', hwId);
+          if (!hwErr) hwCheckCount++;
+        }
+
+        // 학생별 숙제 상태 집계
+        const hwByStudent = new Map<string, 'completed' | 'partial' | 'not_done' | 'none_assigned'>();
+        for (const s of students) {
+          if (absent.has(s.id)) continue;
+          const hwsForS = openHws.filter(h => h.student_id === s.id);
+          if (hwsForS.length === 0) { hwByStudent.set(s.id, 'none_assigned'); continue; }
+          const results = hwsForS.map(h => hwChecks[h.id]?.result || (h.result as any) || null);
+          if (results.some(r => r === 'not_done')) hwByStudent.set(s.id, 'not_done');
+          else if (results.some(r => r === 'partial')) hwByStudent.set(s.id, 'partial');
+          else if (results.every(r => r === 'completed')) hwByStudent.set(s.id, 'completed');
+          else hwByStudent.set(s.id, 'none_assigned');
+        }
+
+        // 2) 학생별 수업일지 upsert (출결 학생만)
+        for (const s of students) {
+          const isAbsent = absent.has(s.id);
+          const summary = summarizeStudentToday(s.id);
+          const hwStatus = isAbsent ? 'none_assigned' : (hwByStudent.get(s.id) || 'none_assigned');
+          const range = isAbsent
+            ? '결석'
+            : (summary.range || (design.title ? `${design.title} 진행` : '수업 진행'));
+
+          const quiz = quizSaved[s.id];
+          const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+
+          // 기존 lesson_record 있는지 확인
+          const { data: existingLR } = await db.from('lesson_records')
+            .select('id')
+            .eq('teacher_id', teacherId)
+            .eq('student_id', s.id)
+            .eq('subject', subject)
+            .eq('lesson_date', todayStr)
+            .maybeSingle();
+
+          const payload: any = {
+            teacher_id: teacherId,
+            student_id: s.id,
+            class_id: design.class_id || null,
+            subject,
+            lesson_date: todayStr,
+            lesson_range: range,
+            homework_status: hwStatus,
+            next_lesson_goal: summary.nextGoalTitle || null,
+            notes: note.trim() || null,
+            understanding_score: understanding,
+            attendance_status: isAbsent ? ['결석'] : ['출석'],
+          };
+
+          let lessonRecordId: string | null = null;
+          if (existingLR?.id) {
+            lessonRecordId = existingLR.id;
+            await db.from('lesson_records').update(payload).eq('id', existingLR.id);
+          } else {
+            const { data: ins } = await db.from('lesson_records').insert(payload).select('id').single();
+            lessonRecordId = ins?.id || null;
+          }
+          if (lessonRecordId) lrCount++;
+
+          // 3) 다음 수업 숙제 부여 (결석자 제외)
+          if (!isAbsent) {
+            const hwContent = (nextHwPerStudent[s.id] ?? nextHwBulk ?? '').trim();
+            if (hwContent) {
+              const { error: nhErr } = await db.from('homework_assignments').insert({
+                student_id: s.id,
+                subject,
+                lesson_record_id: lessonRecordId,
+                assigned_date: todayStr,
+                end_date: nextHwDue || null,
+                content: hwContent,
+                check_status: 'pending',
+                homework_type: 'written',
+                required_submissions: 1,
+                created_by: user?.id || null,
+              });
+              if (!nhErr) hwNewCount++;
+            }
+          }
+        }
+      }
+
       setSavedDone(true);
-      toast.success('오늘 기록 저장 완료' + (nextMemo.trim() ? ' — 📌 메모는 다음 수업에서 다시 만나요' : ''));
+      const parts = ['오늘 기록 저장 완료'];
+      if (lrCount > 0) parts.push(`수업일지 ${lrCount}건`);
+      if (hwCheckCount > 0) parts.push(`숙제 확인 ${hwCheckCount}건`);
+      if (hwNewCount > 0) parts.push(`다음 숙제 ${hwNewCount}건`);
+      if (nextMemo.trim()) parts.push('📌 다음 수업 메모');
+      toast.success(parts.join(' · '));
     } catch (e: any) {
       toast.error(`저장 실패: ${e.message || e}`);
     } finally {
@@ -681,6 +857,48 @@ export function TodaySession() {
                   </div>
                 );
               })}
+            </CardContent></Card>
+          )}
+
+          {/* LESSON-HW-BRIDGE-V1: 지난 숙제 확인 */}
+          {openHws.length > 0 && (
+            <Card><CardContent className="p-4 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                📝 지난 숙제 확인 — {openHws.length}건 (수업일지 숙제란에 자동 반영)
+              </p>
+              <div className="space-y-1.5">
+                {students.filter(s => openHws.some(h => h.student_id === s.id)).map(s => {
+                  const mine = openHws.filter(h => h.student_id === s.id);
+                  return (
+                    <div key={s.id} className="border rounded-lg px-2.5 py-2 bg-background space-y-1">
+                      <p className="text-sm font-bold flex items-center gap-1">{s.name}
+                        {s.type && <span className={`text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                      </p>
+                      {mine.map(h => {
+                        const cur = hwChecks[h.id]?.result;
+                        return (
+                          <div key={h.id} className="flex flex-wrap items-center gap-1.5 pl-1">
+                            <span className="text-xs flex-1 min-w-[140px] truncate" title={h.content}>· {h.content}</span>
+                            <div className="flex gap-1">
+                              {([
+                                { k: 'completed', label: '✓ 완료', cls: 'border-green-400 text-green-700 bg-green-50' },
+                                { k: 'partial', label: '◐ 일부', cls: 'border-amber-400 text-amber-700 bg-amber-50' },
+                                { k: 'not_done', label: '✗ 미제출', cls: 'border-red-400 text-red-700 bg-red-50' },
+                              ] as const).map(o => (
+                                <button key={o.k}
+                                  className={`text-[10px] font-bold rounded-full border px-2 py-0.5 ${cur === o.k ? o.cls : 'text-muted-foreground'}`}
+                                  onClick={() => setHwChecks(p => ({ ...p, [h.id]: { ...(p[h.id] || { result: 'completed' as const }), result: o.k } }))}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent></Card>
           )}
 
@@ -958,6 +1176,36 @@ export function TodaySession() {
                 const g = goals.find(x => x.id === gid);
                 return `${g?.order_index}. ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부(~${st.upto})` : '미룸'}`;
               }).join(' · ')}</p>
+          </CardContent></Card>
+
+          {/* LESSON-HW-BRIDGE-V1: 다음 수업 숙제 부여 */}
+          <Card><CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs font-bold text-muted-foreground">📚 다음 수업 숙제 — 저장 시 학생별로 자동 부여</p>
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-[11px] text-muted-foreground">마감</span>
+                <Input type="date" className="h-7 w-36 text-xs" value={nextHwDue}
+                  onChange={e => setNextHwDue(e.target.value)} />
+              </div>
+            </div>
+            <Input placeholder="전체 공통 숙제 (예: 워크북 p.30~35 풀이)"
+              value={nextHwBulk} onChange={e => setNextHwBulk(e.target.value)} />
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">학생별로 다르게 부여 (선택)</summary>
+              <div className="mt-2 space-y-1.5">
+                {students.filter(s => !absent.has(s.id)).map(s => (
+                  <div key={s.id} className="flex items-center gap-1.5">
+                    <span className="font-bold text-xs min-w-[60px]">{s.name}</span>
+                    <Input placeholder={nextHwBulk || '(공통 없음)'} className="h-7 text-xs"
+                      value={nextHwPerStudent[s.id] ?? ''}
+                      onChange={e => setNextHwPerStudent(p => ({ ...p, [s.id]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+            </details>
+            <p className="text-[10px] text-muted-foreground">
+              비워두면 숙제 없이 저장. 학생별 칸이 비면 공통 숙제가 자동 적용됩니다.
+            </p>
           </CardContent></Card>
 
           <Card><CardContent className="p-4 space-y-3">
