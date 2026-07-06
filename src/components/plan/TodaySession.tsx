@@ -372,6 +372,82 @@ export function TodaySession() {
     }
   }
 
+  // ── PAGE-BASED PROGRESS V1 ── 총 도달 페이지 하나로 여러 goal 자동 판단
+  function extractPageRange(pages: string | null): { start: number; end: number } | null {
+    if (!pages) return null;
+    const nums = (pages.match(/\d+/g) || []).map(Number);
+    if (nums.length === 0) return null;
+    return { start: nums[0], end: nums[nums.length - 1] };
+  }
+  function parsePageInput(raw: string): number | null {
+    const m = (raw || '').match(/\d+/);
+    return m ? Number(m[0]) : null;
+  }
+  // 오늘 시작 goal 인덱스 = 첫 todayGoal의 trackGoals 내 인덱스
+  const todayStartIdx = useMemo(() => {
+    if (todayGoals.length === 0) return groupPosIdx + 1;
+    const firstId = todayGoals[0].goal.id;
+    const i = trackGoals.findIndex(g => g.id === firstId);
+    return i >= 0 ? i : groupPosIdx + 1;
+  }, [todayGoals, trackGoals, groupPosIdx]);
+  const todayEndIdx = useMemo(() => {
+    if (todayGoals.length === 0) return todayStartIdx - 1;
+    const lastId = todayGoals[todayGoals.length - 1].goal.id;
+    const i = trackGoals.findIndex(g => g.id === lastId);
+    return i >= 0 ? i : todayStartIdx - 1;
+  }, [todayGoals, trackGoals, todayStartIdx]);
+
+  // 학생별 "총 도달 페이지" 입력 초안
+  const [reachedDrafts, setReachedDrafts] = useState<Record<string, string>>({}); // studentId | '__all__'
+
+  async function applyReachedPage(studentIds: string[], page: number): Promise<{ lastDoneIdx: number; partialIdx: number | null } | null> {
+    if (todayGoals.length === 0 || !sessionId) return null;
+    let lastDoneIdx = todayStartIdx - 1;
+    let partialIdx: number | null = null;
+    // 오늘 시작부터 트랙 끝까지 훑으며 자동 판단
+    for (let i = todayStartIdx; i < trackGoals.length; i++) {
+      const g = trackGoals[i];
+      const range = extractPageRange(g.pages);
+      if (!range) break;
+      if (page >= range.end) {
+        await setGoalState(g.id, 'done', undefined, studentIds);
+        lastDoneIdx = i;
+      } else if (page >= range.start) {
+        await setGoalState(g.id, 'partial', `p.${page}`, studentIds);
+        partialIdx = i;
+        break;
+      } else {
+        break;
+      }
+    }
+    return { lastDoneIdx, partialIdx };
+  }
+
+  async function submitReached(scope: 'all' | string, raw: string) {
+    const page = parsePageInput(raw);
+    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68)'); return; }
+    const targetIds = scope === 'all'
+      ? students.filter(s => !absent.has(s.id)).map(s => s.id)
+      : [scope];
+    if (targetIds.length === 0) { toast.error('대상 학생이 없어요'); return; }
+    const result = await applyReachedPage(targetIds, page);
+    if (!result) return;
+    // 여유(순항) 계산: 오늘 예정 마지막 goal 인덱스 대비 얼마나 앞섰는지
+    const extraGoals = result.lastDoneIdx - todayEndIdx;
+    const paceVal = pace ?? 1;
+    const extraSessions = extraGoals > 0 && paceVal > 0 ? (extraGoals / paceVal) : 0;
+    const label = scope === 'all' ? `${targetIds.length}명` : (students.find(s => s.id === scope)?.name || '학생');
+    if (extraGoals > 0) {
+      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)`);
+    } else if (result.partialIdx != null && result.partialIdx === todayEndIdx) {
+      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록`);
+    } else if (result.lastDoneIdx >= todayEndIdx) {
+      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록`);
+    } else {
+      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만`);
+    }
+  }
+
   async function resolveQueueItem(q: QueueRow) {
     try {
       await db.from('plan_queue').update({ status: 'done', resolved_at: new Date().toISOString() }).eq('id', q.id);
@@ -641,6 +717,121 @@ export function TodaySession() {
                   {' · '}학생마다 진도가 다르면 아래에서 개별로 기록하세요
                 </p>
               </div>
+
+              {/* 🚀 총 도달 페이지 (권장) — 학생별로 실제 나간 페이지만 적으면 자동으로 여러 목표에 나눠 기록 */}
+              {(() => {
+                const presentStudents = students.filter(s => !absent.has(s.id));
+                const todayEndPage = extractPageRange(trackGoals[todayEndIdx]?.pages || null)?.end ?? null;
+                const paceVal = pace ?? 1;
+                const reachedStateFor = (sid: string): { lastIdx: number; page: number | null } => {
+                  let lastIdx = -1;
+                  let page: number | null = null;
+                  for (let i = todayStartIdx; i < trackGoals.length; i++) {
+                    const g = trackGoals[i];
+                    const local = perStudent[g.id]?.[sid];
+                    const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
+                    const state = local?.state
+                      ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
+                        : p.status === 'partial' ? 'partial' : null) : null);
+                    if (state === 'done') { lastIdx = i; }
+                    else if (state === 'partial') {
+                      const uptoRaw = local?.upto || p?.partial_upto || '';
+                      const parsed = parsePageInput(uptoRaw);
+                      if (parsed != null) page = parsed;
+                      break;
+                    } else { break; }
+                  }
+                  if (page == null && lastIdx >= 0) {
+                    page = extractPageRange(trackGoals[lastIdx].pages)?.end ?? null;
+                  }
+                  return { lastIdx, page };
+                };
+                return (
+                  <Card className="border-primary/30 bg-primary/[0.03]">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-extrabold text-primary">🚀 총 도달 페이지 (권장)</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요
+                          {todayEndPage != null && ` · 오늘 목표 끝: p.${todayEndPage}`}
+                        </span>
+                      </div>
+
+                      {/* 전체 일괄 */}
+                      <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
+                        <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
+                        <Input
+                          placeholder="예: 68"
+                          className="h-7 w-24 text-center text-xs"
+                          value={reachedDrafts['__all__'] ?? ''}
+                          onChange={e => setReachedDrafts(p => ({ ...p, __all__: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') submitReached('all', reachedDrafts['__all__'] || ''); }}
+                        />
+                        <Button size="sm" className="h-7 text-xs" onClick={() => submitReached('all', reachedDrafts['__all__'] || '')}>
+                          <Check className="w-3.5 h-3.5 mr-1" />자동 기록
+                        </Button>
+                      </div>
+
+                      {/* 학생별 입력 + 순항 배지 */}
+                      <div className="space-y-1.5">
+                        {presentStudents.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic px-1">출석 학생 없음</p>
+                        )}
+                        {presentStudents.map(s => {
+                          const rs = reachedStateFor(s.id);
+                          const extra = rs.lastIdx - todayEndIdx;
+                          const extraSess = extra > 0 && paceVal > 0 ? (extra / paceVal) : 0;
+                          const behind = rs.lastIdx >= 0 && rs.lastIdx < todayEndIdx;
+                          const behindGoals = behind ? (todayEndIdx - rs.lastIdx) : 0;
+                          return (
+                            <div key={s.id} className="flex flex-wrap items-center gap-1.5 border rounded-lg px-2.5 py-1.5 bg-background">
+                              <span className="font-bold text-sm min-w-[60px]">{s.name}</span>
+                              {s.type && <span className={`text-[10px] font-bold ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                              {rs.page != null && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  ~p.{rs.page}
+                                </Badge>
+                              )}
+                              {extra > 0 && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100">
+                                  🚀 순항중 +{extra}목표 · 약 {extraSess.toFixed(1)}회 여유
+                                </Badge>
+                              )}
+                              {extra === 0 && rs.lastIdx === todayEndIdx && (
+                                <Badge className="text-[10px] bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-100">
+                                  ✓ 계획대로
+                                </Badge>
+                              )}
+                              {behind && (
+                                <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">
+                                  계획보다 -{behindGoals}목표
+                                </Badge>
+                              )}
+                              <div className="ml-auto flex items-center gap-1">
+                                <Input
+                                  placeholder="p.68"
+                                  className="h-7 w-20 text-center text-xs"
+                                  value={reachedDrafts[s.id] ?? ''}
+                                  onChange={e => setReachedDrafts(p => ({ ...p, [s.id]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') submitReached(s.id, reachedDrafts[s.id] || ''); }}
+                                />
+                                <Button size="sm" className="h-7 text-xs px-2" onClick={() => submitReached(s.id, reachedDrafts[s.id] || '')}>
+                                  기록
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        아래 목표별 카드는 세부 조정이 필요할 때만 쓰세요. 여기서 페이지만 적으면 자동 채워집니다.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+
 
               {todayGoals.map(({ goal, continueFrom }) => {
                 const st = goalStates[goal.id];
