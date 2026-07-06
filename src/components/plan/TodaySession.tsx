@@ -79,6 +79,16 @@ export function TodaySession() {
   const [walkinPool, setWalkinPool] = useState<StudentInfo[]>([]);
   const [walkinFilter, setWalkinFilter] = useState('');
 
+  // LESSON-HW-BRIDGE-V1: 오늘 세션 → 수업일지·숙제 자동 연동
+  const [subject, setSubject] = useState<string>('');
+  const [nextSessionDate, setNextSessionDate] = useState<string>('');
+  type OpenHw = { id: string; student_id: string; content: string; assigned_date: string; end_date: string | null; check_status: string; result: string | null };
+  const [openHws, setOpenHws] = useState<OpenHw[]>([]);
+  const [hwChecks, setHwChecks] = useState<Record<string, { result: 'completed' | 'partial' | 'not_done'; note?: string }>>({});
+  const [nextHwBulk, setNextHwBulk] = useState<string>('');
+  const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
+  const [nextHwDue, setNextHwDue] = useState<string>('');
+
   const todayStr = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
