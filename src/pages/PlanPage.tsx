@@ -198,18 +198,21 @@ function PlanHome() {
             );
           })()}
 
-          {/* ═══ 오늘 수업 ═══ */}
+          {/* ═══ 오늘(또는 선택 날짜) 수업 ═══ */}
           <section className="space-y-2.5">
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-600">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isRealToday ? 'bg-amber-100 text-amber-600' : 'bg-amber-200 text-amber-800'}`}>
                 <Sun className="w-4.5 h-4.5" />
               </div>
-              <h2 className="font-bold">오늘 수업</h2>
+              <h2 className="font-bold">
+                {isRealToday ? '오늘 수업' : `${now.getMonth() + 1}월 ${now.getDate()}일(${WEEK_KO[todayDow]}) 수업`}
+              </h2>
               {todayDesigns.length > 0 && <Badge className="text-[11px]">{todayDesigns.length}개 반</Badge>}
+              {!isRealToday && <span className="text-xs text-amber-700">← 이 날짜의 수업일지를 이어서 기입</span>}
             </div>
             {todayDesigns.length === 0 ? (
               <p className="text-sm text-muted-foreground border rounded-lg px-4 py-3 bg-muted/20">
-                오늘({WEEK_KO[todayDow]}) 예정된 수업이 없습니다. 아래 전체 설계에서 아무 반이나 "오늘 수업 열기"로 임시 수업을 시작할 수 있어요.
+                {isRealToday ? '오늘' : `${now.getMonth() + 1}/${now.getDate()}(${WEEK_KO[todayDow]})`} 예정된 수업이 없습니다. 아래 전체 설계에서 아무 반이나 "수업 열기"로 그 날짜 수업을 시작할 수 있어요.
               </p>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
@@ -274,7 +277,7 @@ function PlanHome() {
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
                             <Link to={`/plan/${d.id}/today${isRealToday ? '' : `?date=${selectedDate}`}`}>
-                              <Play className="w-4 h-4 mr-1" />오늘 수업 시작
+                              <Play className="w-4 h-4 mr-1" />{isRealToday ? '오늘 수업 시작' : `${now.getMonth() + 1}/${now.getDate()} 수업 기입`}
                             </Link>
                           </Button>
                           <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
