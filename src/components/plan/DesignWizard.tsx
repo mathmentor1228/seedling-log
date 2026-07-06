@@ -571,7 +571,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
             <Select value={trackSubject} onValueChange={setTrackSubject}>
               <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['수학', '영어', '국어', '과학', '사회'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {['수학', '영어', '국어', '과학'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

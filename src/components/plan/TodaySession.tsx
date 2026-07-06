@@ -621,9 +621,11 @@ export function TodaySession() {
           let lessonRecordId: string | null = null;
           if (existingLR?.id) {
             lessonRecordId = existingLR.id;
-            await db.from('lesson_records').update(payload).eq('id', existingLR.id);
+            const { error: upErr } = await db.from('lesson_records').update(payload).eq('id', existingLR.id);
+            if (upErr) throw new Error(`수업일지 갱신 실패(${s.name}): ${upErr.message}`);
           } else {
-            const { data: ins } = await db.from('lesson_records').insert(payload).select('id').single();
+            const { data: ins, error: insErr } = await db.from('lesson_records').insert(payload).select('id').single();
+            if (insErr) throw new Error(`수업일지 저장 실패(${s.name}): ${insErr.message}`);
             lessonRecordId = ins?.id || null;
           }
           if (lessonRecordId) lrCount++;
