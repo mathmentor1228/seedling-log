@@ -701,6 +701,21 @@ export function TodaySession() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                className="h-8 w-36 text-xs"
+                value={sessionDate}
+                max={realTodayStr}
+                onChange={e => { if (e.target.value) setSessionDate(e.target.value); }}
+                title="수업기록 날짜 — 과거 날짜로 돌아가서 놓친 기입 가능"
+              />
+              {isPastDate && (
+                <Button variant="ghost" size="sm" className="h-8 text-[11px]" onClick={() => setSessionDate(realTodayStr)}>
+                  오늘로
+                </Button>
+              )}
+            </div>
             <Button variant="ghost" size="sm" onClick={() => navigate('/plan')}>
               <Undo2 className="w-4 h-4 mr-1" />목록
             </Button>
