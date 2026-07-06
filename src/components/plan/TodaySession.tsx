@@ -66,6 +66,9 @@ export function TodaySession() {
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean }>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
   const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
+  // 학생별 진도 상태 — goalId → studentId → {state, upto}
+  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>>>({});
+  const [uptoDrafts, setUptoDrafts] = useState<Record<string, string>>({}); // key: `${goalId}::${studentId|__all__}`
   const [note, setNote] = useState('');
   const [nextMemo, setNextMemo] = useState('');
   const [saving, setSaving] = useState(false);
@@ -321,14 +324,14 @@ export function TodaySession() {
     }
   }
 
-  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string) {
+  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string, onlyStudentIds?: string[]) {
     if (!sessionId) return;
-    const presentIds = students.filter(s => !absent.has(s.id)).map(s => s.id);
-    const absentIds = students.filter(s => absent.has(s.id)).map(s => s.id);
+    const targetIds = onlyStudentIds ?? students.filter(s => !absent.has(s.id)).map(s => s.id);
+    const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)).map(s => s.id);
     const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred' } as const;
     try {
       const rows = [
-        ...presentIds.map(sid => ({
+        ...targetIds.map(sid => ({
           design_id: designId, student_id: sid, goal_id: goalId,
           status: statusMap[state], partial_upto: state === 'partial' ? (upto || null) : null,
           session_id: sessionId, advanced_at: state !== 'defer' ? new Date().toISOString() : null,
@@ -341,17 +344,29 @@ export function TodaySession() {
       const { error } = await db.from('plan_goal_progress')
         .upsert(rows, { onConflict: 'design_id,student_id,goal_id' });
       if (error) throw error;
-      setGoalStates(p => ({ ...p, [goalId]: { state, upto: upto || '' } }));
-      // 로컬 progress 갱신
+      // 학생별 상태 저장 (bulk이면 모두 같은 상태로)
+      setPerStudent(prev => {
+        const next = { ...prev };
+        const cur = { ...(next[goalId] || {}) };
+        targetIds.forEach(sid => { cur[sid] = { state, upto: upto || '' }; });
+        next[goalId] = cur;
+        return next;
+      });
+      // 전체 대상이면 그룹 상태도 세팅 (헤더 배지 유지)
+      if (!onlyStudentIds) {
+        setGoalStates(p => ({ ...p, [goalId]: { state, upto: upto || '' } }));
+      }
+      // 로컬 progress 갱신 — 이번에 건드린 학생만 교체
       setProgress(prev => {
-        const rest = prev.filter(p => p.goal_id !== goalId);
+        const touched = new Set(rows.map(r => `${r.student_id}::${r.goal_id}`));
+        const rest = prev.filter(p => !touched.has(`${p.student_id}::${p.goal_id}`));
         return [...rest, ...rows.map(r => ({
           student_id: r.student_id, goal_id: r.goal_id, status: r.status, partial_upto: (r as any).partial_upto || null,
         }))];
       });
-      if (state === 'done') toast.success(`진도 기록 — ${presentIds.length}명 반영${absentIds.length ? ` (결석 ${absentIds.length}명 스킵 표시)` : ''}`);
-      if (state === 'partial') toast.success(`${upto}까지 기록 — 다음 수업에 "이어서"로 자동 표기`);
-      if (state === 'defer') toast(`미루기 — 남은 수업에 자동 재분배`);
+      if (state === 'done') toast.success(`진도 기록 — ${targetIds.length}명 반영${absentIds.length ? ` (결석 ${absentIds.length}명 스킵 표시)` : ''}`);
+      if (state === 'partial') toast.success(`${upto}까지 기록 — ${targetIds.length}명, 다음 수업에 "이어서"로 자동 표기`);
+      if (state === 'defer') toast(`미루기 — ${targetIds.length}명, 남은 수업에 자동 재분배`);
     } catch (e: any) {
       toast.error(`진도 저장 실패: ${e.message || e}`);
     }
@@ -612,56 +627,125 @@ export function TodaySession() {
               🎉 끝점까지 모든 목표를 나갔습니다 — 확인·복습만 남았어요.
             </CardContent></Card>
           ) : (
-            todayGoals.map(({ goal, continueFrom }) => {
-              const st = goalStates[goal.id];
-              return (
-                <Card key={goal.id} className={
-                  st?.state === 'done' ? 'border-green-300 bg-green-50/40'
-                    : st?.state === 'partial' ? 'border-amber-300 bg-amber-50/40'
-                      : st?.state === 'defer' ? 'opacity-60' : ''}>
-                  <CardContent className="p-4 space-y-2.5">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="font-extrabold">{goal.order_index}. {goal.title}</span>
-                      <span className="text-xs text-muted-foreground">{goal.pages}</span>
-                      {continueFrom && (
-                        <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">
-                          지난 시간 {continueFrom}까지 — 이어서
-                        </Badge>
-                      )}
-                      {st?.state && (
-                        <span className={`ml-auto text-xs font-bold
-                          ${st.state === 'done' ? 'text-green-700' : st.state === 'partial' ? 'text-amber-700' : 'text-muted-foreground'}`}>
-                          {st.state === 'done' ? '완료' : st.state === 'partial' ? `일부 ~${st.upto}` : '미룸'}
-                        </span>
-                      )}
-                    </div>
-                    {design.teaching_mode === 'abc' && design.angle_mode !== 'off' && (
-                      <p className="text-xs text-muted-foreground">
-                        {(['A', 'B', 'C'] as const).filter(t => design.type_concepts?.[t]).map(t => (
-                          <span key={t} className="mr-3"><b className={TYPE_COLORS[t]}>{t}</b> {design.type_concepts[t]}</span>
-                        ))}
-                      </p>
-                    )}
-                    {!st?.state && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" onClick={() => setGoalState(goal.id, 'done')}>
-                          <Check className="w-4 h-4 mr-1" />다 나감
-                        </Button>
-                        <span className="flex items-center gap-1">
-                          <Input placeholder="p.55" className="h-8 w-20 text-center text-sm" id={`upto-${goal.id}`} />
-                          <Button size="sm" variant="outline" onClick={() => {
-                            const v = (document.getElementById(`upto-${goal.id}`) as HTMLInputElement)?.value?.trim();
-                            if (!v) { toast.error('어디까지 나갔는지 적어주세요 (예: p.55)'); return; }
-                            setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
-                          }}>◐ 일부만</Button>
-                        </span>
-                        <Button size="sm" variant="ghost" onClick={() => setGoalState(goal.id, 'defer')}>→ 미루기</Button>
+            <>
+              {/* 오늘 목표 요약 배너 */}
+              <div className="rounded-xl border-2 border-primary/40 bg-primary/5 px-4 py-3">
+                <p className="text-[11px] font-bold text-primary/80 mb-1">🎯 오늘의 목표 ({todayGoals.length}개)</p>
+                <p className="text-sm font-extrabold leading-snug">
+                  {todayGoals[0].goal.order_index}. {todayGoals[0].goal.title}
+                  {todayGoals.length > 1 && <> ~ {todayGoals[todayGoals.length - 1].goal.order_index}. {todayGoals[todayGoals.length - 1].goal.title}</>}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {todayGoals[0].goal.pages}
+                  {todayGoals.length > 1 && todayGoals[todayGoals.length - 1].goal.pages && ` → ${todayGoals[todayGoals.length - 1].goal.pages}`}
+                  {' · '}학생마다 진도가 다르면 아래에서 개별로 기록하세요
+                </p>
+              </div>
+
+              {todayGoals.map(({ goal, continueFrom }) => {
+                const st = goalStates[goal.id];
+                const presentStudents = students.filter(s => !absent.has(s.id));
+                const getStuState = (sid: string) => {
+                  const local = perStudent[goal.id]?.[sid];
+                  if (local) return local;
+                  const p = progress.find(r => r.goal_id === goal.id && r.student_id === sid);
+                  if (!p) return null;
+                  if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) return { state: 'done' as const, upto: '' };
+                  if (p.status === 'partial') return { state: 'partial' as const, upto: p.partial_upto || '' };
+                  if (p.status === 'deferred') return { state: 'defer' as const, upto: '' };
+                  return null;
+                };
+                const bulkKey = `${goal.id}::__all__`;
+                return (
+                  <Card key={goal.id} className={
+                    st?.state === 'done' ? 'border-green-300 bg-green-50/40'
+                      : st?.state === 'partial' ? 'border-amber-300 bg-amber-50/40'
+                        : st?.state === 'defer' ? 'opacity-70' : ''}>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="font-extrabold">{goal.order_index}. {goal.title}</span>
+                        <span className="text-xs text-muted-foreground">{goal.pages}</span>
+                        {continueFrom && (
+                          <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">
+                            지난 시간 {continueFrom}까지 — 이어서
+                          </Badge>
+                        )}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })
+                      {design.teaching_mode === 'abc' && design.angle_mode !== 'off' && (
+                        <p className="text-xs text-muted-foreground">
+                          {(['A', 'B', 'C'] as const).filter(t => design.type_concepts?.[t]).map(t => (
+                            <span key={t} className="mr-3"><b className={TYPE_COLORS[t]}>{t}</b> {design.type_concepts[t]}</span>
+                          ))}
+                        </p>
+                      )}
+
+                      {/* 일괄 처리 (모두 같은 진도일 때) */}
+                      <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
+                        <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
+                        <Button size="sm" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'done')}>
+                          <Check className="w-3.5 h-3.5 mr-1" />모두 다 나감
+                        </Button>
+                        <Input
+                          placeholder="p.55"
+                          className="h-7 w-20 text-center text-xs"
+                          value={uptoDrafts[bulkKey] ?? ''}
+                          onChange={e => setUptoDrafts(p => ({ ...p, [bulkKey]: e.target.value }))}
+                        />
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                          const v = (uptoDrafts[bulkKey] || '').trim();
+                          if (!v) { toast.error('어디까지 나갔는지 적어주세요 (예: p.55)'); return; }
+                          setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
+                        }}>◐ 모두 일부만</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
+                      </div>
+
+                      {/* 학생별 개별 기록 */}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-muted-foreground">학생별 진도 — 다르면 개별로 눌러주세요</p>
+                        {presentStudents.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic px-1">출석 학생 없음</p>
+                        )}
+                        {presentStudents.map(s => {
+                          const ss = getStuState(s.id);
+                          const key = `${goal.id}::${s.id}`;
+                          return (
+                            <div key={s.id} className="flex flex-wrap items-center gap-1.5 border rounded-lg px-2.5 py-1.5 bg-background">
+                              <span className="font-bold text-sm min-w-[60px]">{s.name}</span>
+                              {s.type && <span className={`text-[10px] font-bold ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                              {ss && (
+                                <Badge variant="outline" className={`text-[10px] ${
+                                  ss.state === 'done' ? 'border-green-400 text-green-700 bg-green-50'
+                                    : ss.state === 'partial' ? 'border-amber-400 text-amber-700 bg-amber-50'
+                                      : 'border-muted-foreground/40 text-muted-foreground'}`}>
+                                  {ss.state === 'done' ? '✓ 다 나감' : ss.state === 'partial' ? `◐ ~${ss.upto}` : '→ 미룸'}
+                                </Badge>
+                              )}
+                              <div className="ml-auto flex items-center gap-1">
+                                <Button size="sm" variant={ss?.state === 'done' ? 'default' : 'outline'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'done', undefined, [s.id])}>
+                                  다 나감
+                                </Button>
+                                <Input
+                                  placeholder="p.55"
+                                  className="h-7 w-16 text-center text-xs"
+                                  value={uptoDrafts[key] ?? ''}
+                                  onChange={e => setUptoDrafts(p => ({ ...p, [key]: e.target.value }))}
+                                />
+                                <Button size="sm" variant={ss?.state === 'partial' ? 'default' : 'outline'} className="h-7 text-xs px-2" onClick={() => {
+                                  const v = (uptoDrafts[key] || '').trim();
+                                  if (!v) { toast.error(`${s.name} — 어디까지 나갔는지 적어주세요`); return; }
+                                  setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`, [s.id]);
+                                }}>일부만</Button>
+                                <Button size="sm" variant={ss?.state === 'defer' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'defer', undefined, [s.id])}>미룸</Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </>
           )}
           <Button className="w-full" onClick={() => setStep(3)}>
             {isTestDay ? '복습 끝' : '진도 기록 끝'} — 마무리 <ArrowRight className="w-4 h-4 ml-1" />
