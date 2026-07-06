@@ -165,6 +165,35 @@ export function TodaySession() {
           teacher_id: c.teacher_id, name: nameOf.get(c.teacher_id) || '공동T',
           start_date: c.start_date, end_date: c.end_date,
         })));
+
+        // ── LESSON-HW-BRIDGE-V1 ── 과목, 다음 수업일, 오늘 확인해야 할 숙제 ──
+        const subj = (d as any).plan_tracks?.subject || '';
+        setSubject(subj);
+        // 다음 수업일: rhythm에 등록된 요일 중 오늘 이후 최초의 날짜
+        const rhythmDays = Object.keys(d.rhythm || {}).map(k => Number(k));
+        let nsd = '';
+        if (rhythmDays.length > 0) {
+          for (let i = 1; i <= 14; i++) {
+            const dt = new Date(); dt.setDate(dt.getDate() + i);
+            if (rhythmDays.includes(dt.getDay())) { nsd = dt.toISOString().slice(0, 10); break; }
+          }
+        }
+        setNextHwDue(nsd);
+        setNextSessionDate(nsd);
+
+        // 오늘 확인해야 할 숙제: 이 반 학생들 중, 과목 일치 + (마감이 오늘 포함 이전) + 아직 미확인
+        const studentIds = studs.map(s => s.id);
+        if (subj && studentIds.length > 0) {
+          const { data: hws } = await db.from('homework_assignments')
+            .select('id, student_id, content, assigned_date, end_date, check_status, result')
+            .in('student_id', studentIds)
+            .eq('subject', subj)
+            .in('check_status', ['pending', 'assigned'])
+            .lte('assigned_date', todayStr)
+            .order('assigned_date', { ascending: false })
+            .limit(300);
+          setOpenHws((hws || []) as OpenHw[]);
+        }
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
