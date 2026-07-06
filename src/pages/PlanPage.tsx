@@ -348,6 +348,12 @@ function PlanHome() {
           defaultTeacherId={coTeacherDesign.teacher_id}
           onClose={() => setCoTeacherDesign(null)} onDone={load} />
       )}
+      {rosterDesign && (
+        <RosterManagerModal open={!!rosterDesign} designId={rosterDesign.id}
+          trackId={rosterDesign.track_id} teachingMode={rosterDesign.teaching_mode}
+          title={rosterDesign.title}
+          onClose={() => setRosterDesign(null)} onDone={load} />
+      )}
 
       {/* 수업 대상 선택: 전체 그룹 / 개인만 */}
       <Dialog open={!!startFor} onOpenChange={o => !o && setStartFor(null)}>
