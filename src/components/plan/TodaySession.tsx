@@ -1178,6 +1178,36 @@ export function TodaySession() {
               }).join(' · ')}</p>
           </CardContent></Card>
 
+          {/* LESSON-HW-BRIDGE-V1: 다음 수업 숙제 부여 */}
+          <Card><CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs font-bold text-muted-foreground">📚 다음 수업 숙제 — 저장 시 학생별로 자동 부여</p>
+              <div className="ml-auto flex items-center gap-1.5">
+                <span className="text-[11px] text-muted-foreground">마감</span>
+                <Input type="date" className="h-7 w-36 text-xs" value={nextHwDue}
+                  onChange={e => setNextHwDue(e.target.value)} />
+              </div>
+            </div>
+            <Input placeholder="전체 공통 숙제 (예: 워크북 p.30~35 풀이)"
+              value={nextHwBulk} onChange={e => setNextHwBulk(e.target.value)} />
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">학생별로 다르게 부여 (선택)</summary>
+              <div className="mt-2 space-y-1.5">
+                {students.filter(s => !absent.has(s.id)).map(s => (
+                  <div key={s.id} className="flex items-center gap-1.5">
+                    <span className="font-bold text-xs min-w-[60px]">{s.name}</span>
+                    <Input placeholder={nextHwBulk || '(공통 없음)'} className="h-7 text-xs"
+                      value={nextHwPerStudent[s.id] ?? ''}
+                      onChange={e => setNextHwPerStudent(p => ({ ...p, [s.id]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+            </details>
+            <p className="text-[10px] text-muted-foreground">
+              비워두면 숙제 없이 저장. 학생별 칸이 비면 공통 숙제가 자동 적용됩니다.
+            </p>
+          </CardContent></Card>
+
           <Card><CardContent className="p-4 space-y-3">
             <div>
               <p className="text-xs font-bold text-muted-foreground mb-1.5">특이사항 — 필요할 때만</p>
