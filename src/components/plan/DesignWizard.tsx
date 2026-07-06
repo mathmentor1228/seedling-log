@@ -37,10 +37,12 @@ const CHECK_METHOD_OPTIONS = [
   { key: 'unit_test', label: '단원 마무리 테스트', desc: '단원 끝날 때' },
 ];
 
-export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: () => void; onCancel: () => void; trackOnly?: boolean }) {
   const { user, role } = useAuth();
-  const [step, setStep] = useState(0);
+  // 커리큘럼만 만들기 모드는 목표 편집(step 1)만 사용
+  const [step, setStep] = useState(trackOnly ? 1 : 0);
   const [saving, setSaving] = useState(false);
+  const [trackSubject, setTrackSubject] = useState('수학');
 
   // Q0 반 — 'existing' 기존 반 선택 / 'compose' 학생 골라 즉석 구성
   const [rosterMode, setRosterMode] = useState<'existing' | 'compose'>('existing');
@@ -461,6 +463,21 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     }
   }
 
+  async function saveTrackOnly() {
+    if (!user) return;
+    const validGoals = goals.filter(g => g.title.trim());
+    if (!trackTitle.trim()) { toast.error('트랙(커리큘럼) 이름을 적어주세요.'); return; }
+    if (validGoals.length === 0) { toast.error('목표를 하나 이상 추가해주세요.'); return; }
+    setSaving(true);
+    try {
+      await createTrackWithGoals(trackTitle.trim(), trackSubject, textbook, validGoals, user.id);
+      toast.success('커리큘럼 저장 완료 — 수업 설계할 때 이 트랙을 골라 쓸 수 있어요.');
+      onDone();
+    } catch (e: any) {
+      toast.error(`저장 실패: ${e.message || e}`);
+    } finally { setSaving(false); }
+  }
+
   async function save() {
     if (!user) return;
     if (rosterMode === 'existing' && !selectedClass) return;
@@ -526,7 +543,25 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
     <div className="max-w-6xl mx-auto grid gap-4 lg:grid-cols-[1fr_260px]">
       <div className="space-y-4 min-w-0">
 
+      {/* 커리큘럼만 만들기 헤더 */}
+      {trackOnly && (
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-bold">커리큘럼(트랙)만 만들기</h2>
+          <span className="text-sm text-muted-foreground">반·학생 없이 목표 목록만 저장 — 나중에 여러 반이 골라 씁니다</span>
+          <div className="flex items-center gap-1.5 ml-auto text-sm">
+            <span className="text-muted-foreground">과목</span>
+            <Select value={trackSubject} onValueChange={setTrackSubject}>
+              <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['수학', '영어', '국어', '과학', '사회'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* 진행 표시 */}
+      {!trackOnly && (
       <div className="flex items-center gap-1.5">
         {STEPS.map((label, i) => (
           <div key={i} className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -540,6 +575,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           </div>
         ))}
       </div>
+      )}
 
       <Card>
         <CardContent className="p-6">
@@ -669,7 +705,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-bold">Q1. 이번 시즌, 어디까지 갈까요?</h2>
+                <h2 className="text-lg font-bold">{trackOnly ? '목표 목록을 만드세요' : 'Q1. 이번 시즌, 어디까지 갈까요?'}</h2>
                 <p className="text-sm text-muted-foreground">
                   목표 목록을 만드세요 — 페이지까지 적어야 수업지·플래너가 정확해집니다.
                 </p>
@@ -677,6 +713,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   💡 만든 트랙은 같은 과목 선생님들과 자동으로 공유됩니다.
                 </p>
               </div>
+              {!trackOnly && (
               <div className="flex gap-2 flex-wrap">
                 <Button variant={trackChoice === 'new' ? 'default' : 'outline'} size="sm" onClick={() => setTrackChoice('new')}>
                   <Plus className="w-4 h-4 mr-1" />새 트랙 만들기
@@ -691,6 +728,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
                   </Button>
                 ))}
               </div>
+              )}
 
 
               {trackChoice === 'new' ? (
@@ -1061,28 +1099,39 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
       {/* 네비게이션 */}
       <div className="flex items-center gap-2 flex-wrap">
         <Button variant="ghost" onClick={onCancel}>취소</Button>
-        <Button variant="outline" onClick={saveDraft}>
-          <Save className="w-4 h-4 mr-1" />임시저장
-        </Button>
-        <div className="flex-1" />
-        {step > 0 && (
-          <Button variant="outline" onClick={() => setStep(s => s - 1)}>
-            <ArrowLeft className="w-4 h-4 mr-1" />이전
+        {!trackOnly && (
+          <Button variant="outline" onClick={saveDraft}>
+            <Save className="w-4 h-4 mr-1" />임시저장
           </Button>
         )}
-        {step < STEPS.length - 1 ? (
-          <Button disabled={!canNext()} onClick={() => setStep(s => s + 1)}>
-            다음<ArrowRight className="w-4 h-4 ml-1" />
+        <div className="flex-1" />
+        {trackOnly ? (
+          <Button disabled={saving} onClick={saveTrackOnly}>
+            <Check className="w-4 h-4 mr-1" />{saving ? '저장 중…' : '커리큘럼 저장'}
           </Button>
         ) : (
-          <Button disabled={saving || !targetDate || endGoalIdx < 0} onClick={save}>
-            <Check className="w-4 h-4 mr-1" />{saving ? '저장 중…' : '설계 저장'}
-          </Button>
+          <>
+            {step > 0 && (
+              <Button variant="outline" onClick={() => setStep(s => s - 1)}>
+                <ArrowLeft className="w-4 h-4 mr-1" />이전
+              </Button>
+            )}
+            {step < STEPS.length - 1 ? (
+              <Button disabled={!canNext()} onClick={() => setStep(s => s + 1)}>
+                다음<ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            ) : (
+              <Button disabled={saving || !targetDate || endGoalIdx < 0} onClick={save}>
+                <Check className="w-4 h-4 mr-1" />{saving ? '저장 중…' : '설계 저장'}
+              </Button>
+            )}
+          </>
         )}
       </div>
       </div>
 
-      {/* 사이드 셋리스트 — 임시저장된 설계 */}
+      {/* 사이드 셋리스트 — 임시저장된 설계 (커리큘럼만 만들기에선 숨김) */}
+      {!trackOnly && (
       <aside className="lg:sticky lg:top-4 lg:self-start">
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -1129,6 +1178,7 @@ export function DesignWizard({ onDone, onCancel }: { onDone: () => void; onCance
           </CardContent>
         </Card>
       </aside>
+      )}
     </div>
   );
 }

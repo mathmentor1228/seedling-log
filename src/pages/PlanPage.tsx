@@ -27,6 +27,7 @@ function PlanHome() {
   const [designs, setDesigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardTrackOnly, setWizardTrackOnly] = useState(false);
   const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
   const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
@@ -94,8 +95,9 @@ function PlanHome() {
   if (wizardOpen) {
     return (
       <DesignWizard
-        onDone={() => { setWizardOpen(false); load(); }}
-        onCancel={() => setWizardOpen(false)}
+        trackOnly={wizardTrackOnly}
+        onDone={() => { setWizardOpen(false); setWizardTrackOnly(false); load(); }}
+        onCancel={() => { setWizardOpen(false); setWizardTrackOnly(false); }}
       />
     );
   }
@@ -113,9 +115,14 @@ function PlanHome() {
         <span className="text-sm text-muted-foreground">
           {now.getMonth() + 1}월 {now.getDate()}일 ({WEEK_KO[todayDow]}) 기준
         </span>
-        <Button className="ml-auto" onClick={() => setWizardOpen(true)}>
-          <Plus className="w-4 h-4 mr-1" />새 수업 설계
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" onClick={() => { setWizardTrackOnly(true); setWizardOpen(true); }}>
+            <NotebookPen className="w-4 h-4 mr-1" />커리큘럼만 만들기
+          </Button>
+          <Button onClick={() => { setWizardTrackOnly(false); setWizardOpen(true); }}>
+            <Plus className="w-4 h-4 mr-1" />새 수업 설계
+          </Button>
+        </div>
       </div>
 
       {loading ? (
