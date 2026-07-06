@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Sparkles, Flag, Upload, ArrowUp, ArrowDown, CornerDownRight, Loader2, Save, ListChecks, FileText, Merge, GripVertical } from 'lucide-react';
 import {
   PlanTrack, PlanGoal, GoalInput, TeachingMode, StudentType, SessionRole,
-  fetchTracks, fetchGoals, createTrackWithGoals, createDesign,
+  fetchTracks, fetchGoals, createTrackWithGoals, updateTrackGoals, createDesign,
   DAY_LABELS, ROLE_LABELS, countProgressSessions,
 } from './planApi';
 
@@ -37,10 +37,11 @@ const CHECK_METHOD_OPTIONS = [
   { key: 'unit_test', label: '단원 마무리 테스트', desc: '단원 끝날 때' },
 ];
 
-export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: () => void; onCancel: () => void; trackOnly?: boolean }) {
+export function DesignWizard({ onDone, onCancel, trackOnly = false, editTrackId = null }: { onDone: () => void; onCancel: () => void; trackOnly?: boolean; editTrackId?: string | null }) {
   const { user, role } = useAuth();
-  // 커리큘럼만 만들기 모드는 목표 편집(step 1)만 사용
-  const [step, setStep] = useState(trackOnly ? 1 : 0);
+  const isTrackMode = trackOnly || !!editTrackId; // 커리큘럼(트랙)만 다루는 모드
+  // 커리큘럼 모드는 목표 편집(step 1)만 사용
+  const [step, setStep] = useState(isTrackMode ? 1 : 0);
   const [saving, setSaving] = useState(false);
   const [trackSubject, setTrackSubject] = useState('수학');
 
@@ -299,6 +300,21 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     fetchGoals(trackChoice).then(setExistingGoals).catch(() => setExistingGoals([]));
   }, [trackChoice]);
 
+  // 커리큘럼 수정 모드: 기존 트랙 로드
+  useEffect(() => {
+    if (!editTrackId) return;
+    (async () => {
+      try {
+        const tracks = await fetchTracks();
+        const t = tracks.find(x => x.id === editTrackId);
+        if (t) { setTrackTitle(t.title); setTextbook(t.textbook || ''); setTrackSubject(t.subject); }
+        const gs = await fetchGoals(editTrackId);
+        setGoals(gs.length ? gs.map(g => ({ id: g.id, title: g.title, pages: g.pages || '' })) : [{ title: '', pages: '' }]);
+      } catch { /* 무시 */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTrackId]);
+
   const effectiveGoals: { title: string; pages: string }[] = trackChoice === 'new'
     ? goals.filter(g => g.title.trim())
     : existingGoals.map(g => ({ title: g.title, pages: g.pages || '' }));
@@ -474,8 +490,15 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     if (validGoals.length === 0) { toast.error('목표를 하나 이상 추가해주세요.'); return; }
     setSaving(true);
     try {
-      await createTrackWithGoals(trackTitle.trim(), trackSubject, textbook, validGoals, user.id);
-      toast.success('커리큘럼 저장 완료 — 수업 설계할 때 이 트랙을 골라 쓸 수 있어요.');
+      if (editTrackId) {
+        const { deletedBlocked } = await updateTrackGoals(editTrackId, trackTitle.trim(), textbook, validGoals);
+        toast.success(deletedBlocked > 0
+          ? `커리큘럼 수정 완료 — 단, 이미 진도가 나간 목표 ${deletedBlocked}개는 삭제되지 않았어요.`
+          : '커리큘럼 수정 완료.');
+      } else {
+        await createTrackWithGoals(trackTitle.trim(), trackSubject, textbook, validGoals, user.id);
+        toast.success('커리큘럼 저장 완료 — 수업 설계할 때 이 트랙을 골라 쓸 수 있어요.');
+      }
       onDone();
     } catch (e: any) {
       toast.error(`저장 실패: ${e.message || e}`);
@@ -562,13 +585,15 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
       <div className="space-y-4 min-w-0">
 
       {/* 커리큘럼만 만들기 헤더 */}
-      {trackOnly && (
+      {isTrackMode && (
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-bold">커리큘럼(트랙)만 만들기</h2>
-          <span className="text-sm text-muted-foreground">반·학생 없이 목표 목록만 저장 — 나중에 여러 반이 골라 씁니다</span>
+          <h2 className="text-lg font-bold">{editTrackId ? '커리큘럼 수정' : '커리큘럼(트랙)만 만들기'}</h2>
+          <span className="text-sm text-muted-foreground">
+            {editTrackId ? '목표·페이지·순서를 고치고 저장하세요 (진도가 쌓인 목표는 삭제되지 않아요)' : '반·학생 없이 목표 목록만 저장 — 나중에 여러 반이 골라 씁니다'}
+          </span>
           <div className="flex items-center gap-1.5 ml-auto text-sm">
             <span className="text-muted-foreground">과목</span>
-            <Select value={trackSubject} onValueChange={setTrackSubject}>
+            <Select value={trackSubject} onValueChange={setTrackSubject} disabled={!!editTrackId}>
               <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {['수학', '영어', '국어', '과학'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -579,7 +604,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
       )}
 
       {/* 진행 표시 */}
-      {!trackOnly && (
+      {!isTrackMode && (
       <div className="flex items-center gap-1.5">
         {STEPS.map((label, i) => (
           <div key={i} className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -731,7 +756,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
                   💡 만든 트랙은 같은 과목 선생님들과 자동으로 공유됩니다.
                 </p>
               </div>
-              {!trackOnly && (
+              {!isTrackMode && (
               <div className="flex gap-2 flex-wrap">
                 <Button variant={trackChoice === 'new' ? 'default' : 'outline'} size="sm" onClick={() => setTrackChoice('new')}>
                   <Plus className="w-4 h-4 mr-1" />새 트랙 만들기
@@ -1173,15 +1198,15 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
       {/* 네비게이션 */}
       <div className="flex items-center gap-2 flex-wrap">
         <Button variant="ghost" onClick={onCancel}>취소</Button>
-        {!trackOnly && (
+        {!isTrackMode && (
           <Button variant="outline" onClick={saveDraft}>
             <Save className="w-4 h-4 mr-1" />임시저장
           </Button>
         )}
         <div className="flex-1" />
-        {trackOnly ? (
+        {isTrackMode ? (
           <Button disabled={saving} onClick={saveTrackOnly}>
-            <Check className="w-4 h-4 mr-1" />{saving ? '저장 중…' : '커리큘럼 저장'}
+            <Check className="w-4 h-4 mr-1" />{saving ? '저장 중…' : editTrackId ? '커리큘럼 수정 저장' : '커리큘럼 저장'}
           </Button>
         ) : (
           <>
@@ -1205,7 +1230,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
       </div>
 
       {/* 사이드 셋리스트 — 임시저장된 설계 (커리큘럼만 만들기에선 숨김) */}
-      {!trackOnly && (
+      {!isTrackMode && (
       <aside className="lg:sticky lg:top-4 lg:self-start">
         <Card>
           <CardContent className="p-4 space-y-3">

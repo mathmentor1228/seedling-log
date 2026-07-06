@@ -11,7 +11,7 @@ export type PlanTrack = {
 export type PlanGoal = {
   id: string; track_id: string; order_index: number; title: string; pages: string | null;
 };
-export type GoalInput = { title: string; pages: string };
+export type GoalInput = { id?: string; title: string; pages: string };
 
 export type TeachingMode = 'lecture' | 'abc' | 'individual';
 export type StudentType = 'A' | 'B' | 'C';
@@ -60,6 +60,39 @@ export async function fetchGoals(trackId: string): Promise<PlanGoal[]> {
     .select('*').eq('track_id', trackId).order('order_index');
   if (error) throw error;
   return data || [];
+}
+
+// PLAN-TRACK-EDIT-V1: 기존 트랙의 목표를 통째로 동기화 (수정/추가/삭제/순서변경)
+// goals: 편집된 순서대로. id 있으면 기존 목표, 없으면 신규. 목록에서 빠진 기존 목표는 삭제 시도.
+export async function updateTrackGoals(
+  trackId: string, title: string, textbook: string,
+  goals: { id?: string; title: string; pages: string }[],
+): Promise<{ deletedBlocked: number }> {
+  // 1) 트랙 메타 갱신
+  await db.from('plan_tracks').update({ title: title.trim(), textbook: textbook || null }).eq('id', trackId);
+
+  const existing = await fetchGoals(trackId);
+  const keepIds = new Set(goals.filter(g => g.id).map(g => g.id));
+  const toDelete = existing.filter(g => !keepIds.has(g.id));
+
+  // 2) 삭제 — 진도(plan_goal_progress) 참조 있는 목표는 못 지움(FK) → 건너뛰고 카운트
+  let deletedBlocked = 0;
+  for (const g of toDelete) {
+    const { error } = await db.from('plan_goals').delete().eq('id', g.id);
+    if (error) deletedBlocked++;
+  }
+
+  // 3) 순서대로 upsert (기존=update, 신규=insert)
+  for (let i = 0; i < goals.length; i++) {
+    const g = goals[i];
+    const row = { track_id: trackId, order_index: i + 1, title: g.title.trim(), pages: g.pages.trim() || null };
+    if (g.id) {
+      await db.from('plan_goals').update(row).eq('id', g.id);
+    } else {
+      await db.from('plan_goals').insert(row);
+    }
+  }
+  return { deletedBlocked };
 }
 
 export async function createTrackWithGoals(

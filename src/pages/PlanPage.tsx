@@ -5,7 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { DesignWizard } from '@/components/plan/DesignWizard';
 import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
-  fetchBriefings, fetchPlannerStatus, fetchTrackProgress,
+  fetchBriefings, fetchPlannerStatus, fetchTrackProgress, fetchTracks, fetchGoals,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
   PlanBriefing, PrinterStatus, PlanProgress,
 } from '@/components/plan/planApi';
@@ -58,6 +58,9 @@ function PlanHome() {
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardTrackOnly, setWizardTrackOnly] = useState(false);
+  const [editTrackId, setEditTrackId] = useState<string | null>(null);
+  const [trackListOpen, setTrackListOpen] = useState(false);
+  const [tracks, setTracks] = useState<any[]>([]);
   const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
   const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
   const [rosterDesign, setRosterDesign] = useState<{ id: string; track_id: string; teaching_mode: string; title: string } | null>(null);
@@ -133,12 +136,25 @@ function PlanHome() {
     return { todayDesigns: today, otherDesigns: other };
   }, [designs, todayDow, todayIntensive]);
 
+  async function openTrackList() {
+    setTrackListOpen(true);
+    try {
+      const ts = await fetchTracks();
+      const withCounts = await Promise.all(ts.map(async (t: any) => {
+        const gs = await fetchGoals(t.id).catch(() => []);
+        return { ...t, goalCount: gs.length };
+      }));
+      setTracks(withCounts);
+    } catch { setTracks([]); }
+  }
+
   if (wizardOpen) {
     return (
       <DesignWizard
         trackOnly={wizardTrackOnly}
-        onDone={() => { setWizardOpen(false); setWizardTrackOnly(false); load(); }}
-        onCancel={() => { setWizardOpen(false); setWizardTrackOnly(false); }}
+        editTrackId={editTrackId}
+        onDone={() => { setWizardOpen(false); setWizardTrackOnly(false); setEditTrackId(null); load(); }}
+        onCancel={() => { setWizardOpen(false); setWizardTrackOnly(false); setEditTrackId(null); }}
       />
     );
   }
@@ -169,11 +185,14 @@ function PlanHome() {
             {now.getMonth() + 1}월 {now.getDate()}일 ({WEEK_KO[todayDow]})
           </span>
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" onClick={() => { setWizardTrackOnly(true); setWizardOpen(true); }}>
-            <NotebookPen className="w-4 h-4 mr-1" />커리큘럼만 만들기
+        <div className="ml-auto flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={openTrackList}>
+            <NotebookPen className="w-4 h-4 mr-1" />커리큘럼 관리
           </Button>
-          <Button onClick={() => { setWizardTrackOnly(false); setWizardOpen(true); }}>
+          <Button variant="outline" onClick={() => { setWizardTrackOnly(true); setEditTrackId(null); setWizardOpen(true); }}>
+            <Plus className="w-4 h-4 mr-1" />커리큘럼 만들기
+          </Button>
+          <Button onClick={() => { setWizardTrackOnly(false); setEditTrackId(null); setWizardOpen(true); }}>
             <Plus className="w-4 h-4 mr-1" />새 수업 설계
           </Button>
         </div>
@@ -450,6 +469,29 @@ function PlanHome() {
             <Button className="w-full" disabled={pickIds.size === 0} onClick={() => goStart(true)}>
               선택한 {pickIds.size}명과 개인 수업 시작
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 커리큘럼 관리 — 트랙 목록 → 수정 */}
+      <Dialog open={trackListOpen} onOpenChange={setTrackListOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>커리큘럼 관리</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">만든 커리큘럼(트랙)을 골라 목표·페이지·순서를 실시간으로 수정할 수 있어요.</p>
+          <div className="max-h-80 overflow-y-auto rounded-lg border divide-y">
+            {tracks.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">아직 만든 커리큘럼이 없습니다.</p>
+            ) : tracks.map(t => (
+              <button key={t.id}
+                className="flex items-center justify-between w-full px-3.5 py-2.5 text-left hover:bg-muted/40"
+                onClick={() => { setTrackListOpen(false); setEditTrackId(t.id); setWizardTrackOnly(false); setWizardOpen(true); }}>
+                <span>
+                  <span className="font-medium text-sm">{t.title}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{t.subject} · 목표 {t.goalCount}개{t.textbook ? ` · ${t.textbook}` : ''}</span>
+                </span>
+                <span className="text-xs text-primary font-semibold">수정 →</span>
+              </button>
+            ))}
           </div>
         </DialogContent>
       </Dialog>
