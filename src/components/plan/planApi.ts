@@ -79,13 +79,24 @@ export async function createTrackWithGoals(
 
 export async function createDesign(
   payload: DesignPayload,
-  students: { student_id: string; student_type: StudentType | null }[],
+  students: {
+    student_id: string;
+    student_type: StudentType | null;
+    start_goal_id?: string | null;
+    joined_at?: string | null;
+  }[],
 ): Promise<string> {
   const { data: design, error: dErr } = await db.from('plan_designs')
     .insert({ ...payload, status: 'active' }).select().single();
   if (dErr) throw dErr;
   if (students.length > 0) {
-    const rows = students.map(s => ({ design_id: design.id, ...s }));
+    const rows = students.map(s => ({
+      design_id: design.id,
+      student_id: s.student_id,
+      student_type: s.student_type,
+      start_goal_id: s.start_goal_id ?? null,
+      joined_at: s.joined_at ?? null,
+    }));
     const { error: sErr } = await db.from('plan_students').insert(rows);
     if (sErr) throw sErr;
   }

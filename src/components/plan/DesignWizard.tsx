@@ -73,6 +73,9 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
   const [mode, setMode] = useState<TeachingMode>('lecture');
   const [concepts, setConcepts] = useState<Record<StudentType, string>>({ A: '', B: '', C: '' });
   const [studentTypes, setStudentTypes] = useState<Record<string, StudentType>>({});
+  // PLAN-ROSTER-MIXED-PROGRESS-V1: 학생별 시작 진도 위치
+  // 값: '__begin__' | goal.id (기존 트랙) | `new:${index}` (새 트랙 goals 배열 index)
+  const [studentStartGoal, setStudentStartGoal] = useState<Record<string, string>>({});
   const [angleMode, setAngleMode] = useState<'manual' | 'ai' | 'off'>('manual');
 
   // Q3 룰셋
@@ -117,7 +120,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     return {
       rosterMode, classId, pickedIds, composeSubject, composeGroupName, composeDays,
       trackChoice, trackTitle, textbook, goals,
-      mode, concepts, studentTypes, angleMode,
+      mode, concepts, studentTypes, studentStartGoal, angleMode,
       methods, cycle, cutline, cutlines,
       failAction, escalateAfter,
       rhythm, endGoalIdx, targetDate,
@@ -138,6 +141,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     if (s.mode) setMode(s.mode);
     if (s.concepts) setConcepts(s.concepts);
     if (s.studentTypes) setStudentTypes(s.studentTypes);
+    if (s.studentStartGoal) setStudentStartGoal(s.studentStartGoal);
     if (s.angleMode) setAngleMode(s.angleMode);
     if (Array.isArray(s.methods)) setMethods(s.methods);
     if (typeof s.cycle === 'string') setCycle(s.cycle);
@@ -522,10 +526,24 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
         rhythm,
         end_goal_id: endGoal?.id || null,
         target_date: targetDate,
-      }, students.map(s => ({
-        student_id: s.id,
-        student_type: mode === 'abc' ? (studentTypes[s.id] || 'B') : null,
-      })));
+      }, students.map(s => {
+        const key = studentStartGoal[s.id];
+        let startGoalId: string | null = null;
+        if (key && key !== '__begin__') {
+          if (key.startsWith('new:')) {
+            const idx = Number(key.slice(4));
+            startGoalId = goalRows[idx]?.id || null;
+          } else {
+            startGoalId = key;
+          }
+        }
+        return {
+          student_id: s.id,
+          student_type: mode === 'abc' ? (studentTypes[s.id] || 'B') : null,
+          start_goal_id: startGoalId,
+          joined_at: startGoalId ? new Date().toISOString().slice(0, 10) : null,
+        };
+      }));
       toast.success('수업 설계 저장 완료 — 이제 매 수업이 자동으로 준비됩니다.');
       removeCurrentDraftOnFinalize();
       onDone();
@@ -907,6 +925,62 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
                   </button>
                 ))}
               </div>
+
+              {/* PLAN-ROSTER-MIXED-PROGRESS-V1: 학생별 시작 진도 위치 */}
+              {students.length > 0 && (() => {
+                const goalOptions: { key: string; label: string }[] = [{ key: '__begin__', label: '🌱 커리큘럼 처음부터' }];
+                if (trackChoice === 'new') {
+                  goals.forEach((g, i) => {
+                    if (g.title.trim()) goalOptions.push({ key: `new:${i}`, label: `${i + 1}. ${g.title}${g.pages ? ` (${g.pages})` : ''}` });
+                  });
+                } else {
+                  existingGoals.forEach(g => {
+                    goalOptions.push({ key: g.id, label: `${g.order_index}. ${g.title}${g.pages ? ` (${g.pages})` : ''}` });
+                  });
+                }
+                const hasGoals = goalOptions.length > 1;
+                const mixedCount = students.filter(s => (studentStartGoal[s.id] || '__begin__') !== '__begin__').length;
+                return (
+                  <div className="border-t pt-4 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">🎯 학생별 시작 진도</p>
+                      <span className="text-xs text-muted-foreground">
+                        모두 처음부터가 기본 — 이미 앞선 진도에 있는 학생은 시작 위치를 지정하세요
+                      </span>
+                      {mixedCount > 0 && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          중도 합류 {mixedCount}명
+                        </Badge>
+                      )}
+                    </div>
+                    {!hasGoals ? (
+                      <p className="text-xs text-muted-foreground italic">Q1에서 목차를 먼저 채워주세요.</p>
+                    ) : (
+                      <div className="rounded-lg border divide-y">
+                        {students.map(s => {
+                          const v = studentStartGoal[s.id] || '__begin__';
+                          const isMid = v !== '__begin__';
+                          return (
+                            <div key={s.id} className={`flex items-center gap-2 p-2 ${isMid ? 'bg-emerald-50/50' : ''}`}>
+                              <span className="min-w-[80px] text-sm font-medium">{s.name}</span>
+                              <Select value={v}
+                                onValueChange={val => setStudentStartGoal(p => ({ ...p, [s.id]: val }))}>
+                                <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {goalOptions.map(o => (
+                                    <SelectItem key={o.key} value={o.key} className="text-xs">{o.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {mode === 'abc' && (
                 <div className="space-y-3 border-t pt-4">
                   <p className="text-sm font-medium">각 유형의 컨셉을 한 줄로 — 그리고 학생을 배정하세요 (이름 클릭 = 유형 순환)</p>
