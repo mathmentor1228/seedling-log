@@ -134,7 +134,7 @@ export function TodaySession() {
         if ((memoRes.data || []).length > 0) setMemo(memoRes.data[0]);
 
         // 오늘 세션 확보 (있으면 재사용 — 특강으로 미리 생성된 세션 포함)
-        const role: SessionRole = (d.rhythm || {})[String(new Date().getDay())] || 'progress';
+        const role: SessionRole = (d.rhythm || {})[String(sessionDay)] || 'progress';
         const { data: existing } = await db.from('plan_sessions')
           .select('id, note, intensive_id, assigned_teacher_id')
           .eq('design_id', designId).eq('session_date', todayStr).maybeSingle();
