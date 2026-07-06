@@ -47,14 +47,19 @@ function PlanHome() {
   }
   function goStart(individual: boolean) {
     if (!startFor) return;
-    const only = individual && pickIds.size > 0 ? `?only=${Array.from(pickIds).join(',')}` : '';
-    navigate(`/plan/${startFor.id}/today${only}`);
+    const params = new URLSearchParams();
+    if (individual && pickIds.size > 0) params.set('only', Array.from(pickIds).join(','));
+    if (!isRealToday) params.set('date', selectedDate);
+    const qs = params.toString();
+    navigate(`/plan/${startFor.id}/today${qs ? `?${qs}` : ''}`);
   }
 
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const todayDow = now.getDay();
-  const periodMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const realToday = new Date();
+  const realTodayStr = realToday.toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState<string>(realTodayStr);
+  const isRealToday = selectedDate === realTodayStr;
+  const now = useMemo(() => new Date(selectedDate + 'T12:00:00'), [selectedDate]);
+  const todayStr = selectedDate;
 
   async function load() {
     setLoading(true);
