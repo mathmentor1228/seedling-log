@@ -321,14 +321,14 @@ export function TodaySession() {
     }
   }
 
-  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string) {
+  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string, onlyStudentIds?: string[]) {
     if (!sessionId) return;
-    const presentIds = students.filter(s => !absent.has(s.id)).map(s => s.id);
-    const absentIds = students.filter(s => absent.has(s.id)).map(s => s.id);
+    const targetIds = onlyStudentIds ?? students.filter(s => !absent.has(s.id)).map(s => s.id);
+    const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)).map(s => s.id);
     const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred' } as const;
     try {
       const rows = [
-        ...presentIds.map(sid => ({
+        ...targetIds.map(sid => ({
           design_id: designId, student_id: sid, goal_id: goalId,
           status: statusMap[state], partial_upto: state === 'partial' ? (upto || null) : null,
           session_id: sessionId, advanced_at: state !== 'defer' ? new Date().toISOString() : null,
@@ -341,10 +341,22 @@ export function TodaySession() {
       const { error } = await db.from('plan_goal_progress')
         .upsert(rows, { onConflict: 'design_id,student_id,goal_id' });
       if (error) throw error;
-      setGoalStates(p => ({ ...p, [goalId]: { state, upto: upto || '' } }));
-      // 로컬 progress 갱신
+      // 학생별 상태 저장 (bulk이면 모두 같은 상태로)
+      setPerStudent(prev => {
+        const next = { ...prev };
+        const cur = { ...(next[goalId] || {}) };
+        targetIds.forEach(sid => { cur[sid] = { state, upto: upto || '' }; });
+        next[goalId] = cur;
+        return next;
+      });
+      // 전체 대상이면 그룹 상태도 세팅 (헤더 배지 유지)
+      if (!onlyStudentIds) {
+        setGoalStates(p => ({ ...p, [goalId]: { state, upto: upto || '' } }));
+      }
+      // 로컬 progress 갱신 — 이번에 건드린 학생만 교체
       setProgress(prev => {
-        const rest = prev.filter(p => p.goal_id !== goalId);
+        const touched = new Set(rows.map(r => `${r.student_id}::${r.goal_id}`));
+        const rest = prev.filter(p => !touched.has(`${p.student_id}::${p.goal_id}`));
         return [...rest, ...rows.map(r => ({
           student_id: r.student_id, goal_id: r.goal_id, status: r.status, partial_upto: (r as any).partial_upto || null,
         }))];
