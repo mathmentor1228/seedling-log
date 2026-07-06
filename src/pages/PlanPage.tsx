@@ -254,6 +254,10 @@ function PlanHome() {
                           <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
                             <UserCheck className="w-4 h-4" />
                           </Button>
+                          <Button variant="outline" title="명단 관리 (추가·제외)"
+                            onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
+                            <UserCog className="w-4 h-4" />
+                          </Button>
                           <Button asChild variant="outline" title="학생 플래너 인쇄">
                             <Link to={`/plan/${d.id}/planner`}><Printer className="w-4 h-4" /></Link>
                           </Button>
