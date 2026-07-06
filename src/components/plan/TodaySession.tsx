@@ -741,6 +741,11 @@ export function TodaySession() {
             )}
           </div>
         </div>
+        {isPastDate && (
+          <div className="mt-3 rounded-lg bg-amber-500/10 border border-amber-400/40 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+            📅 <b>{sessionDate}</b> 수업 기록을 이어서 작성 중입니다 — 그 날 있었던 진도·쪽지·숙제를 그대로 채워넣으면 수업일지에 반영돼요.
+          </div>
+        )}
         {onlyIds && (
           <div className="mt-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary flex items-center gap-1.5">
             <UserCheck className="w-4 h-4" />
