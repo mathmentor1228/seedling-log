@@ -15,9 +15,10 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog } from 'lucide-react';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
+import { RosterManagerModal } from '@/components/plan/RosterManagerModal';
 
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
