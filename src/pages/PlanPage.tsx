@@ -5,9 +5,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { DesignWizard } from '@/components/plan/DesignWizard';
 import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
-  fetchBriefings, fetchPlannerStatus,
+  fetchBriefings, fetchPlannerStatus, fetchTrackProgress,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
-  PlanBriefing, PrinterStatus,
+  PlanBriefing, PrinterStatus, PlanProgress,
 } from '@/components/plan/planApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,35 @@ import { RosterManagerModal } from '@/components/plan/RosterManagerModal';
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
+// 커리큘럼 진행 위치 — 눈에 띄는 진도 막대
+function TrackProgressBar({ p }: { p?: PlanProgress }) {
+  if (!p || p.total === 0) return null;
+  const pct = Math.round((p.done / p.total) * 100);
+  // 학생별 편차: 나간 수의 최대·최소 차이
+  const dones = p.perStudent.map(s => s.done);
+  const spread = dones.length > 1 ? Math.max(...dones) - Math.min(...dones) : 0;
+  return (
+    <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-xs font-bold text-emerald-800">
+          🌱 {p.done}/{p.total} 목표 · {pct}%
+        </span>
+        {p.currentTitle && (
+          <span className="text-[11px] text-emerald-700 truncate max-w-[55%]" title={p.currentTitle}>
+            지금: {p.currentTitle}
+          </span>
+        )}
+      </div>
+      <div className="h-2.5 rounded-full bg-emerald-100 overflow-hidden">
+        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      {spread >= 2 && (
+        <p className="text-[11px] text-amber-700 mt-1">⚠ 학생별 진도 편차 {spread}단원 — 개인별 확인 권장</p>
+      )}
+    </div>
+  );
+}
+
 function PlanHome() {
   const navigate = useNavigate();
   const [designs, setDesigns] = useState<any[]>([]);
@@ -37,6 +66,7 @@ function PlanHome() {
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
   const [briefings, setBriefings] = useState<Record<string, PlanBriefing>>({});
   const [printStatus, setPrintStatus] = useState<Record<string, PrinterStatus>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, PlanProgress>>({});
   // 대상 선택(전체/개인) 다이얼로그
   const [startFor, setStartFor] = useState<{ id: string; title: string; roster: RosterStudent[] } | null>(null);
   const [pickIds, setPickIds] = useState<Set<string>>(new Set());
@@ -69,16 +99,18 @@ function PlanHome() {
       const list = await fetchDesigns();
       setDesigns(list);
       const ids = list.map((d: any) => d.id);
-      const [rosterMap, intensiveToday, briefMap, printMap] = await Promise.all([
+      const [rosterMap, intensiveToday, briefMap, printMap, progMap] = await Promise.all([
         fetchRostersFor(ids),
         fetchTodayIntensiveDesignIds(todayStr),
         fetchBriefings(ids),
         fetchPlannerStatus(list.map((d: any) => ({ id: d.id, updated_at: d.updated_at })), periodMonth),
+        fetchTrackProgress(list.map((d: any) => ({ id: d.id, track_id: d.track_id, end_goal_id: d.end_goal_id }))),
       ]);
       setRosters(rosterMap);
       setTodayIntensive(intensiveToday);
       setBriefings(briefMap);
       setPrintStatus(printMap);
+      setProgressMap(progMap);
       const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
       await Promise.all(list.map(async (d: any) => {
         const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
@@ -244,6 +276,7 @@ function PlanHome() {
                         <p className="text-xs text-muted-foreground">
                           {roster.length}명 · 트랙: {d.plan_tracks?.title}
                         </p>
+                        <TrackProgressBar p={progressMap[d.id]} />
                         {(() => {
                           const b = briefings[d.id];
                           if (!b) return null;
@@ -323,6 +356,7 @@ function PlanHome() {
                         {rhythmEntries.map(([day, role]) => `${DAY_LABELS[Number(day)]} ${ROLE_LABELS[role] || role}`).join(' · ')}
                         {d.target_date && <span>· ~{d.target_date}</span>}
                       </p>
+                      <TrackProgressBar p={progressMap[d.id]} />
                       {(extMap[d.id]?.intensives?.length || 0) > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {extMap[d.id].intensives.map(it => (

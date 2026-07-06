@@ -169,6 +169,56 @@ export async function fetchRostersFor(designIds: string[]): Promise<Record<strin
   return out;
 }
 
+// PLAN-PROGRESS-VIZ-V1: 설계별 커리큘럼 진행 위치 (어디쯤 왔나)
+export type PlanProgress = {
+  total: number;          // 끝점까지 목표 수
+  done: number;           // 나간(진행/확인) 목표 수
+  currentIdx: number;     // 그룹 현재 위치 (0-based, -1=시작 전)
+  currentTitle: string | null;  // 지금 나가는 중인/다음 목표
+  perStudent: { studentId: string; done: number }[]; // 학생별 나간 수 (편차 표시용)
+};
+export async function fetchTrackProgress(
+  designs: { id: string; track_id: string; end_goal_id?: string | null }[],
+): Promise<Record<string, PlanProgress>> {
+  const out: Record<string, PlanProgress> = {};
+  if (designs.length === 0) return out;
+  const trackIds = Array.from(new Set(designs.map(d => d.track_id)));
+  const designIds = designs.map(d => d.id);
+  const [goalsRes, progRes] = await Promise.all([
+    db.from('plan_goals').select('id, track_id, order_index, title').in('track_id', trackIds).order('order_index'),
+    db.from('plan_goal_progress').select('design_id, student_id, goal_id, status').in('design_id', designIds),
+  ]);
+  const goalsByTrack = new Map<string, any[]>();
+  ((goalsRes.data || []) as any[]).forEach(g => { (goalsByTrack.get(g.track_id) || goalsByTrack.set(g.track_id, []).get(g.track_id))!.push(g); });
+  const ADVANCED = new Set(['advanced', 'partial', 'verified_ok', 'verified_weak']);
+  const progByDesign = new Map<string, any[]>();
+  ((progRes.data || []) as any[]).forEach(p => { (progByDesign.get(p.design_id) || progByDesign.set(p.design_id, []).get(p.design_id))!.push(p); });
+
+  for (const d of designs) {
+    const allGoals = (goalsByTrack.get(d.track_id) || []);
+    const endIdx = d.end_goal_id ? allGoals.findIndex(g => g.id === d.end_goal_id) : allGoals.length - 1;
+    const trackGoals = allGoals.slice(0, (endIdx >= 0 ? endIdx : allGoals.length - 1) + 1);
+    const total = trackGoals.length;
+    const prog = progByDesign.get(d.id) || [];
+    const advancedGoalIds = new Set(prog.filter(p => ADVANCED.has(p.status)).map(p => p.goal_id));
+    // 그룹 현재 위치 = advanced된 목표 중 가장 뒤 index
+    let currentIdx = -1;
+    trackGoals.forEach((g, i) => { if (advancedGoalIds.has(g.id)) currentIdx = i; });
+    const done = trackGoals.filter(g => advancedGoalIds.has(g.id)).length;
+    const currentTitle = currentIdx >= 0 && currentIdx < trackGoals.length
+      ? trackGoals[Math.min(currentIdx + 1, trackGoals.length - 1)]?.title || trackGoals[currentIdx]?.title
+      : (trackGoals[0]?.title || null);
+    // 학생별 나간 수 (편차)
+    const perMap = new Map<string, Set<string>>();
+    prog.filter(p => ADVANCED.has(p.status)).forEach(p => {
+      (perMap.get(p.student_id) || perMap.set(p.student_id, new Set()).get(p.student_id))!.add(p.goal_id);
+    });
+    const perStudent = Array.from(perMap.entries()).map(([studentId, gset]) => ({ studentId, done: gset.size }));
+    out[d.id] = { total, done, currentIdx, currentTitle, perStudent };
+  }
+  return out;
+}
+
 // 오늘 특강 세션이 있는 설계 id 집합 (materialize된 plan_sessions 기준)
 export async function fetchTodayIntensiveDesignIds(todayStr: string): Promise<Set<string>> {
   const { data } = await db.from('plan_sessions')
