@@ -674,16 +674,20 @@ export function TodaySession() {
     { n: 3, t: '마무리', s: '메모 · 저장' },
   ];
 
-  const todayRole = ((design.rhythm || {})[String(new Date().getDay())] || 'progress') as SessionRole;
+  const todayRole = ((design.rhythm || {})[String(sessionDay)] || 'progress') as SessionRole;
+  const sessionDateObj = new Date(sessionDate + 'T12:00:00');
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       {/* 헤더 카드 */}
-      <div className="rounded-2xl border bg-gradient-to-br from-primary/8 to-transparent p-5">
+      <div className={`rounded-2xl border bg-gradient-to-br p-5 ${isPastDate ? 'from-amber-500/10 to-transparent border-amber-400/40' : 'from-primary/8 to-transparent'}`}>
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
-              <Badge className="text-[11px]">{onlyIds ? '개인 수업' : '오늘 수업'}</Badge>
+              <Badge className="text-[11px]">{onlyIds ? '개인 수업' : isPastDate ? '과거 날짜 기입' : '오늘 수업'}</Badge>
+              {isPastDate && (
+                <Badge variant="outline" className="border-amber-500 text-amber-700 text-[11px]">📅 {sessionDate}</Badge>
+              )}
               {sessionMeta.intensive_id && (
                 <Badge variant="outline" className="border-primary/60 text-primary text-[11px]">✨ 특강 회차</Badge>
               )}
@@ -691,7 +695,7 @@ export function TodaySession() {
             </div>
             <h1 className="text-xl font-extrabold tracking-tight leading-tight">{design.title}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {new Date().getMonth() + 1}월 {new Date().getDate()}일 · {students.length}명
+              {sessionDateObj.getMonth() + 1}월 {sessionDateObj.getDate()}일 ({['일','월','화','수','목','금','토'][sessionDay]}) · {students.length}명
               {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
               {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회)`}
             </p>
