@@ -73,6 +73,9 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
   const [mode, setMode] = useState<TeachingMode>('lecture');
   const [concepts, setConcepts] = useState<Record<StudentType, string>>({ A: '', B: '', C: '' });
   const [studentTypes, setStudentTypes] = useState<Record<string, StudentType>>({});
+  // PLAN-ROSTER-MIXED-PROGRESS-V1: 학생별 시작 진도 위치
+  // 값: '__begin__' | goal.id (기존 트랙) | `new:${index}` (새 트랙 goals 배열 index)
+  const [studentStartGoal, setStudentStartGoal] = useState<Record<string, string>>({});
   const [angleMode, setAngleMode] = useState<'manual' | 'ai' | 'off'>('manual');
 
   // Q3 룰셋
@@ -117,7 +120,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     return {
       rosterMode, classId, pickedIds, composeSubject, composeGroupName, composeDays,
       trackChoice, trackTitle, textbook, goals,
-      mode, concepts, studentTypes, angleMode,
+      mode, concepts, studentTypes, studentStartGoal, angleMode,
       methods, cycle, cutline, cutlines,
       failAction, escalateAfter,
       rhythm, endGoalIdx, targetDate,
@@ -138,6 +141,7 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
     if (s.mode) setMode(s.mode);
     if (s.concepts) setConcepts(s.concepts);
     if (s.studentTypes) setStudentTypes(s.studentTypes);
+    if (s.studentStartGoal) setStudentStartGoal(s.studentStartGoal);
     if (s.angleMode) setAngleMode(s.angleMode);
     if (Array.isArray(s.methods)) setMethods(s.methods);
     if (typeof s.cycle === 'string') setCycle(s.cycle);
