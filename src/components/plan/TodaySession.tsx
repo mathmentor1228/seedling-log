@@ -268,7 +268,7 @@ export function TodaySession() {
     return trackGoals[groupPosIdx];
   }, [groupPosIdx, trackGoals, progress]);
 
-  const isTestDay = design && ((design.rhythm || {})[String(new Date().getDay())] === 'test_day');
+  const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
 
   // 게릴라 학생을 명단에 합쳐 출결·쪽지에 표시(진도 기록에는 미포함)
