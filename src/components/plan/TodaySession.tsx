@@ -207,7 +207,7 @@ export function TodaySession() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [designId]);
+  }, [designId, sessionDate]);
 
   // ── 계산: 끝점까지의 목표, 그룹 현재 위치, 오늘 분량 ──
   const endIdx = useMemo(() => {
