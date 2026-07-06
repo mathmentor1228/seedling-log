@@ -495,6 +495,40 @@ export function TodaySession() {
     } catch (e: any) { toast.error(e.message || String(e)); }
   }
 
+  // 학생별 오늘 진도 요약 (수업일지 lesson_range 생성용)
+  function summarizeStudentToday(sid: string): {
+    range: string; nextGoalTitle: string | null; hadProgress: boolean;
+  } {
+    const donePartial: { g: PlanGoal; state: 'done' | 'partial'; upto?: string }[] = [];
+    let lastIdx = -1;
+    for (let i = todayStartIdx; i < trackGoals.length; i++) {
+      const g = trackGoals[i];
+      const local = perStudent[g.id]?.[sid];
+      const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
+      const state = local?.state
+        ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
+          : p.status === 'partial' ? 'partial' : null) : null);
+      if (state === 'done') { donePartial.push({ g, state: 'done' }); lastIdx = i; }
+      else if (state === 'partial') {
+        donePartial.push({ g, state: 'partial', upto: local?.upto || p?.partial_upto || '' });
+        lastIdx = i; break;
+      } else break;
+    }
+    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[todayStartIdx]?.title || null, hadProgress: false };
+    const first = donePartial[0].g;
+    const last = donePartial[donePartial.length - 1];
+    const startPage = extractPageRange(first.pages)?.start;
+    const endPage = last.state === 'partial'
+      ? (parsePageInput(last.upto || '') ?? extractPageRange(last.g.pages)?.end)
+      : extractPageRange(last.g.pages)?.end;
+    const goalPart = donePartial.length === 1
+      ? `${first.order_index}. ${first.title}${last.state === 'partial' ? ` (일부 ~${last.upto || `p.${endPage}`})` : ''}`
+      : `${first.order_index}. ${first.title} ~ ${last.g.order_index}. ${last.g.title}${last.state === 'partial' ? ` (일부)` : ''}`;
+    const pagePart = startPage != null && endPage != null ? ` · p.${startPage}~p.${endPage}` : '';
+    const nextGoal = trackGoals[lastIdx + 1]?.title || null;
+    return { range: `${goalPart}${pagePart}`, nextGoalTitle: nextGoal, hadProgress: true };
+  }
+
   async function saveDay() {
     if (!sessionId) return;
     setSaving(true);
@@ -508,8 +542,111 @@ export function TodaySession() {
           design_id: designId, session_id: sessionId, content: nextMemo.trim(),
         });
       }
+
+      // ── LESSON-HW-BRIDGE-V1 ── 수업일지·숙제 자동 반영 ──
+      let lrCount = 0, hwCheckCount = 0, hwNewCount = 0;
+      if (subject) {
+        const teacherId = sessionMeta.assigned_teacher_id || design.teacher_id;
+        // 1) 숙제 확인: hwChecks 반영
+        const hwCheckRows = Object.entries(hwChecks);
+        for (const [hwId, v] of hwCheckRows) {
+          const { error: hwErr } = await db.from('homework_assignments').update({
+            check_status: 'checked',
+            result: v.result,
+            checked_by: user?.id || null,
+            checked_at: new Date().toISOString(),
+            notes: v.note || null,
+          }).eq('id', hwId);
+          if (!hwErr) hwCheckCount++;
+        }
+
+        // 학생별 숙제 상태 집계
+        const hwByStudent = new Map<string, 'completed' | 'partial' | 'not_done' | 'none_assigned'>();
+        for (const s of students) {
+          if (absent.has(s.id)) continue;
+          const hwsForS = openHws.filter(h => h.student_id === s.id);
+          if (hwsForS.length === 0) { hwByStudent.set(s.id, 'none_assigned'); continue; }
+          const results = hwsForS.map(h => hwChecks[h.id]?.result || (h.result as any) || null);
+          if (results.some(r => r === 'not_done')) hwByStudent.set(s.id, 'not_done');
+          else if (results.some(r => r === 'partial')) hwByStudent.set(s.id, 'partial');
+          else if (results.every(r => r === 'completed')) hwByStudent.set(s.id, 'completed');
+          else hwByStudent.set(s.id, 'none_assigned');
+        }
+
+        // 2) 학생별 수업일지 upsert (출결 학생만)
+        for (const s of students) {
+          const isAbsent = absent.has(s.id);
+          const summary = summarizeStudentToday(s.id);
+          const hwStatus = isAbsent ? 'none_assigned' : (hwByStudent.get(s.id) || 'none_assigned');
+          const range = isAbsent
+            ? '결석'
+            : (summary.range || (design.title ? `${design.title} 진행` : '수업 진행'));
+
+          const quiz = quizSaved[s.id];
+          const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+
+          // 기존 lesson_record 있는지 확인
+          const { data: existingLR } = await db.from('lesson_records')
+            .select('id')
+            .eq('teacher_id', teacherId)
+            .eq('student_id', s.id)
+            .eq('subject', subject)
+            .eq('lesson_date', todayStr)
+            .maybeSingle();
+
+          const payload: any = {
+            teacher_id: teacherId,
+            student_id: s.id,
+            class_id: design.class_id || null,
+            subject,
+            lesson_date: todayStr,
+            lesson_range: range,
+            homework_status: hwStatus,
+            next_lesson_goal: summary.nextGoalTitle || null,
+            notes: note.trim() || null,
+            understanding_score: understanding,
+            attendance_status: isAbsent ? ['결석'] : ['출석'],
+          };
+
+          let lessonRecordId: string | null = null;
+          if (existingLR?.id) {
+            lessonRecordId = existingLR.id;
+            await db.from('lesson_records').update(payload).eq('id', existingLR.id);
+          } else {
+            const { data: ins } = await db.from('lesson_records').insert(payload).select('id').single();
+            lessonRecordId = ins?.id || null;
+          }
+          if (lessonRecordId) lrCount++;
+
+          // 3) 다음 수업 숙제 부여 (결석자 제외)
+          if (!isAbsent) {
+            const hwContent = (nextHwPerStudent[s.id] ?? nextHwBulk ?? '').trim();
+            if (hwContent) {
+              const { error: nhErr } = await db.from('homework_assignments').insert({
+                student_id: s.id,
+                subject,
+                lesson_record_id: lessonRecordId,
+                assigned_date: todayStr,
+                end_date: nextHwDue || null,
+                content: hwContent,
+                check_status: 'pending',
+                homework_type: 'written',
+                required_submissions: 1,
+                created_by: user?.id || null,
+              });
+              if (!nhErr) hwNewCount++;
+            }
+          }
+        }
+      }
+
       setSavedDone(true);
-      toast.success('오늘 기록 저장 완료' + (nextMemo.trim() ? ' — 📌 메모는 다음 수업에서 다시 만나요' : ''));
+      const parts = ['오늘 기록 저장 완료'];
+      if (lrCount > 0) parts.push(`수업일지 ${lrCount}건`);
+      if (hwCheckCount > 0) parts.push(`숙제 확인 ${hwCheckCount}건`);
+      if (hwNewCount > 0) parts.push(`다음 숙제 ${hwNewCount}건`);
+      if (nextMemo.trim()) parts.push('📌 다음 수업 메모');
+      toast.success(parts.join(' · '));
     } catch (e: any) {
       toast.error(`저장 실패: ${e.message || e}`);
     } finally {
