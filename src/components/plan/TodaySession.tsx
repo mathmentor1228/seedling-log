@@ -718,6 +718,121 @@ export function TodaySession() {
                 </p>
               </div>
 
+              {/* 🚀 총 도달 페이지 (권장) — 학생별로 실제 나간 페이지만 적으면 자동으로 여러 목표에 나눠 기록 */}
+              {(() => {
+                const presentStudents = students.filter(s => !absent.has(s.id));
+                const todayEndPage = extractPageRange(trackGoals[todayEndIdx]?.pages || null)?.end ?? null;
+                const paceVal = pace ?? 1;
+                const reachedStateFor = (sid: string): { lastIdx: number; page: number | null } => {
+                  let lastIdx = -1;
+                  let page: number | null = null;
+                  for (let i = todayStartIdx; i < trackGoals.length; i++) {
+                    const g = trackGoals[i];
+                    const local = perStudent[g.id]?.[sid];
+                    const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
+                    const state = local?.state
+                      ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
+                        : p.status === 'partial' ? 'partial' : null) : null);
+                    if (state === 'done') { lastIdx = i; }
+                    else if (state === 'partial') {
+                      const uptoRaw = local?.upto || p?.partial_upto || '';
+                      const parsed = parsePageInput(uptoRaw);
+                      if (parsed != null) page = parsed;
+                      break;
+                    } else { break; }
+                  }
+                  if (page == null && lastIdx >= 0) {
+                    page = extractPageRange(trackGoals[lastIdx].pages)?.end ?? null;
+                  }
+                  return { lastIdx, page };
+                };
+                return (
+                  <Card className="border-primary/30 bg-primary/[0.03]">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-extrabold text-primary">🚀 총 도달 페이지 (권장)</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요
+                          {todayEndPage != null && ` · 오늘 목표 끝: p.${todayEndPage}`}
+                        </span>
+                      </div>
+
+                      {/* 전체 일괄 */}
+                      <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
+                        <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
+                        <Input
+                          placeholder="예: 68"
+                          className="h-7 w-24 text-center text-xs"
+                          value={reachedDrafts['__all__'] ?? ''}
+                          onChange={e => setReachedDrafts(p => ({ ...p, __all__: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') submitReached('all', reachedDrafts['__all__'] || ''); }}
+                        />
+                        <Button size="sm" className="h-7 text-xs" onClick={() => submitReached('all', reachedDrafts['__all__'] || '')}>
+                          <Check className="w-3.5 h-3.5 mr-1" />자동 기록
+                        </Button>
+                      </div>
+
+                      {/* 학생별 입력 + 순항 배지 */}
+                      <div className="space-y-1.5">
+                        {presentStudents.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic px-1">출석 학생 없음</p>
+                        )}
+                        {presentStudents.map(s => {
+                          const rs = reachedStateFor(s.id);
+                          const extra = rs.lastIdx - todayEndIdx;
+                          const extraSess = extra > 0 && paceVal > 0 ? (extra / paceVal) : 0;
+                          const behind = rs.lastIdx >= 0 && rs.lastIdx < todayEndIdx;
+                          const behindGoals = behind ? (todayEndIdx - rs.lastIdx) : 0;
+                          return (
+                            <div key={s.id} className="flex flex-wrap items-center gap-1.5 border rounded-lg px-2.5 py-1.5 bg-background">
+                              <span className="font-bold text-sm min-w-[60px]">{s.name}</span>
+                              {s.type && <span className={`text-[10px] font-bold ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                              {rs.page != null && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  ~p.{rs.page}
+                                </Badge>
+                              )}
+                              {extra > 0 && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-100">
+                                  🚀 순항중 +{extra}목표 · 약 {extraSess.toFixed(1)}회 여유
+                                </Badge>
+                              )}
+                              {extra === 0 && rs.lastIdx === todayEndIdx && (
+                                <Badge className="text-[10px] bg-sky-100 text-sky-800 border border-sky-300 hover:bg-sky-100">
+                                  ✓ 계획대로
+                                </Badge>
+                              )}
+                              {behind && (
+                                <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">
+                                  계획보다 -{behindGoals}목표
+                                </Badge>
+                              )}
+                              <div className="ml-auto flex items-center gap-1">
+                                <Input
+                                  placeholder="p.68"
+                                  className="h-7 w-20 text-center text-xs"
+                                  value={reachedDrafts[s.id] ?? ''}
+                                  onChange={e => setReachedDrafts(p => ({ ...p, [s.id]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') submitReached(s.id, reachedDrafts[s.id] || ''); }}
+                                />
+                                <Button size="sm" className="h-7 text-xs px-2" onClick={() => submitReached(s.id, reachedDrafts[s.id] || '')}>
+                                  기록
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        아래 목표별 카드는 세부 조정이 필요할 때만 쓰세요. 여기서 페이지만 적으면 자동 채워집니다.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+
+
               {todayGoals.map(({ goal, continueFrom }) => {
                 const st = goalStates[goal.id];
                 const presentStudents = students.filter(s => !absent.has(s.id));
