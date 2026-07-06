@@ -273,7 +273,7 @@ function PlanHome() {
                         })()}
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
-                            <Link to={`/plan/${d.id}/today`}>
+                            <Link to={`/plan/${d.id}/today${isRealToday ? '' : `?date=${selectedDate}`}`}>
                               <Play className="w-4 h-4 mr-1" />오늘 수업 시작
                             </Link>
                           </Button>
