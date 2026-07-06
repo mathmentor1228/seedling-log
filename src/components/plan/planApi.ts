@@ -107,6 +107,34 @@ export async function fetchDesignStudents(designId: string): Promise<any[]> {
   return data || [];
 }
 
+// PLAN-ROSTER-MID-JOIN-V1: 설계 명단 추가/제거/수정
+export type AddStudentInput = {
+  student_id: string;
+  student_type: StudentType | null;
+  start_goal_id: string | null;   // null = 처음부터
+  joined_at: string | null;       // 'YYYY-MM-DD'
+};
+export async function addStudentsToDesign(designId: string, students: AddStudentInput[]): Promise<void> {
+  if (!students.length) return;
+  const rows = students.map(s => ({ design_id: designId, ...s }));
+  const { error } = await db.from('plan_students')
+    .upsert(rows, { onConflict: 'design_id,student_id' });
+  if (error) throw error;
+}
+export async function removeStudentFromDesign(designId: string, studentId: string): Promise<void> {
+  const { error } = await db.from('plan_students')
+    .delete().eq('design_id', designId).eq('student_id', studentId);
+  if (error) throw error;
+}
+export async function updateDesignStudent(
+  designId: string, studentId: string,
+  patch: Partial<Pick<AddStudentInput, 'student_type' | 'start_goal_id' | 'joined_at'>>,
+): Promise<void> {
+  const { error } = await db.from('plan_students')
+    .update(patch).eq('design_id', designId).eq('student_id', studentId);
+  if (error) throw error;
+}
+
 export type RosterStudent = { id: string; name: string; grade: string | null; type: 'A' | 'B' | 'C' | null };
 
 // 여러 설계의 명단(이름 포함)을 한 번에 — design_id → 학생 배열

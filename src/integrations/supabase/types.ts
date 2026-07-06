@@ -3767,6 +3767,8 @@ export type Database = {
           custom_target_date: string | null
           design_id: string
           id: string
+          joined_at: string | null
+          start_goal_id: string | null
           student_id: string
           student_type: string | null
         }
@@ -3776,6 +3778,8 @@ export type Database = {
           custom_target_date?: string | null
           design_id: string
           id?: string
+          joined_at?: string | null
+          start_goal_id?: string | null
           student_id: string
           student_type?: string | null
         }
@@ -3785,6 +3789,8 @@ export type Database = {
           custom_target_date?: string | null
           design_id?: string
           id?: string
+          joined_at?: string | null
+          start_goal_id?: string | null
           student_id?: string
           student_type?: string | null
         }
@@ -3801,6 +3807,13 @@ export type Database = {
             columns: ["design_id"]
             isOneToOne: false
             referencedRelation: "plan_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_students_start_goal_id_fkey"
+            columns: ["start_goal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_goals"
             referencedColumns: ["id"]
           },
         ]

@@ -15,9 +15,10 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog } from 'lucide-react';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
+import { RosterManagerModal } from '@/components/plan/RosterManagerModal';
 
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
@@ -30,6 +31,7 @@ function PlanHome() {
   const [wizardTrackOnly, setWizardTrackOnly] = useState(false);
   const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
   const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
+  const [rosterDesign, setRosterDesign] = useState<{ id: string; track_id: string; teaching_mode: string; title: string } | null>(null);
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
   const [rosters, setRosters] = useState<Record<string, RosterStudent[]>>({});
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
@@ -252,6 +254,10 @@ function PlanHome() {
                           <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
                             <UserCheck className="w-4 h-4" />
                           </Button>
+                          <Button variant="outline" title="명단 관리 (추가·제외)"
+                            onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
+                            <UserCog className="w-4 h-4" />
+                          </Button>
                           <Button asChild variant="outline" title="학생 플래너 인쇄">
                             <Link to={`/plan/${d.id}/planner`}><Printer className="w-4 h-4" /></Link>
                           </Button>
@@ -306,12 +312,16 @@ function PlanHome() {
                           ))}
                         </div>
                       )}
-                      <div className="flex gap-2 pt-2 border-t">
+                      <div className="flex gap-2 pt-2 border-t flex-wrap">
                         <Button size="sm" variant="outline" onClick={() => setIntensiveDesignId(d.id)}>
                           <Sparkles className="w-3.5 h-3.5 mr-1" />특강
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setCoTeacherDesign({ id: d.id, teacher_id: d.teacher_id })}>
                           <Users className="w-3.5 h-3.5 mr-1" />공동T
+                        </Button>
+                        <Button size="sm" variant="outline"
+                          onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
+                          <UserCog className="w-3.5 h-3.5 mr-1" />명단
                         </Button>
                         <Button size="sm" variant="ghost" className="ml-auto" onClick={() => openStart(d)}>
                           <Play className="w-4 h-4 mr-1" />수업 열기
@@ -337,6 +347,12 @@ function PlanHome() {
         <CoTeacherModal open={!!coTeacherDesign} designId={coTeacherDesign.id}
           defaultTeacherId={coTeacherDesign.teacher_id}
           onClose={() => setCoTeacherDesign(null)} onDone={load} />
+      )}
+      {rosterDesign && (
+        <RosterManagerModal open={!!rosterDesign} designId={rosterDesign.id}
+          trackId={rosterDesign.track_id} teachingMode={rosterDesign.teaching_mode}
+          title={rosterDesign.title}
+          onClose={() => setRosterDesign(null)} onDone={load} />
       )}
 
       {/* 수업 대상 선택: 전체 그룹 / 개인만 */}
