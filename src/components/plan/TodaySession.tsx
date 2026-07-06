@@ -361,9 +361,9 @@ export function TodaySession() {
           student_id: r.student_id, goal_id: r.goal_id, status: r.status, partial_upto: (r as any).partial_upto || null,
         }))];
       });
-      if (state === 'done') toast.success(`진도 기록 — ${presentIds.length}명 반영${absentIds.length ? ` (결석 ${absentIds.length}명 스킵 표시)` : ''}`);
-      if (state === 'partial') toast.success(`${upto}까지 기록 — 다음 수업에 "이어서"로 자동 표기`);
-      if (state === 'defer') toast(`미루기 — 남은 수업에 자동 재분배`);
+      if (state === 'done') toast.success(`진도 기록 — ${targetIds.length}명 반영${absentIds.length ? ` (결석 ${absentIds.length}명 스킵 표시)` : ''}`);
+      if (state === 'partial') toast.success(`${upto}까지 기록 — ${targetIds.length}명, 다음 수업에 "이어서"로 자동 표기`);
+      if (state === 'defer') toast(`미루기 — ${targetIds.length}명, 남은 수업에 자동 재분배`);
     } catch (e: any) {
       toast.error(`진도 저장 실패: ${e.message || e}`);
     }
