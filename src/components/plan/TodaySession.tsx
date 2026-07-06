@@ -432,6 +432,12 @@ export function TodaySession() {
     if (nums.length === 0) return null;
     return { start: nums[0], end: nums[nums.length - 1] };
   }
+  // 페이지 표기: 범위면 '부터~까지', 단일이면 'p.N', 페이지 없으면 원문
+  function formatPages(pages: string | null): string {
+    const r = extractPageRange(pages);
+    if (!r) return pages || '';
+    return r.start === r.end ? `p.${r.start}` : `p.${r.start} 부터 → p.${r.end} 까지`;
+  }
   function parsePageInput(raw: string): number | null {
     const m = (raw || '').match(/\d+/);
     return m ? Number(m[0]) : null;
@@ -970,7 +976,7 @@ export function TodaySession() {
                 const startPage = extractPageRange(todayGoals[0].goal.pages)?.start ?? null;
                 const endPage = extractPageRange(todayGoals[todayGoals.length - 1].goal.pages)?.end ?? null;
                 const rangeText = startPage != null && endPage != null
-                  ? `p.${startPage} 부터 → p.${endPage} 까지`
+                  ? (startPage === endPage ? `p.${startPage}` : `p.${startPage} 부터 → p.${endPage} 까지`)
                   : (todayGoals[0].goal.pages || '') + (todayGoals.length > 1 && todayGoals[todayGoals.length - 1].goal.pages ? ` → ${todayGoals[todayGoals.length - 1].goal.pages}` : '');
                 return (
                   <div className="rounded-xl border-2 border-primary/40 bg-primary/5 px-4 py-3">
@@ -1142,12 +1148,7 @@ export function TodaySession() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="font-extrabold">{goal.order_index}. {goal.title}</span>
-                        {(() => {
-                          const r = extractPageRange(goal.pages);
-                          return <span className="text-xs text-muted-foreground">
-                            {r ? `p.${r.start} 부터 → p.${r.end} 까지` : goal.pages}
-                          </span>;
-                        })()}
+                        <span className="text-xs text-muted-foreground">{formatPages(goal.pages)}</span>
                         {continueFrom && (
                           <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">
                             지난 시간 {continueFrom}까지 — 이어서
