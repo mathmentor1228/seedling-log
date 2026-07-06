@@ -225,86 +225,89 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
           </div>
         )}
 
-        {/* 추가 다이얼로그 */}
-        <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>학생 추가</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold">학생</label>
-                <div className="relative mt-1">
-                  <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
-                  <Input placeholder="이름 검색" value={query}
-                    onChange={e => setQuery(e.target.value)} className="pl-7 h-8" />
-                </div>
-                <div className="mt-1 max-h-40 overflow-y-auto border rounded-md">
-                  {availablePool.length === 0 ? (
-                    <p className="p-3 text-xs text-muted-foreground">추가 가능한 학생이 없습니다.</p>
-                  ) : availablePool.map(p => (
-                    <button key={p.id} type="button"
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted ${pickedId === p.id ? 'bg-primary/10 font-semibold' : ''}`}
-                      onClick={() => setPickedId(p.id)}>
-                      {p.name} <span className="text-xs text-muted-foreground">{p.grade}</span>
-                    </button>
-                  ))}
-                </div>
+        {/* 추가 패널 (Dialog 중첩 금지 — 인라인 확장) */}
+        {addOpen && (
+          <div className="mt-3 border rounded-lg p-3 bg-muted/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-sm flex items-center gap-1">
+                <UserPlus className="w-4 h-4" />학생 추가
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => setAddOpen(false)}>닫기</Button>
+            </div>
+            <div>
+              <label className="text-xs font-semibold">학생</label>
+              <div className="relative mt-1">
+                <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
+                <Input placeholder="이름 검색" value={query}
+                  onChange={e => setQuery(e.target.value)} className="pl-7 h-8" />
               </div>
+              <div className="mt-1 max-h-40 overflow-y-auto border rounded-md bg-background">
+                {availablePool.length === 0 ? (
+                  <p className="p-3 text-xs text-muted-foreground">추가 가능한 학생이 없습니다.</p>
+                ) : availablePool.map(p => (
+                  <button key={p.id} type="button"
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted ${pickedId === p.id ? 'bg-primary/10 font-semibold' : ''}`}
+                    onClick={() => setPickedId(p.id)}>
+                    {p.name} <span className="text-xs text-muted-foreground">{p.grade}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-              {isABC && (
-                <div>
-                  <label className="text-xs font-semibold">유형</label>
-                  <Select value={pickedType} onValueChange={v => setPickedType(v as StudentType)}>
-                    <SelectTrigger className="mt-1 h-8"><SelectValue /></SelectTrigger>
+            {isABC && (
+              <div>
+                <label className="text-xs font-semibold">유형</label>
+                <Select value={pickedType} onValueChange={v => setPickedType(v as StudentType)}>
+                  <SelectTrigger className="mt-1 h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(['A', 'B', 'C'] as const).map(t => (
+                      <SelectItem key={t} value={t}>{t}형 · {TYPE_LABEL[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold flex items-center gap-1">
+                <Sprout className="w-3.5 h-3.5 text-emerald-600" />어디서부터 시작할까요?
+              </label>
+              <div className="mt-1 space-y-1.5">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" checked={startFromBeginning}
+                    onChange={() => setStartFromBeginning(true)} />
+                  커리큘럼 처음부터
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" checked={!startFromBeginning}
+                    onChange={() => setStartFromBeginning(false)} />
+                  특정 목차부터
+                </label>
+                {!startFromBeginning && (
+                  <Select value={pickedStartGoal} onValueChange={setPickedStartGoal}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="시작할 목차 선택" /></SelectTrigger>
                     <SelectContent>
-                      {(['A', 'B', 'C'] as const).map(t => (
-                        <SelectItem key={t} value={t}>{t}형 · {TYPE_LABEL[t]}</SelectItem>
+                      {goals.map(g => (
+                        <SelectItem key={g.id} value={g.id}>{g.order_index}. {g.title}{g.pages ? ` (${g.pages})` : ''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-semibold flex items-center gap-1">
-                  <Sprout className="w-3.5 h-3.5 text-emerald-600" />어디서부터 시작할까요?
-                </label>
-                <div className="mt-1 space-y-1.5">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="radio" checked={startFromBeginning}
-                      onChange={() => setStartFromBeginning(true)} />
-                    커리큘럼 처음부터
-                  </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="radio" checked={!startFromBeginning}
-                      onChange={() => setStartFromBeginning(false)} />
-                    특정 목차부터
-                  </label>
-                  {!startFromBeginning && (
-                    <Select value={pickedStartGoal} onValueChange={setPickedStartGoal}>
-                      <SelectTrigger className="h-8"><SelectValue placeholder="시작할 목차 선택" /></SelectTrigger>
-                      <SelectContent>
-                        {goals.map(g => (
-                          <SelectItem key={g.id} value={g.id}>{g.order_index}. {g.title}{g.pages ? ` (${g.pages})` : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold">합류일</label>
-                <Input type="date" value={joinedAt} onChange={e => setJoinedAt(e.target.value)}
-                  className="mt-1 h-8" />
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>취소</Button>
-                <Button className="flex-1" onClick={handleAdd}>추가</Button>
+                )}
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+
+            <div>
+              <label className="text-xs font-semibold">합류일</label>
+              <Input type="date" value={joinedAt} onChange={e => setJoinedAt(e.target.value)}
+                className="mt-1 h-8" />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>취소</Button>
+              <Button className="flex-1" onClick={handleAdd}>추가</Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
