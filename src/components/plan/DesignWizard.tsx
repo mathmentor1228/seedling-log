@@ -526,10 +526,24 @@ export function DesignWizard({ onDone, onCancel, trackOnly = false }: { onDone: 
         rhythm,
         end_goal_id: endGoal?.id || null,
         target_date: targetDate,
-      }, students.map(s => ({
-        student_id: s.id,
-        student_type: mode === 'abc' ? (studentTypes[s.id] || 'B') : null,
-      })));
+      }, students.map(s => {
+        const key = studentStartGoal[s.id];
+        let startGoalId: string | null = null;
+        if (key && key !== '__begin__') {
+          if (key.startsWith('new:')) {
+            const idx = Number(key.slice(4));
+            startGoalId = goalRows[idx]?.id || null;
+          } else {
+            startGoalId = key;
+          }
+        }
+        return {
+          student_id: s.id,
+          student_type: mode === 'abc' ? (studentTypes[s.id] || 'B') : null,
+          start_goal_id: startGoalId,
+          joined_at: startGoalId ? new Date().toISOString().slice(0, 10) : null,
+        };
+      }));
       toast.success('수업 설계 저장 완료 — 이제 매 수업이 자동으로 준비됩니다.');
       removeCurrentDraftOnFinalize();
       onDone();
