@@ -121,9 +121,22 @@ function PlanHome() {
         <h1 className="text-xl font-bold flex items-center gap-2">
           <NotebookPen className="w-5 h-5" />수업 계획
         </h1>
-        <span className="text-sm text-muted-foreground">
-          {now.getMonth() + 1}월 {now.getDate()}일 ({WEEK_KO[todayDow]}) 기준
-        </span>
+        <div className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 ${isRealToday ? 'border-primary/30 bg-primary/5' : 'border-amber-400 bg-amber-50'}`}>
+          <label className="text-xs font-semibold whitespace-nowrap">📅 기준일</label>
+          <input
+            type="date"
+            value={selectedDate}
+            max={realTodayStr}
+            onChange={(e) => setSelectedDate(e.target.value || realTodayStr)}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {!isRealToday && (
+            <Button size="sm" variant="secondary" className="h-7 px-2 text-xs" onClick={() => setSelectedDate(realTodayStr)}>오늘로</Button>
+          )}
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {now.getMonth() + 1}월 {now.getDate()}일 ({WEEK_KO[todayDow]})
+          </span>
+        </div>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" onClick={() => { setWizardTrackOnly(true); setWizardOpen(true); }}>
             <NotebookPen className="w-4 h-4 mr-1" />커리큘럼만 만들기
@@ -133,6 +146,12 @@ function PlanHome() {
           </Button>
         </div>
       </div>
+
+      {!isRealToday && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          <b>과거 날짜({selectedDate})</b> 기준으로 표시 중 — 놓친 진도·숙제·수업일지를 이어서 기입할 수 있어요.
+        </div>
+      )}
 
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2">
