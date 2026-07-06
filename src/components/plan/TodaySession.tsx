@@ -89,7 +89,12 @@ export function TodaySession() {
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 수업기록 날짜 — 기본은 오늘, 과거로 돌아가서 놓친 기입도 가능
+  const [sessionDate, setSessionDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const todayStr = sessionDate;
+  const sessionDay = useMemo(() => new Date(sessionDate + 'T12:00:00').getDay(), [sessionDate]);
+  const realTodayStr = new Date().toISOString().slice(0, 10);
+  const isPastDate = sessionDate < realTodayStr;
 
   useEffect(() => {
     if (!designId) return;
