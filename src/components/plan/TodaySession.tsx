@@ -860,6 +860,48 @@ export function TodaySession() {
             </CardContent></Card>
           )}
 
+          {/* LESSON-HW-BRIDGE-V1: 지난 숙제 확인 */}
+          {openHws.length > 0 && (
+            <Card><CardContent className="p-4 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                📝 지난 숙제 확인 — {openHws.length}건 (수업일지 숙제란에 자동 반영)
+              </p>
+              <div className="space-y-1.5">
+                {students.filter(s => openHws.some(h => h.student_id === s.id)).map(s => {
+                  const mine = openHws.filter(h => h.student_id === s.id);
+                  return (
+                    <div key={s.id} className="border rounded-lg px-2.5 py-2 bg-background space-y-1">
+                      <p className="text-sm font-bold flex items-center gap-1">{s.name}
+                        {s.type && <span className={`text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                      </p>
+                      {mine.map(h => {
+                        const cur = hwChecks[h.id]?.result;
+                        return (
+                          <div key={h.id} className="flex flex-wrap items-center gap-1.5 pl-1">
+                            <span className="text-xs flex-1 min-w-[140px] truncate" title={h.content}>· {h.content}</span>
+                            <div className="flex gap-1">
+                              {([
+                                { k: 'completed', label: '✓ 완료', cls: 'border-green-400 text-green-700 bg-green-50' },
+                                { k: 'partial', label: '◐ 일부', cls: 'border-amber-400 text-amber-700 bg-amber-50' },
+                                { k: 'not_done', label: '✗ 미제출', cls: 'border-red-400 text-red-700 bg-red-50' },
+                              ] as const).map(o => (
+                                <button key={o.k}
+                                  className={`text-[10px] font-bold rounded-full border px-2 py-0.5 ${cur === o.k ? o.cls : 'text-muted-foreground'}`}
+                                  onClick={() => setHwChecks(p => ({ ...p, [h.id]: { ...(p[h.id] || { result: 'completed' as const }), result: o.k } }))}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent></Card>
+          )}
+
           <Button className="w-full" onClick={() => setStep(2)}>
             시작 체크 끝 — {isTestDay ? '테스트·복습으로' : '진도 나가기'} <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
