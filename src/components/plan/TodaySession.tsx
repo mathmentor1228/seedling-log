@@ -372,6 +372,82 @@ export function TodaySession() {
     }
   }
 
+  // ── PAGE-BASED PROGRESS V1 ── 총 도달 페이지 하나로 여러 goal 자동 판단
+  function extractPageRange(pages: string | null): { start: number; end: number } | null {
+    if (!pages) return null;
+    const nums = (pages.match(/\d+/g) || []).map(Number);
+    if (nums.length === 0) return null;
+    return { start: nums[0], end: nums[nums.length - 1] };
+  }
+  function parsePageInput(raw: string): number | null {
+    const m = (raw || '').match(/\d+/);
+    return m ? Number(m[0]) : null;
+  }
+  // 오늘 시작 goal 인덱스 = 첫 todayGoal의 trackGoals 내 인덱스
+  const todayStartIdx = useMemo(() => {
+    if (todayGoals.length === 0) return groupPosIdx + 1;
+    const firstId = todayGoals[0].goal.id;
+    const i = trackGoals.findIndex(g => g.id === firstId);
+    return i >= 0 ? i : groupPosIdx + 1;
+  }, [todayGoals, trackGoals, groupPosIdx]);
+  const todayEndIdx = useMemo(() => {
+    if (todayGoals.length === 0) return todayStartIdx - 1;
+    const lastId = todayGoals[todayGoals.length - 1].goal.id;
+    const i = trackGoals.findIndex(g => g.id === lastId);
+    return i >= 0 ? i : todayStartIdx - 1;
+  }, [todayGoals, trackGoals, todayStartIdx]);
+
+  // 학생별 "총 도달 페이지" 입력 초안
+  const [reachedDrafts, setReachedDrafts] = useState<Record<string, string>>({}); // studentId | '__all__'
+
+  async function applyReachedPage(studentIds: string[], page: number): Promise<{ lastDoneIdx: number; partialIdx: number | null } | null> {
+    if (todayGoals.length === 0 || !sessionId) return null;
+    let lastDoneIdx = todayStartIdx - 1;
+    let partialIdx: number | null = null;
+    // 오늘 시작부터 트랙 끝까지 훑으며 자동 판단
+    for (let i = todayStartIdx; i < trackGoals.length; i++) {
+      const g = trackGoals[i];
+      const range = extractPageRange(g.pages);
+      if (!range) break;
+      if (page >= range.end) {
+        await setGoalState(g.id, 'done', undefined, studentIds);
+        lastDoneIdx = i;
+      } else if (page >= range.start) {
+        await setGoalState(g.id, 'partial', `p.${page}`, studentIds);
+        partialIdx = i;
+        break;
+      } else {
+        break;
+      }
+    }
+    return { lastDoneIdx, partialIdx };
+  }
+
+  async function submitReached(scope: 'all' | string, raw: string) {
+    const page = parsePageInput(raw);
+    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68)'); return; }
+    const targetIds = scope === 'all'
+      ? students.filter(s => !absent.has(s.id)).map(s => s.id)
+      : [scope];
+    if (targetIds.length === 0) { toast.error('대상 학생이 없어요'); return; }
+    const result = await applyReachedPage(targetIds, page);
+    if (!result) return;
+    // 여유(순항) 계산: 오늘 예정 마지막 goal 인덱스 대비 얼마나 앞섰는지
+    const extraGoals = result.lastDoneIdx - todayEndIdx;
+    const paceVal = pace ?? 1;
+    const extraSessions = extraGoals > 0 && paceVal > 0 ? (extraGoals / paceVal) : 0;
+    const label = scope === 'all' ? `${targetIds.length}명` : (students.find(s => s.id === scope)?.name || '학생');
+    if (extraGoals > 0) {
+      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)`);
+    } else if (result.partialIdx != null && result.partialIdx === todayEndIdx) {
+      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록`);
+    } else if (result.lastDoneIdx >= todayEndIdx) {
+      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록`);
+    } else {
+      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만`);
+    }
+  }
+
   async function resolveQueueItem(q: QueueRow) {
     try {
       await db.from('plan_queue').update({ status: 'done', resolved_at: new Date().toISOString() }).eq('id', q.id);
