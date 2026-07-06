@@ -174,12 +174,13 @@ export function TodaySession() {
         // ── LESSON-HW-BRIDGE-V1 ── 과목, 다음 수업일, 오늘 확인해야 할 숙제 ──
         const subj = (d as any).plan_tracks?.subject || '';
         setSubject(subj);
-        // 다음 수업일: rhythm에 등록된 요일 중 오늘 이후 최초의 날짜
+        // 다음 수업일: rhythm에 등록된 요일 중 선택 날짜 이후 최초의 날짜
         const rhythmDays = Object.keys(d.rhythm || {}).map(k => Number(k));
         let nsd = '';
         if (rhythmDays.length > 0) {
+          const base = new Date(sessionDate + 'T12:00:00');
           for (let i = 1; i <= 14; i++) {
-            const dt = new Date(); dt.setDate(dt.getDate() + i);
+            const dt = new Date(base); dt.setDate(dt.getDate() + i);
             if (rhythmDays.includes(dt.getDay())) { nsd = dt.toISOString().slice(0, 10); break; }
           }
         }
