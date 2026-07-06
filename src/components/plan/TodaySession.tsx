@@ -66,6 +66,9 @@ export function TodaySession() {
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean }>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
   const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
+  // 학생별 진도 상태 — goalId → studentId → {state, upto}
+  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>>>({});
+  const [uptoDrafts, setUptoDrafts] = useState<Record<string, string>>({}); // key: `${goalId}::${studentId|__all__}`
   const [note, setNote] = useState('');
   const [nextMemo, setNextMemo] = useState('');
   const [saving, setSaving] = useState(false);
