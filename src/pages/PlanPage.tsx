@@ -312,12 +312,16 @@ function PlanHome() {
                           ))}
                         </div>
                       )}
-                      <div className="flex gap-2 pt-2 border-t">
+                      <div className="flex gap-2 pt-2 border-t flex-wrap">
                         <Button size="sm" variant="outline" onClick={() => setIntensiveDesignId(d.id)}>
                           <Sparkles className="w-3.5 h-3.5 mr-1" />특강
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setCoTeacherDesign({ id: d.id, teacher_id: d.teacher_id })}>
                           <Users className="w-3.5 h-3.5 mr-1" />공동T
+                        </Button>
+                        <Button size="sm" variant="outline"
+                          onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
+                          <UserCog className="w-3.5 h-3.5 mr-1" />명단
                         </Button>
                         <Button size="sm" variant="ghost" className="ml-auto" onClick={() => openStart(d)}>
                           <Play className="w-4 h-4 mr-1" />수업 열기
