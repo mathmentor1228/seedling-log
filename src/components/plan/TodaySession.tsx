@@ -1020,6 +1020,13 @@ export function TodaySession() {
                       {manualTodayCount != null && <span className="ml-1 text-primary">· 수동 조정됨(자동 {autoTodayCount}개)</span>}
                       {' · '}학생마다 진도가 다르면 아래에서 개별로 기록하세요
                     </p>
+                    {/* 무리 페이스 신호 — 기한 대비 분량이 과할 때 */}
+                    {pace != null && pace >= 1.5 && (
+                      <p className="text-[11px] mt-1.5 rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2 py-1">
+                        ⚠ <b>페이스 무리 신호</b> — 기한까지 남은 수업당 <b>{pace.toFixed(1)}개</b> 목표를 나가야 해요.
+                        계획이 빡빡하다면: 특강으로 수업 횟수 추가 · 커리큘럼 수정으로 범위 축소 · 기한 조정을 검토하세요.
+                      </p>
+                    )}
                   </div>
                 );
               })()}

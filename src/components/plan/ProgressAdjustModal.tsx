@@ -26,15 +26,20 @@ export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, end
 }) {
   const [goals, setGoals] = useState<PlanGoal[]>([]);
   const [rows, setRows] = useState<ProgressDetailRow[]>([]);
-  const [studentIds, setStudentIds] = useState<string[]>([]);
+  const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   // 선택: -1 = 처음부터(기록 전체 삭제), i = trackGoals[i]까지 나감
   const [selected, setSelected] = useState<number | null>(null);
+  // 배지 클릭 → 그 목표의 학생별 상태 펼치기
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+
+  const studentIds = useMemo(() => students.map(s => s.id), [students]);
 
   useEffect(() => {
     if (!open) return;
     setSelected(null);
+    setExpandedGoalId(null);
     (async () => {
       setLoading(true);
       try {
@@ -45,7 +50,13 @@ export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, end
         ]);
         setGoals(gs);
         setRows(prs);
-        setStudentIds(((psRes.data || []) as any[]).map((r: any) => r.student_id));
+        const ids = ((psRes.data || []) as any[]).map((r: any) => r.student_id);
+        const { data: studs } = ids.length > 0
+          ? await supabase.from('students').select('id, name').in('id', ids)
+          : { data: [] as any[] };
+        setStudents(((studs || []) as any[])
+          .map((s: any) => ({ id: s.id, name: s.name }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko')));
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
@@ -73,6 +84,20 @@ export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, end
     const done = mine.filter(r => ['advanced', 'verified_ok', 'verified_weak'].includes(r.status)).length;
     const partials = mine.filter(r => r.status === 'partial');
     return { done, partial: partials.length, partialUpto: partials[0]?.partial_upto || null };
+  }
+
+  // 목표별 학생 상태 상세 — 배지 클릭 시 누가 나갔는지/못 나갔는지
+  function detailFor(goalId: string): { done: string[]; partial: string[]; defer: string[]; none: string[] } {
+    const out = { done: [] as string[], partial: [] as string[], defer: [] as string[], none: [] as string[] };
+    for (const s of students) {
+      const r = rows.find(x => x.goal_id === goalId && x.student_id === s.id);
+      if (!r) out.none.push(s.name);
+      else if (['advanced', 'verified_ok', 'verified_weak'].includes(r.status)) out.done.push(s.name);
+      else if (r.status === 'partial') out.partial.push(`${s.name}${r.partial_upto ? ` (~${r.partial_upto})` : ''}`);
+      else if (r.status === 'deferred') out.defer.push(s.name);
+      else out.none.push(s.name); // skipped_absent 등 — 안 나간 것으로 표시
+    }
+    return out;
   }
 
   async function apply() {
@@ -127,28 +152,57 @@ export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, end
               const s = summaryFor(g.id);
               const isCurrent = i === currentIdx;
               const isSelected = selected === i;
+              const hasRecord = s.done > 0 || s.partial > 0;
+              const isExpanded = expandedGoalId === g.id;
+              const toggleDetail = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setExpandedGoalId(prev => (prev === g.id ? null : g.id));
+              };
+              const detail = isExpanded ? detailFor(g.id) : null;
               return (
-                <button key={g.id}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition
-                    ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/40'}`}
-                  onClick={() => setSelected(i)}>
-                  <span className="min-w-0 flex-1 truncate">
-                    <b>{g.order_index}.</b> {g.title}
-                    {g.pages && <span className="ml-1 text-[11px] text-muted-foreground">{g.pages}</span>}
-                  </span>
-                  {s.done > 0 && (
-                    <Badge variant="outline" className="text-[10px] border-green-400 text-green-700 bg-green-50 shrink-0">
-                      나감 {s.done}
-                    </Badge>
+                <div key={g.id}>
+                  <button
+                    className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition
+                      ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/40'}`}
+                    onClick={() => setSelected(i)}>
+                    <span className="min-w-0 flex-1 truncate">
+                      <b>{g.order_index}.</b> {g.title}
+                      {g.pages && <span className="ml-1 text-[11px] text-muted-foreground">{g.pages}</span>}
+                    </span>
+                    {s.done > 0 && (
+                      <Badge variant="outline"
+                        className="text-[10px] border-green-400 text-green-700 bg-green-50 shrink-0 cursor-pointer hover:bg-green-100"
+                        title="누가 나갔는지 보기" onClick={toggleDetail}>
+                        나감 {s.done} {isExpanded ? '▴' : '▾'}
+                      </Badge>
+                    )}
+                    {s.partial > 0 && (
+                      <Badge variant="outline"
+                        className="text-[10px] border-amber-400 text-amber-700 bg-amber-50 shrink-0 cursor-pointer hover:bg-amber-100"
+                        title="누가 어디까지 나갔는지 보기" onClick={toggleDetail}>
+                        일부 {s.partial}{s.partialUpto ? ` (~${s.partialUpto})` : ''} {isExpanded ? '▴' : '▾'}
+                      </Badge>
+                    )}
+                    {isCurrent && <Badge variant="secondary" className="text-[10px] shrink-0">현재</Badge>}
+                    {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                  </button>
+                  {hasRecord && isExpanded && detail && (
+                    <div className="px-3 pb-2 pt-0.5 bg-muted/20 text-[11px] space-y-0.5">
+                      {detail.done.length > 0 && (
+                        <p><span className="font-bold text-green-700">✓ 나감:</span> {detail.done.join(', ')}</p>
+                      )}
+                      {detail.partial.length > 0 && (
+                        <p><span className="font-bold text-amber-700">◐ 일부:</span> {detail.partial.join(', ')}</p>
+                      )}
+                      {detail.defer.length > 0 && (
+                        <p><span className="font-bold text-muted-foreground">→ 미룸:</span> {detail.defer.join(', ')}</p>
+                      )}
+                      {detail.none.length > 0 && (
+                        <p><span className="font-bold text-muted-foreground">· 안 나감:</span> {detail.none.join(', ')}</p>
+                      )}
+                    </div>
                   )}
-                  {s.partial > 0 && (
-                    <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50 shrink-0">
-                      일부 {s.partial}{s.partialUpto ? ` (~${s.partialUpto})` : ''}
-                    </Badge>
-                  )}
-                  {isCurrent && <Badge variant="secondary" className="text-[10px] shrink-0">현재</Badge>}
-                  {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
-                </button>
+                </div>
               );
             })}
           </div>
