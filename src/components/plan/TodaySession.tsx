@@ -16,6 +16,7 @@ import {
   AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck,
 } from 'lucide-react';
 import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions } from './planApi';
+import { ProgressAdjustModal } from './ProgressAdjustModal';
 
 const db = supabase as any;
 
@@ -88,6 +89,10 @@ export function TodaySession() {
   const [nextHwBulk, setNextHwBulk] = useState<string>('');
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
+
+  // PLAN-POS-ADJUST-V1: 진도 위치 조정 모달 + 조정 후 데이터 재로딩 키
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 수업기록 날짜 — 기본은 오늘, 과거로 돌아가서 놓친 기입도 가능
   const [sessionDate, setSessionDate] = useState<string>(() => {
@@ -211,7 +216,7 @@ export function TodaySession() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [designId, sessionDate]);
+  }, [designId, sessionDate, reloadKey]);
 
   // ── 계산: 끝점까지의 목표, 그룹 현재 위치, 오늘 분량 ──
   const endIdx = useMemo(() => {
@@ -966,8 +971,11 @@ export function TodaySession() {
               <p className="text-muted-foreground">진도 대신 1단계의 밀린 할 일(재시험·재학습)을 소화하는 날입니다. 단원 마무리 테스트 결과는 1단계 쪽지시험 칸에 기록하세요.</p>
             </CardContent></Card>
           ) : todayGoals.length === 0 ? (
-            <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-              🎉 끝점까지 모든 목표를 나갔습니다 — 확인·복습만 남았어요.
+            <Card><CardContent className="p-8 text-center text-sm text-muted-foreground space-y-2">
+              <p>🎉 끝점까지 모든 목표를 나갔습니다 — 확인·복습만 남았어요.</p>
+              <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
+                진도 위치 조정 (기록이 실제와 다르면)
+              </Button>
             </CardContent></Card>
           ) : (
             <>
@@ -996,6 +1004,11 @@ export function TodaySession() {
                           <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px]"
                             onClick={() => setManualTodayCount(null)} title="자동 페이스로">자동</Button>
                         )}
+                        <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-muted-foreground"
+                          onClick={() => setAdjustOpen(true)}
+                          title="진도 위치 조정 — 시작 위치가 실제와 다르면 여기서 바로잡으세요">
+                          위치 조정
+                        </Button>
                       </div>
                     </div>
                     <p className="text-sm font-extrabold leading-snug">
@@ -1339,6 +1352,25 @@ export function TodaySession() {
           <Button onClick={() => setWalkinPickerOpen(false)}>완료 ({walkinIds.size}명 선택)</Button>
         </DialogContent>
       </Dialog>
+
+      {/* PLAN-POS-ADJUST-V1: 진도 위치 조정 */}
+      <ProgressAdjustModal
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        designId={designId!}
+        trackId={design.track_id}
+        endGoalId={design.end_goal_id || null}
+        title={design.title}
+        onChanged={() => {
+          // 로컬 캐시 상태 비우고 서버에서 다시 로딩
+          setPerStudent({});
+          setGoalStates({});
+          setUptoDrafts({});
+          setReachedDrafts({});
+          setManualTodayCount(null);
+          setReloadKey(k => k + 1);
+        }}
+      />
     </div>
   );
 }

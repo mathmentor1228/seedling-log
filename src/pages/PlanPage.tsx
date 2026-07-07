@@ -15,10 +15,11 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog, MapPin } from 'lucide-react';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
 import { RosterManagerModal } from '@/components/plan/RosterManagerModal';
+import { ProgressAdjustModal } from '@/components/plan/ProgressAdjustModal';
 
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
@@ -64,6 +65,7 @@ function PlanHome() {
   const [intensiveDesignId, setIntensiveDesignId] = useState<string | null>(null);
   const [coTeacherDesign, setCoTeacherDesign] = useState<{ id: string; teacher_id: string | null } | null>(null);
   const [rosterDesign, setRosterDesign] = useState<{ id: string; track_id: string; teaching_mode: string; title: string } | null>(null);
+  const [adjustDesign, setAdjustDesign] = useState<{ id: string; track_id: string; end_goal_id: string | null; title: string } | null>(null);
   const [extMap, setExtMap] = useState<Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }>>({});
   const [rosters, setRosters] = useState<Record<string, RosterStudent[]>>({});
   const [todayIntensive, setTodayIntensive] = useState<Set<string>>(new Set());
@@ -339,6 +341,10 @@ function PlanHome() {
                             onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
                             <UserCog className="w-4 h-4" />
                           </Button>
+                          <Button variant="outline" title="진도 위치 조정 (기록이 실제와 다를 때)"
+                            onClick={() => setAdjustDesign({ id: d.id, track_id: d.track_id, end_goal_id: d.end_goal_id || null, title: d.title || d.plan_tracks?.title })}>
+                            <MapPin className="w-4 h-4" />
+                          </Button>
                           <Button asChild variant="outline" title="학생 플래너 인쇄">
                             <Link to={`/plan/${d.id}/planner`}><Printer className="w-4 h-4" /></Link>
                           </Button>
@@ -405,6 +411,10 @@ function PlanHome() {
                           onClick={() => setRosterDesign({ id: d.id, track_id: d.track_id, teaching_mode: d.teaching_mode, title: d.title || d.plan_tracks?.title })}>
                           <UserCog className="w-3.5 h-3.5 mr-1" />명단
                         </Button>
+                        <Button size="sm" variant="outline"
+                          onClick={() => setAdjustDesign({ id: d.id, track_id: d.track_id, end_goal_id: d.end_goal_id || null, title: d.title || d.plan_tracks?.title })}>
+                          <MapPin className="w-3.5 h-3.5 mr-1" />진도
+                        </Button>
                         <Button size="sm" variant="ghost" className="ml-auto" onClick={() => openStart(d)}>
                           <Play className="w-4 h-4 mr-1" />수업 열기
                         </Button>
@@ -435,6 +445,13 @@ function PlanHome() {
           trackId={rosterDesign.track_id} teachingMode={rosterDesign.teaching_mode}
           title={rosterDesign.title}
           onClose={() => setRosterDesign(null)} onDone={load} />
+      )}
+      {adjustDesign && (
+        <ProgressAdjustModal open={!!adjustDesign} designId={adjustDesign.id}
+          trackId={adjustDesign.track_id} endGoalId={adjustDesign.end_goal_id}
+          title={adjustDesign.title}
+          onOpenChange={o => { if (!o) setAdjustDesign(null); }}
+          onChanged={load} />
       )}
 
       {/* 수업 대상 선택: 전체 그룹 / 개인만 */}

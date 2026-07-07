@@ -252,6 +252,51 @@ export async function fetchTrackProgress(
   return out;
 }
 
+// PLAN-POS-ADJUST-V1: 진도 위치 수동 조정 — 잘못 눌린 기록을 UI에서 리셋/이동
+export type ProgressDetailRow = { student_id: string; goal_id: string; status: string; partial_upto: string | null };
+export async function fetchDesignProgressRows(designId: string): Promise<ProgressDetailRow[]> {
+  const { data, error } = await db.from('plan_goal_progress')
+    .select('student_id, goal_id, status, partial_upto').eq('design_id', designId);
+  if (error) throw error;
+  return data || [];
+}
+
+// 위치 재설정: doneGoalIds까지는 전원 '나감' 처리, clearGoalIds의 기록은 삭제.
+// 이미 확인(verified_*)·나감(advanced)인 기록은 그대로 둔다 — 쪽지 점수(plan_checks)는 건드리지 않음.
+export async function setDesignPosition(
+  designId: string,
+  studentIds: string[],
+  doneGoalIds: string[],
+  clearGoalIds: string[],
+): Promise<void> {
+  if (clearGoalIds.length > 0) {
+    const { error } = await db.from('plan_goal_progress')
+      .delete().eq('design_id', designId).in('goal_id', clearGoalIds);
+    if (error) throw error;
+  }
+  if (doneGoalIds.length > 0 && studentIds.length > 0) {
+    const existing = await fetchDesignProgressRows(designId);
+    const keep = new Set(existing
+      .filter(r => ['advanced', 'verified_ok', 'verified_weak'].includes(r.status))
+      .map(r => `${r.student_id}::${r.goal_id}`));
+    const rows: any[] = [];
+    for (const gid of doneGoalIds) {
+      for (const sid of studentIds) {
+        if (keep.has(`${sid}::${gid}`)) continue;
+        rows.push({
+          design_id: designId, student_id: sid, goal_id: gid,
+          status: 'advanced', partial_upto: null, advanced_at: new Date().toISOString(),
+        });
+      }
+    }
+    if (rows.length > 0) {
+      const { error } = await db.from('plan_goal_progress')
+        .upsert(rows, { onConflict: 'design_id,student_id,goal_id' });
+      if (error) throw error;
+    }
+  }
+}
+
 // 오늘 특강 세션이 있는 설계 id 집합 (materialize된 plan_sessions 기준)
 export async function fetchTodayIntensiveDesignIds(todayStr: string): Promise<Set<string>> {
   const { data } = await db.from('plan_sessions')
