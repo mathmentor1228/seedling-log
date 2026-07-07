@@ -3985,6 +3985,21 @@ export type Database = {
           },
         ]
       }
+      private_channel_members: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       private_channel_tags: {
         Row: {
           color: string
@@ -7933,6 +7948,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin_staff: { Args: never; Returns: boolean }
+      is_private_channel_member: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       resolve_teacher_display_name_for_record: {
         Args: { _record_date?: string; _teacher_id: string }
         Returns: string
