@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ArrowRight, Check, StickyNote, Save,
-  AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck,
+  AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck, ChevronDown,
 } from 'lucide-react';
 import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions } from './planApi';
 import { ProgressAdjustModal } from './ProgressAdjustModal';
@@ -93,6 +93,8 @@ export function TodaySession() {
   // PLAN-POS-ADJUST-V1: 진도 위치 조정 모달 + 조정 후 데이터 재로딩 키
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // 목표별 세부 카드 접기/펼치기 — 총 도달 페이지가 주 입력이라 기본 접힘
+  const [openGoalCards, setOpenGoalCards] = useState<Set<string>>(new Set());
 
   // 수업기록 날짜 — 기본은 오늘, 과거로 돌아가서 놓친 기입도 가능
   const [sessionDate, setSessionDate] = useState<string>(() => {
@@ -1160,13 +1162,29 @@ export function TodaySession() {
                   return null;
                 };
                 const bulkKey = `${goal.id}::__all__`;
+                // 접힘 요약: 출석 학생들의 상태 집계
+                const isOpen = openGoalCards.has(goal.id);
+                let cDone = 0, cPartial = 0, cDefer = 0;
+                presentStudents.forEach(s => {
+                  const ss = getStuState(s.id);
+                  if (ss?.state === 'done') cDone++;
+                  else if (ss?.state === 'partial') cPartial++;
+                  else if (ss?.state === 'defer') cDefer++;
+                });
                 return (
                   <Card key={goal.id} className={
                     st?.state === 'done' ? 'border-green-300 bg-green-50/40'
                       : st?.state === 'partial' ? 'border-amber-300 bg-amber-50/40'
                         : st?.state === 'defer' ? 'opacity-70' : ''}>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-baseline gap-2 flex-wrap">
+                    <CardContent className={isOpen ? 'p-4 space-y-3' : 'p-0'}>
+                      <button
+                        className={`flex items-center gap-2 flex-wrap w-full text-left ${isOpen ? '' : 'px-4 py-3 hover:bg-muted/30 transition rounded-xl'}`}
+                        onClick={() => setOpenGoalCards(prev => {
+                          const n = new Set(prev);
+                          n.has(goal.id) ? n.delete(goal.id) : n.add(goal.id);
+                          return n;
+                        })}
+                        title={isOpen ? '접기' : '세부 조정 펼치기'}>
                         <span className="font-extrabold">{goal.order_index}. {goal.title}</span>
                         <span className="text-xs text-muted-foreground">{formatPages(goal.pages)}</span>
                         {continueFrom && (
@@ -1174,7 +1192,24 @@ export function TodaySession() {
                             지난 시간 {continueFrom}까지 — 이어서
                           </Badge>
                         )}
-                      </div>
+                        <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                          {cDone > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-green-400 text-green-700 bg-green-50">✓ {cDone}</Badge>
+                          )}
+                          {cPartial > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">◐ {cPartial}</Badge>
+                          )}
+                          {cDefer > 0 && (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">→ {cDefer}</Badge>
+                          )}
+                          {!isOpen && cDone === 0 && cPartial === 0 && cDefer === 0 && (
+                            <span className="text-[10px] text-muted-foreground">세부 조정</span>
+                          )}
+                          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <>
                       {design.teaching_mode === 'abc' && design.angle_mode !== 'off' && (
                         <p className="text-xs text-muted-foreground">
                           {(['A', 'B', 'C'] as const).filter(t => design.type_concepts?.[t]).map(t => (
@@ -1183,7 +1218,7 @@ export function TodaySession() {
                         </p>
                       )}
 
-                      {/* 일괄 처리 (모두 같은 진도일 때) */}
+                      {/* 일괄 처리 — 모두 같은 진도일 때 */}
                       <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
                         <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
                         <Button size="sm" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'done')}>
@@ -1203,7 +1238,7 @@ export function TodaySession() {
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
                       </div>
 
-                      {/* 학생별 개별 기록 */}
+                      {/* 학생별 개별 기록 — 다르면 개별 처리 */}
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-bold text-muted-foreground">학생별 진도 — 다르면 개별로 눌러주세요</p>
                         {presentStudents.length === 0 && (
@@ -1245,6 +1280,8 @@ export function TodaySession() {
                           );
                         })}
                       </div>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
                 );
