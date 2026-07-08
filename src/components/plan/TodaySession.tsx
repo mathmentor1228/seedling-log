@@ -707,6 +707,24 @@ export function TodaySession() {
     return { range: `${goalPart}${pagePart}`, nextGoalTitle: nextGoal, hadProgress: true };
   }
 
+  // PLAN-REPORT-BRIDGE-V1: 오늘 계획 데이터 → 수업일지 관찰노트 자동 기록.
+  // 주간리포트 AI가 learning_issues_note·test_result_text를 서술 근거로 읽으므로,
+  // 확인 도장·쪽지 결과를 여기에 채워야 학부모 리포트에 반영된다.
+  function planAutoNote(sid: string): string {
+    const parts: string[] = [];
+    const sum = summarizeStudentToday(sid);
+    if (sum.hadProgress) parts.push(`진도 ${sum.range}`);
+    const stamps = Object.entries(verifiedLocal)
+      .filter(([k]) => k.endsWith(`::${sid}`))
+      .map(([k, v]) => {
+        const g = goals.find(x => x.id === k.split('::')[0]);
+        return g ? `${g.title} ${v === 'ok' ? '이해 확인' : '미흡(재학습 등록)'}` : null;
+      })
+      .filter(Boolean);
+    if (stamps.length > 0) parts.push(`확인: ${stamps.join(', ')}`);
+    return parts.length > 0 ? `📋 수업계획 자동 기록 — ${parts.join(' · ')}` : '';
+  }
+
   async function saveDay() {
     if (!sessionId) return;
     setSaving(true);
@@ -780,14 +798,23 @@ export function TodaySession() {
           const quiz = quizSaved[s.id];
           const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
 
-          // 기존 lesson_record 있는지 확인
+          // 기존 lesson_record 있는지 확인 (관찰노트는 보존·병합 위해 함께 조회)
           const { data: existingLR } = await db.from('lesson_records')
-            .select('id')
+            .select('id, learning_issues_note')
             .eq('teacher_id', teacherId)
             .eq('student_id', s.id)
             .eq('subject', subject)
             .eq('lesson_date', todayStr)
             .maybeSingle();
+
+          // PLAN-REPORT-BRIDGE-V1: 교사가 직접 쓴 관찰노트는 보존, 자동 기록 줄만 교체
+          const autoNote = isAbsent ? '' : planAutoNote(s.id);
+          const manualNote = (existingLR?.learning_issues_note || '')
+            .split('\n')
+            .filter((l: string) => !l.startsWith('📋 수업계획 자동 기록'))
+            .join('\n')
+            .trim();
+          const mergedNote = [manualNote, autoNote].filter(Boolean).join('\n') || null;
 
           const payload: any = {
             teacher_id: teacherId,
@@ -801,6 +828,13 @@ export function TodaySession() {
             notes: note.trim() || null,
             understanding_score: understanding,
             attendance_status: isAbsent ? ['결석'] : ['출석'],
+            // PLAN-REPORT-BRIDGE-V1: 주간리포트 AI가 읽는 서술 근거 채우기
+            learning_issues_note: mergedNote,
+            ...(quiz && quizTarget ? {
+              test_title: `쪽지시험 — ${quizTarget.title}`,
+              test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
+                : `미달${errorPick[s.id] ? ` (원인: ${ERROR_TYPES.find(e => e.key === errorPick[s.id])?.label})` : ''}`}`,
+            } : {}),
           };
 
           let lessonRecordId: string | null = null;
