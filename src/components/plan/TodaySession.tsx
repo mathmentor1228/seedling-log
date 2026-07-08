@@ -63,6 +63,10 @@ export function TodaySession() {
 
   const [step, setStep] = useState(1);
   const [absent, setAbsent] = useState<Set<string>>(new Set());
+  // PLAN-ABSENT-3WAY-V1: 결석 처리 3형 — skip(넘어감)/makeup(보충 큐)/defer(진도 미루기)
+  // 기본값: 그룹 수업 → 스킵, 1:1(individual) → 보충. 결석 체크 시 학생별 원탭 변경.
+  type AbsentHandling = 'skip' | 'makeup' | 'defer';
+  const [absentHandling, setAbsentHandling] = useState<Record<string, AbsentHandling>>({});
   const [quizScores, setQuizScores] = useState<Record<string, string>>({});
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean }>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
@@ -418,7 +422,9 @@ export function TodaySession() {
   async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string, onlyStudentIds?: string[]) {
     if (!sessionId) return;
     const targetIds = onlyStudentIds ?? students.filter(s => !absent.has(s.id)).map(s => s.id);
-    const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)).map(s => s.id);
+    // PLAN-ABSENT-3WAY-V1: 미루기(defer) 학생은 기록을 안 남긴다 → 목표가 그 학생 풀에 남아 자동 재분배
+    const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)
+      && (absentHandling[s.id] ?? 'skip') !== 'defer').map(s => s.id);
     const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred' } as const;
     try {
       const rows = [
@@ -658,6 +664,23 @@ export function TodaySession() {
         });
       }
 
+      // PLAN-ABSENT-3WAY-V1: 보충형 결석 → 보충 큐 자동 등록 (같은 제목이 이미 열려 있으면 중복 방지)
+      let makeupCount = 0;
+      for (const s of students) {
+        if (!absent.has(s.id)) continue;
+        if ((absentHandling[s.id] ?? 'skip') !== 'makeup') continue;
+        const goalPart = todayGoals.length > 0
+          ? ` (${todayGoals[0].goal.title}${todayGoals.length > 1 ? ` 외 ${todayGoals.length - 1}개` : ''})`
+          : '';
+        const title = `보충 — ${todayStr} 결석분${goalPart}`;
+        if (queue.some(q => q.student_id === s.id && q.kind === 'makeup' && q.title === title)) continue;
+        const { data: q } = await db.from('plan_queue').insert({
+          design_id: designId, student_id: s.id, kind: 'makeup',
+          title, assignee: 'teacher',
+        }).select().single();
+        if (q) { setQueue(p => [...p, q]); makeupCount++; }
+      }
+
       // ── LESSON-HW-BRIDGE-V1 ── 수업일지·숙제 자동 반영 ──
       let lrCount = 0, hwCheckCount = 0, hwNewCount = 0;
       if (subject) {
@@ -759,6 +782,7 @@ export function TodaySession() {
 
       setSavedDone(true);
       const parts = ['오늘 기록 저장 완료'];
+      if (makeupCount > 0) parts.push(`결석 보충 큐 ${makeupCount}건`);
       if (lrCount > 0) parts.push(`수업일지 ${lrCount}건`);
       if (hwCheckCount > 0) parts.push(`숙제 확인 ${hwCheckCount}건`);
       if (hwNewCount > 0) parts.push(`다음 숙제 ${hwNewCount}건`);
@@ -909,7 +933,17 @@ export function TodaySession() {
                       ${absent.has(s.id) ? 'border-red-300 bg-red-50 text-red-600'
                         : isWalkin ? 'border-primary/50 bg-primary/5 text-primary'
                         : 'border-green-300 bg-green-50 text-green-700'}`}
-                    onClick={() => setAbsent(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; })}>
+                    onClick={() => {
+                      const wasAbsent = absent.has(s.id);
+                      setAbsent(p => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; });
+                      // PLAN-ABSENT-3WAY-V1: 결석 체크 시 기본 처리형 자동 세팅 (그룹→스킵, 1:1→보충)
+                      setAbsentHandling(p => {
+                        const n = { ...p };
+                        if (wasAbsent) delete n[s.id];
+                        else n[s.id] = design?.teaching_mode === 'individual' ? 'makeup' : 'skip';
+                        return n;
+                      });
+                    }}>
                     {absent.has(s.id) && <UserX className="w-3.5 h-3.5 inline mr-1" />}
                     {s.name}
                     {isWalkin && <span className="ml-1 text-[10px]">게릴라</span>}
@@ -918,6 +952,40 @@ export function TodaySession() {
                 );
               })}
             </div>
+            {/* PLAN-ABSENT-3WAY-V1: 결석 학생별 처리 원탭 — 스킵/보충/미루기 */}
+            {students.filter(s => absent.has(s.id)).length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t">
+                <p className="text-[11px] font-bold text-muted-foreground">
+                  결석 처리 — 기본값 자동({design?.teaching_mode === 'individual' ? '보충' : '스킵'}) · 이번만 다르게 하려면 탭
+                </p>
+                {students.filter(s => absent.has(s.id)).map(s => {
+                  const cur: AbsentHandling = absentHandling[s.id] ?? (design?.teaching_mode === 'individual' ? 'makeup' : 'skip');
+                  const opts: { k: AbsentHandling; label: string; desc: string; cls: string }[] = [
+                    { k: 'skip', label: '넘어감', desc: '커리큘럼 그대로 — 구멍만 표시', cls: 'border-muted-foreground/40 bg-muted text-foreground' },
+                    { k: 'makeup', label: '보충 잡기', desc: '진도는 계획대로 + 보충 큐 자동 등록', cls: 'border-amber-400 bg-amber-50 text-amber-800' },
+                    { k: 'defer', label: '진도 미루기', desc: '이 학생만 남은 수업에 자동 재분배', cls: 'border-sky-400 bg-sky-50 text-sky-800' },
+                  ];
+                  return (
+                    <div key={s.id} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/40 px-2.5 py-1.5">
+                      <b className="text-sm min-w-[56px] text-red-600">{s.name}</b>
+                      <div className="flex gap-1">
+                        {opts.map(o => (
+                          <button key={o.k} title={o.desc}
+                            className={`text-[11px] font-bold rounded-full border px-2.5 py-0.5 transition
+                              ${cur === o.k ? o.cls : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+                            onClick={() => setAbsentHandling(p => ({ ...p, [s.id]: o.k }))}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {opts.find(o => o.k === cur)?.desc}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {walkinStudents.length > 0 && (
               <p className="text-[11px] text-muted-foreground">
                 게릴라 {walkinStudents.length}명은 오늘 출결·쪽지에만 반영되고, 이 반 커리큘럼 진도에는 포함되지 않습니다.
@@ -1448,7 +1516,19 @@ export function TodaySession() {
         <div className="space-y-3">
           <Card><CardContent className="p-4 space-y-2 text-sm">
             <p className="text-xs font-bold text-muted-foreground">오늘 자동으로 기록된 것</p>
-            <p>· 출석 {effectiveStudents.length - absent.size}명{absent.size > 0 && ` / 결석 ${absent.size}명 (진도 스킵 표시)`}{walkinStudents.length > 0 && ` · 게릴라 ${walkinStudents.length}명 포함`}</p>
+            <p>· 출석 {effectiveStudents.length - absent.size}명
+              {absent.size > 0 && (() => {
+                const hOf = (sid: string) => absentHandling[sid] ?? 'skip';
+                const abs = students.filter(s => absent.has(s.id));
+                const cnt = (k: string) => abs.filter(s => hOf(s.id) === k).length;
+                const parts = [
+                  cnt('skip') > 0 ? `넘어감 ${cnt('skip')}` : '',
+                  cnt('makeup') > 0 ? `보충 ${cnt('makeup')} (저장 시 큐 등록)` : '',
+                  cnt('defer') > 0 ? `미루기 ${cnt('defer')} (자동 재분배)` : '',
+                ].filter(Boolean).join(' · ');
+                return ` / 결석 ${absent.size}명${parts ? ` — ${parts}` : ''}`;
+              })()}
+              {walkinStudents.length > 0 && ` · 게릴라 ${walkinStudents.length}명 포함`}</p>
             <p>· 쪽지시험 {Object.keys(quizSaved).length}명 기록
               {Object.values(quizSaved).filter(v => !v.passed).length > 0 &&
                 ` — 미달 ${Object.values(quizSaved).filter(v => !v.passed).length}명 자동 큐 등록`}</p>
