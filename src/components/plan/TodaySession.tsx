@@ -90,6 +90,10 @@ export function TodaySession() {
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
 
+  // PLAN-VERIFY-LOOP-V1: 확인 루프 — 지난 진행분에 ✓이해/✗미흡 도장 (이번 세션에서 찍은 것)
+  const [verifiedLocal, setVerifiedLocal] = useState<Record<string, 'ok' | 'weak'>>({}); // `${goalId}::${studentId}`
+  const [verifyExpanded, setVerifyExpanded] = useState(false);
+
   // PLAN-POS-ADJUST-V1: 진도 위치 조정 모달 + 조정 후 데이터 재로딩 키
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -286,6 +290,21 @@ export function TodaySession() {
   const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
 
+  // PLAN-VERIFY-LOOP-V1: 확인 대기 목록 — 나갔지만(advanced) 아직 확인 도장 없는 지난 진행분.
+  // 오늘 나갈 목표와, 쪽지시험이 다루는 목표는 제외. 학생별로 도장 대상이 다를 수 있어 목표 단위로 묶는다.
+  const verifyBlocks = useMemo(() => {
+    const todayIds = new Set(todayGoals.map(t => t.goal.id));
+    const blocks: { goal: PlanGoal; stus: StudentInfo[] }[] = [];
+    for (const g of trackGoals) {
+      if (todayIds.has(g.id)) continue;
+      if (hasQuiz && quizTarget?.id === g.id) continue;
+      const stus = students.filter(s => !absent.has(s.id)
+        && progress.some(p => p.goal_id === g.id && p.student_id === s.id && p.status === 'advanced'));
+      if (stus.length > 0) blocks.push({ goal: g, stus });
+    }
+    return blocks;
+  }, [trackGoals, todayGoals, students, absent, progress, hasQuiz, quizTarget]);
+
   // 게릴라 학생을 명단에 합쳐 출결·쪽지에 표시(진도 기록에는 미포함)
   const walkinStudents = useMemo(
     () => walkinPool.filter(s => walkinIds.has(s.id)),
@@ -344,6 +363,18 @@ export function TodaySession() {
       if (error) throw error;
       setQuizSaved(p => ({ ...p, [stu.id]: { score, passed } }));
       setRecentChecks(p => [{ student_id: stu.id, goal_id: quizTarget.id, score, passed, method: 'quiz', created_at: new Date().toISOString() }, ...p]);
+
+      // PLAN-VERIFY-LOOP-V1: 쪽지 결과가 곧 확인 도장 — 나간(advanced) 상태인 목표에 한해.
+      // 로컬 progress는 건드리지 않는다 (건드리면 채점 도중 quizTarget이 다음 목표로 밀림).
+      const pRow = progress.find(r => r.goal_id === quizTarget.id && r.student_id === stu.id && r.status === 'advanced');
+      if (pRow) {
+        await db.from('plan_goal_progress').upsert({
+          design_id: designId, student_id: stu.id, goal_id: quizTarget.id,
+          status: passed ? 'verified_ok' : 'verified_weak',
+          verified_at: new Date().toISOString(), session_id: sessionId,
+        }, { onConflict: 'design_id,student_id,goal_id' });
+        setVerifiedLocal(p => ({ ...p, [`${quizTarget.id}::${stu.id}`]: passed ? 'ok' : 'weak' }));
+      }
 
       if (!passed) {
         // 룰셋의 1차 처리 → 큐 자동 등록
@@ -512,6 +543,63 @@ export function TodaySession() {
     } else {
       toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만`);
     }
+  }
+
+  // PLAN-VERIFY-LOOP-V1: 확인 도장 — ✓이해/✗미흡. 미흡은 쪽지 미달과 같은 룰셋 라우팅으로 큐 자동 등록.
+  async function verifyStudents(goal: PlanGoal, stus: StudentInfo[], result: 'ok' | 'weak') {
+    if (!sessionId || stus.length === 0) return;
+    const now = new Date().toISOString();
+    try {
+      const rows = stus.map(s => ({
+        design_id: designId, student_id: s.id, goal_id: goal.id,
+        status: result === 'ok' ? 'verified_ok' : 'verified_weak',
+        verified_at: now, session_id: sessionId,
+      }));
+      const { error } = await db.from('plan_goal_progress')
+        .upsert(rows, { onConflict: 'design_id,student_id,goal_id' });
+      if (error) throw error;
+      setVerifiedLocal(prev => {
+        const next = { ...prev };
+        stus.forEach(s => { next[`${goal.id}::${s.id}`] = result; });
+        return next;
+      });
+      if (result === 'ok') {
+        await db.from('plan_checks').insert(stus.map(s => ({
+          design_id: designId, session_id: sessionId, student_id: s.id,
+          goal_id: goal.id, method: 'oral', passed: true,
+        })));
+        toast.success(`✓ 이해 확인 — ${goal.title} · ${stus.length}명`);
+      } else {
+        const kindMap: Record<string, string> = { retest: 'retest', clinic: 'relearn', homework: 'relearn' };
+        for (const s of stus) {
+          const { data: check } = await db.from('plan_checks').insert({
+            design_id: designId, session_id: sessionId, student_id: s.id,
+            goal_id: goal.id, method: 'oral', passed: false,
+          }).select().single();
+          const { data: q } = await db.from('plan_queue').insert({
+            design_id: designId, student_id: s.id, goal_id: goal.id,
+            source_check_id: check?.id ?? null,
+            kind: kindMap[design.fail_action] || 'relearn',
+            title: `재학습 — ${goal.title}`,
+            assignee: design.fail_action === 'clinic' ? 'assistant' : 'teacher',
+          }).select().single();
+          if (q) setQueue(p => [...p, q]);
+        }
+        toast(`✗ 미흡 — ${stus.map(s => s.name).join(', ')} · 재학습 큐 자동 등록 (잘못 눌렀으면 ✓로 다시 찍고 큐에서 체크)`);
+      }
+    } catch (e: any) {
+      toast.error(`확인 저장 실패: ${e.message || e}`);
+    }
+  }
+
+  // 큐 담당 원탭 전환 — 교사 ↔ 조교 인계
+  async function toggleQueueAssignee(q: QueueRow) {
+    const next = q.assignee === 'assistant' ? 'teacher' : 'assistant';
+    try {
+      await db.from('plan_queue').update({ assignee: next }).eq('id', q.id);
+      setQueue(p => p.map(x => x.id === q.id ? { ...x, assignee: next } : x));
+      toast.success(next === 'assistant' ? '조교에게 인계했어요' : '교사 담당으로 가져왔어요');
+    } catch (e: any) { toast.error(e.message || String(e)); }
   }
 
   async function resolveQueueItem(q: QueueRow) {
@@ -897,16 +985,77 @@ export function TodaySession() {
             </CardContent></Card>
           )}
 
+          {/* PLAN-VERIFY-LOOP-V1: ① 지난 진도 확인 — "나갔다 ≠ 배웠다" */}
+          {verifyBlocks.length > 0 && (
+            <Card><CardContent className="p-4 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                🔍 지난 진도 확인 — 제대로 배웠는지 도장 찍기
+                <span className="ml-1 font-normal">(✗미흡은 재학습 큐 자동 등록)</span>
+              </p>
+              {!verifyExpanded && verifyBlocks.length > 3 && (
+                <button className="text-[11px] text-muted-foreground underline underline-offset-2"
+                  onClick={() => setVerifyExpanded(true)}>
+                  이전 목표 {verifyBlocks.length - 3}개 더 보기
+                </button>
+              )}
+              {(verifyExpanded ? verifyBlocks : verifyBlocks.slice(-3)).map(({ goal, stus }) => {
+                const pending = stus.filter(s => !verifiedLocal[`${goal.id}::${s.id}`]);
+                return (
+                  <div key={goal.id} className="border rounded-lg px-3 py-2 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold">{goal.order_index}. {goal.title}</span>
+                      <span className="text-[11px] text-muted-foreground">{formatPages(goal.pages)}</span>
+                      {pending.length > 0 && (
+                        <Button size="sm" variant="outline"
+                          className="ml-auto h-6 text-[10px] border-green-400 text-green-700 hover:bg-green-50"
+                          onClick={() => verifyStudents(goal, pending, 'ok')}>
+                          남은 {pending.length}명 ✓이해
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {stus.map(s => {
+                        const v = verifiedLocal[`${goal.id}::${s.id}`];
+                        return (
+                          <div key={s.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs
+                            ${v === 'ok' ? 'border-green-300 bg-green-50 text-green-700'
+                              : v === 'weak' ? 'border-red-300 bg-red-50 text-red-600' : 'bg-background'}`}>
+                            <b>{s.name}</b>
+                            {s.type && <span className={`text-[10px] ${TYPE_COLORS[s.type]}`}>{s.type}</span>}
+                            {v === 'ok' && <span className="font-bold">✓ 이해</span>}
+                            {v === 'weak' && <span className="font-bold">✗ 미흡</span>}
+                            {!v && (
+                              <>
+                                <button className="rounded-full border border-green-300 text-green-700 px-1.5 font-bold hover:bg-green-100"
+                                  onClick={() => verifyStudents(goal, [s], 'ok')} title="이해 확인">✓</button>
+                                <button className="rounded-full border border-red-300 text-red-600 px-1.5 font-bold hover:bg-red-100"
+                                  onClick={() => verifyStudents(goal, [s], 'weak')} title="미흡 — 재학습 큐 등록">✗</button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent></Card>
+          )}
+
           {queue.length > 0 && (
             <Card><CardContent className="p-4 space-y-2">
-              <p className="text-xs font-bold text-muted-foreground">밀린 할 일 {queue.length}건 — 오늘 처리했으면 체크</p>
+              <p className="text-xs font-bold text-muted-foreground">밀린 할 일 {queue.length}건 — 오늘 처리했으면 체크 · 담당 배지를 누르면 교사↔조교 인계</p>
               {queue.map(q => {
                 const stu = students.find(s => s.id === q.student_id);
                 return (
                   <div key={q.id} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2">
                     <b>{stu?.name}</b>
                     <span className="flex-1 truncate">{q.title}</span>
-                    <Badge variant="outline" className="text-[10px]">{q.assignee === 'assistant' ? '조교' : '교사'}</Badge>
+                    <Badge variant="outline" className="text-[10px] cursor-pointer select-none hover:bg-muted"
+                      title="눌러서 교사 ↔ 조교 인계"
+                      onClick={() => toggleQueueAssignee(q)}>
+                      {q.assignee === 'assistant' ? '조교' : '교사'}
+                    </Badge>
                     <Button size="sm" variant="ghost" className="h-7" onClick={() => resolveQueueItem(q)}>
                       <Check className="w-4 h-4" />
                     </Button>
@@ -1303,6 +1452,11 @@ export function TodaySession() {
             <p>· 쪽지시험 {Object.keys(quizSaved).length}명 기록
               {Object.values(quizSaved).filter(v => !v.passed).length > 0 &&
                 ` — 미달 ${Object.values(quizSaved).filter(v => !v.passed).length}명 자동 큐 등록`}</p>
+            {Object.keys(verifiedLocal).length > 0 && (
+              <p>· 확인 도장 {Object.keys(verifiedLocal).length}건
+                — ✓이해 {Object.values(verifiedLocal).filter(v => v === 'ok').length} / ✗미흡 {Object.values(verifiedLocal).filter(v => v === 'weak').length}
+                {Object.values(verifiedLocal).some(v => v === 'weak') && ' (미흡은 재학습 큐 등록됨)'}</p>
+            )}
             <p>· 진도: {Object.entries(goalStates).length === 0 ? '기록 없음'
               : Object.entries(goalStates).map(([gid, st]) => {
                 const g = goals.find(x => x.id === gid);
