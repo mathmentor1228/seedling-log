@@ -338,6 +338,139 @@ export async function fetchBriefings(designIds: string[]): Promise<Record<string
   return out;
 }
 
+// PLAN-PRINCIPAL-BOARD-V1: 원장 격차 대시보드 — 반별 "나간 진도 vs 확인된 진도" + 학생별 신호
+export type PrincipalStudentRow = {
+  studentId: string; name: string; type: string | null;
+  done: number;        // 나간 목표 수 (advanced 계열)
+  verifiedOk: number;  // 확인 도장 ✓이해
+  weak: number;        // 확인 도장 ✗미흡
+  unverified: number;  // 나갔지만 아직 확인 안 됨
+  behind: number;      // 반에서 가장 앞선 학생 대비 뒤처진 목표 수
+  openQueue: number;   // 열린 재시험·재학습 건수
+};
+export type PrincipalDesignOverview = {
+  designId: string; title: string; subject: string; teacherName: string;
+  total: number;            // 끝점까지 목표 수
+  groupDone: number;        // 반이 나간 목표 수 (union)
+  advancedRate: number;     // 나간 진도 % (학생×목표 기준)
+  verifiedRate: number;     // 확인된 진도 % (학생×목표 기준)
+  unverifiedCount: number; weakCount: number;
+  queueTeacher: number; queueAssistant: number;
+  pace: number | null;      // 남은 목표 ÷ 남은 수업 (기한 없으면 null)
+  targetDate: string | null;
+  students: PrincipalStudentRow[];
+};
+const ADVANCED_FAMILY = ['advanced', 'partial', 'verified_ok', 'verified_weak'];
+
+export async function fetchPrincipalOverview(): Promise<PrincipalDesignOverview[]> {
+  const designs = await fetchDesigns();
+  if (designs.length === 0) return [];
+  const designIds = designs.map((d: any) => d.id);
+  const trackIds = Array.from(new Set(designs.map((d: any) => d.track_id)));
+  const [goalsRes, progRes, queueRes, psRes] = await Promise.all([
+    db.from('plan_goals').select('id, track_id, order_index').in('track_id', trackIds).order('order_index'),
+    db.from('plan_goal_progress').select('design_id, student_id, goal_id, status').in('design_id', designIds),
+    db.from('plan_queue').select('design_id, student_id, assignee').in('design_id', designIds).eq('status', 'open'),
+    db.from('plan_students').select('design_id, student_id, student_type').in('design_id', designIds),
+  ]);
+  const sids = Array.from(new Set(((psRes.data || []) as any[]).map(r => r.student_id)));
+  const tids = Array.from(new Set(designs.map((d: any) => d.teacher_id).filter(Boolean)));
+  const [studsRes, profsRes] = await Promise.all([
+    sids.length ? supabase.from('students').select('id, name').in('id', sids) : Promise.resolve({ data: [] as any[] }),
+    tids.length ? db.from('profiles').select('id, full_name').in('id', tids) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const nameOf = new Map(((studsRes.data || []) as any[]).map((s: any) => [s.id, s.name]));
+  const teacherOf = new Map(((profsRes.data || []) as any[]).map((p: any) => [p.id, p.full_name]));
+  const goalsByTrack = new Map<string, any[]>();
+  ((goalsRes.data || []) as any[]).forEach(g => {
+    (goalsByTrack.get(g.track_id) || goalsByTrack.set(g.track_id, []).get(g.track_id))!.push(g);
+  });
+
+  const out: PrincipalDesignOverview[] = [];
+  for (const d of designs) {
+    const allGoals = goalsByTrack.get(d.track_id) || [];
+    const endIdx = d.end_goal_id ? allGoals.findIndex(g => g.id === d.end_goal_id) : allGoals.length - 1;
+    const trackGoalIds = new Set(allGoals.slice(0, (endIdx >= 0 ? endIdx : allGoals.length - 1) + 1).map(g => g.id));
+    const total = trackGoalIds.size;
+    const roster = ((psRes.data || []) as any[]).filter(r => r.design_id === d.id);
+    const rows = ((progRes.data || []) as any[]).filter(r => r.design_id === d.id && trackGoalIds.has(r.goal_id));
+    const queueRows = ((queueRes.data || []) as any[]).filter(r => r.design_id === d.id);
+
+    const perStudent: PrincipalStudentRow[] = roster.map(r => {
+      const mine = rows.filter(p => p.student_id === r.student_id);
+      const done = mine.filter(p => ADVANCED_FAMILY.includes(p.status)).length;
+      const verifiedOk = mine.filter(p => p.status === 'verified_ok').length;
+      const weak = mine.filter(p => p.status === 'verified_weak').length;
+      return {
+        studentId: r.student_id, name: nameOf.get(r.student_id) || '?', type: r.student_type || null,
+        done, verifiedOk, weak,
+        unverified: mine.filter(p => p.status === 'advanced' || p.status === 'partial').length,
+        behind: 0,
+        openQueue: queueRows.filter(q => q.student_id === r.student_id).length,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const maxDone = perStudent.reduce((m, s) => Math.max(m, s.done), 0);
+    perStudent.forEach(s => { s.behind = maxDone - s.done; });
+
+    const groupDone = new Set(rows.filter(p => ADVANCED_FAMILY.includes(p.status)).map(p => p.goal_id)).size;
+    const denom = roster.length * total;
+    const advancedTotal = perStudent.reduce((a, s) => a + s.done, 0);
+    const verifiedTotal = perStudent.reduce((a, s) => a + s.verifiedOk, 0);
+    const remainSessions = countProgressSessions(d.rhythm || {}, d.target_date);
+    out.push({
+      designId: d.id,
+      title: d.title || d.plan_tracks?.title || '(제목 없음)',
+      subject: d.plan_tracks?.subject || '',
+      teacherName: teacherOf.get(d.teacher_id) || '담당',
+      total, groupDone,
+      advancedRate: denom > 0 ? advancedTotal / denom : 0,
+      verifiedRate: denom > 0 ? verifiedTotal / denom : 0,
+      unverifiedCount: perStudent.reduce((a, s) => a + s.unverified, 0),
+      weakCount: perStudent.reduce((a, s) => a + s.weak, 0),
+      queueTeacher: queueRows.filter(q => q.assignee !== 'assistant').length,
+      queueAssistant: queueRows.filter(q => q.assignee === 'assistant').length,
+      pace: remainSessions > 0 ? Math.max(0, total - groupDone) / remainSessions : null,
+      targetDate: d.target_date || null,
+      students: perStudent,
+    });
+  }
+  return out;
+}
+
+// 에스컬레이션 플래그 — 원장 보드에서 소비 (확인/해결 처리)
+export type PlanFlagRow = {
+  id: string; design_id: string; student_id: string;
+  kind: string; level: string; message: string; status: string; created_at: string;
+  student_name?: string; design_title?: string;
+};
+export async function fetchOpenFlags(): Promise<PlanFlagRow[]> {
+  const { data, error } = await db.from('plan_flags')
+    .select('*').in('status', ['open', 'acknowledged'])
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const rows = (data || []) as PlanFlagRow[];
+  if (rows.length === 0) return rows;
+  const sids = Array.from(new Set(rows.map(r => r.student_id)));
+  const dids = Array.from(new Set(rows.map(r => r.design_id)));
+  const [studs, des] = await Promise.all([
+    supabase.from('students').select('id, name').in('id', sids),
+    db.from('plan_designs').select('id, title, plan_tracks(title)').in('id', dids),
+  ]);
+  const sName = new Map(((studs.data || []) as any[]).map((s: any) => [s.id, s.name]));
+  const dName = new Map(((des.data || []) as any[]).map((r: any) => [r.id, r.title || r.plan_tracks?.title]));
+  rows.forEach(r => {
+    r.student_name = sName.get(r.student_id) || '?';
+    r.design_title = dName.get(r.design_id) || '';
+  });
+  return rows;
+}
+export async function updateFlagStatus(id: string, status: 'acknowledged' | 'resolved'): Promise<void> {
+  const patch: any = { status };
+  if (status === 'resolved') patch.resolved_at = new Date().toISOString();
+  const { error } = await db.from('plan_flags').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
 // PLANNER-PRINT-V1: 플래너 출력 이력 → 재출력 필요 판정
 export type PrinterStatus = 'never' | 'outdated' | 'ok';
 export async function fetchPlannerStatus(

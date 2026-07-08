@@ -15,7 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog, MapPin } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog, MapPin, ShieldCheck } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
 import { RosterManagerModal } from '@/components/plan/RosterManagerModal';
@@ -55,6 +56,7 @@ function TrackProgressBar({ p }: { p?: PlanProgress }) {
 
 function PlanHome() {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [designs, setDesigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -188,6 +190,13 @@ function PlanHome() {
           </span>
         </div>
         <div className="ml-auto flex gap-2 flex-wrap">
+          {role === 'admin' && (
+            <Button variant="outline" asChild>
+              <Link to="/plan/overview">
+                <ShieldCheck className="w-4 h-4 mr-1" />원장 보드
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={openTrackList}>
             <NotebookPen className="w-4 h-4 mr-1" />커리큘럼 관리
           </Button>

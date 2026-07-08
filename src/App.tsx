@@ -53,6 +53,7 @@ const ExamBoardPage = lazy(() => import("./pages/ExamBoardPage"));
 const PlanPage = lazy(() => import("./pages/PlanPage"));
 const PlanTodayPage = lazy(() => import("./pages/PlanTodayPage"));
 const PlanPlannerPage = lazy(() => import("./pages/PlanPlannerPage"));
+const PlanOverviewPage = lazy(() => import("./pages/PlanOverviewPage"));
 const MathConceptPage = lazy(() => import("./pages/MathConceptPage"));
 const ExamPrepPage = lazy(() => import("./pages/ExamPrepPage"));
 const StudySessionPage = lazy(() => import("./pages/StudySessionPage"));
@@ -188,6 +189,7 @@ const App = () => (
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/plan" element={<PlanPage />} />
+                <Route path="/plan/overview" element={<PlanOverviewPage />} />
                 <Route path="/plan/:designId/today" element={<PlanTodayPage />} />
                 <Route path="/plan/:designId/planner" element={<PlanPlannerPage />} />
                 <Route path="/exam-board" element={<ExamBoardPage />} />
