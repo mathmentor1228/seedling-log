@@ -675,7 +675,7 @@ export function TodaySession() {
 
   // 학생별 오늘 진도 요약 (수업일지 lesson_range 생성용)
   function summarizeStudentToday(sid: string): {
-    range: string; nextGoalTitle: string | null; hadProgress: boolean;
+    range: string; nextGoalTitle: string | null; hadProgress: boolean; lastIdx: number;
   } {
     const donePartial: { g: PlanGoal; state: 'done' | 'partial'; upto?: string }[] = [];
     let lastIdx = -1;
@@ -692,7 +692,7 @@ export function TodaySession() {
         lastIdx = i; break;
       } else break;
     }
-    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[todayStartIdx]?.title || null, hadProgress: false };
+    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[todayStartIdx]?.title || null, hadProgress: false, lastIdx: -1 };
     const first = donePartial[0].g;
     const last = donePartial[donePartial.length - 1];
     const startPage = extractPageRange(first.pages)?.start;
@@ -704,7 +704,7 @@ export function TodaySession() {
       : `${first.order_index}. ${first.title} ~ ${last.g.order_index}. ${last.g.title}${last.state === 'partial' ? ` (일부)` : ''}`;
     const pagePart = startPage != null && endPage != null ? ` · p.${startPage}~p.${endPage}` : '';
     const nextGoal = trackGoals[lastIdx + 1]?.title || null;
-    return { range: `${goalPart}${pagePart}`, nextGoalTitle: nextGoal, hadProgress: true };
+    return { range: `${goalPart}${pagePart}`, nextGoalTitle: nextGoal, hadProgress: true, lastIdx };
   }
 
   // PLAN-REPORT-BRIDGE-V1: 오늘 계획 데이터 → 수업일지 관찰노트 자동 기록.
@@ -713,15 +713,28 @@ export function TodaySession() {
   function planAutoNote(sid: string): string {
     const parts: string[] = [];
     const sum = summarizeStudentToday(sid);
-    if (sum.hadProgress) parts.push(`진도 ${sum.range}`);
-    const stamps = Object.entries(verifiedLocal)
+    if (sum.hadProgress) {
+      parts.push(`진도 ${sum.range}`);
+      // 페이스 평가 — 오늘 계획 분량 대비 어디까지 갔나
+      const extra = sum.lastIdx - todayEndIdx;
+      if (extra > 0) parts.push(`계획보다 +${extra}목표 앞서 순항`);
+      else if (extra === 0) parts.push('오늘 계획 분량 완료');
+      else parts.push(`오늘 계획 대비 ${extra}목표 (남은 수업에 재분배)`);
+    }
+    // 확인 도장 — 첫 확인과 망각곡선 복습을 구분해 기록
+    const reviewKeys = new Set(reviewBlocks.flatMap(b => b.stus.map(s => `${b.goal.id}::${s.id}`)));
+    const firstStamps: string[] = [];
+    const reviewStamps: string[] = [];
+    Object.entries(verifiedLocal)
       .filter(([k]) => k.endsWith(`::${sid}`))
-      .map(([k, v]) => {
+      .forEach(([k, v]) => {
         const g = goals.find(x => x.id === k.split('::')[0]);
-        return g ? `${g.title} ${v === 'ok' ? '이해 확인' : '미흡(재학습 등록)'}` : null;
-      })
-      .filter(Boolean);
-    if (stamps.length > 0) parts.push(`확인: ${stamps.join(', ')}`);
+        if (!g) return;
+        if (reviewKeys.has(k)) reviewStamps.push(`${g.title} ${v === 'ok' ? '기억' : '잊음(재학습 등록)'}`);
+        else firstStamps.push(`${g.title} ${v === 'ok' ? '이해 확인' : '미흡(재학습 등록)'}`);
+      });
+    if (firstStamps.length > 0) parts.push(`확인: ${firstStamps.join(', ')}`);
+    if (reviewStamps.length > 0) parts.push(`복습 확인(망각곡선): ${reviewStamps.join(', ')}`);
     return parts.length > 0 ? `📋 수업계획 자동 기록 — ${parts.join(' · ')}` : '';
   }
 
