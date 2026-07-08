@@ -383,18 +383,24 @@ export type PlanBriefing = {
   makeup: string[];   // 보충/재학습 대상 학생명
   weak: string[];     // 최근 확인에서 미흡(verified_weak)인 학생명
   flagged: string[];  // 학습신호 플래그(원장 에스컬레이션) 학생명
+  review: string[];   // 🔁 복습 예정일 지난 학생명 (PLAN-REVIEW-SM2-V1)
 };
-export async function fetchBriefings(designIds: string[]): Promise<Record<string, PlanBriefing>> {
+export async function fetchBriefings(designIds: string[], dateStr?: string): Promise<Record<string, PlanBriefing>> {
   const out: Record<string, PlanBriefing> = {};
   if (designIds.length === 0) return out;
-  designIds.forEach(id => { out[id] = { retest: [], makeup: [], weak: [], flagged: [] }; });
+  designIds.forEach(id => { out[id] = { retest: [], makeup: [], weak: [], flagged: [], review: [] }; });
+  const today = dateStr || new Date().toISOString().slice(0, 10);
 
-  const [qRes, pgRes, flRes] = await Promise.all([
+  const [qRes, pgRes, flRes, revRes] = await Promise.all([
     db.from('plan_queue').select('design_id, student_id, kind').in('design_id', designIds).eq('status', 'open'),
     db.from('plan_goal_progress').select('design_id, student_id, status').in('design_id', designIds).eq('status', 'verified_weak'),
     db.from('plan_flags').select('design_id, student_id, status').in('design_id', designIds).eq('status', 'open'),
+    // 복습 due — 마이그레이션 전(컬럼 없음)이면 error가 오고 조용히 빈 목록
+    db.from('plan_goal_progress').select('design_id, student_id')
+      .in('design_id', designIds).eq('status', 'verified_ok').lte('next_review_date', today),
   ]);
-  const rows = [...(qRes.data || []), ...(pgRes.data || []), ...(flRes.data || [])] as any[];
+  const revRows = (revRes.error ? [] : (revRes.data || [])) as any[];
+  const rows = [...(qRes.data || []), ...(pgRes.data || []), ...(flRes.data || []), ...revRows] as any[];
   const sids = Array.from(new Set(rows.map(r => r.student_id)));
   const { data: studs } = sids.length > 0
     ? await supabase.from('students').select('id, name').in('id', sids)
@@ -408,6 +414,7 @@ export async function fetchBriefings(designIds: string[]): Promise<Record<string
   });
   ((pgRes.data || []) as any[]).forEach(r => pushUniq(out[r.design_id].weak, nameOf.get(r.student_id)));
   ((flRes.data || []) as any[]).forEach(r => pushUniq(out[r.design_id].flagged, nameOf.get(r.student_id)));
+  revRows.forEach(r => pushUniq(out[r.design_id].review, nameOf.get(r.student_id)));
   return out;
 }
 

@@ -22,7 +22,26 @@ const db = supabase as any;
 
 type Design = any;
 type StudentInfo = { id: string; name: string; grade: string | null; type: 'A' | 'B' | 'C' | null };
-type ProgressRow = { student_id: string; goal_id: string; status: string; partial_upto: string | null };
+type ProgressRow = {
+  student_id: string; goal_id: string; status: string; partial_upto: string | null;
+  review_count?: number | null; next_review_date?: string | null;
+};
+
+// PLAN-REVIEW-SM2-V1: 망각곡선 복습 사다리 — 확인 성공마다 간격이 늘고, 실패하면 3일로 리셋
+const REVIEW_LADDER = [3, 7, 14, 30, 60];
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function reviewFields(result: 'ok' | 'weak', prevCount: number | null | undefined, baseDate: string) {
+  if (result === 'ok') {
+    const count = (prevCount || 0) + 1;
+    const interval = REVIEW_LADDER[Math.min(count - 1, REVIEW_LADDER.length - 1)];
+    return { review_count: count, review_interval: interval, next_review_date: addDays(baseDate, interval) };
+  }
+  return { review_count: 0, review_interval: REVIEW_LADDER[0], next_review_date: addDays(baseDate, REVIEW_LADDER[0]) };
+}
 type CheckRow = { student_id: string; goal_id: string | null; score: number | null; passed: boolean | null; method: string; created_at: string };
 type QueueRow = { id: string; student_id: string; kind: string; title: string; assignee: string };
 
@@ -135,7 +154,7 @@ export function TodaySession() {
           db.from('plan_goals').select('*').eq('track_id', d.track_id).order('order_index'),
           supabase.from('students').select('id, name, grade')
             .in('id', ((psRes.data || []) as any[]).map((r: any) => r.student_id)),
-          db.from('plan_goal_progress').select('student_id, goal_id, status, partial_upto').eq('design_id', designId),
+          db.from('plan_goal_progress').select('*').eq('design_id', designId),
           db.from('plan_checks').select('student_id, goal_id, score, passed, method, created_at')
             .eq('design_id', designId).order('created_at', { ascending: false }).limit(200),
           db.from('plan_queue').select('id, student_id, kind, title, assignee').eq('design_id', designId).eq('status', 'open'),
@@ -317,6 +336,20 @@ export function TodaySession() {
     return blocks;
   }, [trackGoals, todayGoals, students, absent, progress, hasQuiz, quizTarget]);
 
+  // PLAN-REVIEW-SM2-V1: 오늘 복습 due — 확인 완료(verified_ok)했지만 복습 예정일이 지난 목표
+  const reviewBlocks = useMemo(() => {
+    const blocks: { goal: PlanGoal; stus: (StudentInfo & { due: string })[] }[] = [];
+    for (const g of trackGoals) {
+      const stus = students.filter(s => !absent.has(s.id)).flatMap(s => {
+        const p = progress.find(r => r.goal_id === g.id && r.student_id === s.id
+          && r.status === 'verified_ok' && r.next_review_date && r.next_review_date <= todayStr);
+        return p ? [{ ...s, due: p.next_review_date! }] : [];
+      });
+      if (stus.length > 0) blocks.push({ goal: g, stus });
+    }
+    return blocks;
+  }, [trackGoals, students, absent, progress, todayStr]);
+
   // 게릴라 학생을 명단에 합쳐 출결·쪽지에 표시(진도 기록에는 미포함)
   const walkinStudents = useMemo(
     () => walkinPool.filter(s => walkinIds.has(s.id)),
@@ -380,11 +413,18 @@ export function TodaySession() {
       // 로컬 progress는 건드리지 않는다 (건드리면 채점 도중 quizTarget이 다음 목표로 밀림).
       const pRow = progress.find(r => r.goal_id === quizTarget.id && r.student_id === stu.id && r.status === 'advanced');
       if (pRow) {
-        await db.from('plan_goal_progress').upsert({
+        const base = {
           design_id: designId, student_id: stu.id, goal_id: quizTarget.id,
           status: passed ? 'verified_ok' : 'verified_weak',
           verified_at: new Date().toISOString(), session_id: sessionId,
-        }, { onConflict: 'design_id,student_id,goal_id' });
+        };
+        // PLAN-REVIEW-SM2-V1: 쪽지 결과로도 복습일 갱신 (마이그레이션 전이면 기본 필드로 폴백)
+        const { error: vErr } = await db.from('plan_goal_progress').upsert(
+          { ...base, ...reviewFields(passed ? 'ok' : 'weak', pRow.review_count, todayStr) },
+          { onConflict: 'design_id,student_id,goal_id' });
+        if (vErr && /column|schema/i.test(String(vErr.message))) {
+          await db.from('plan_goal_progress').upsert(base, { onConflict: 'design_id,student_id,goal_id' });
+        }
         setVerifiedLocal(p => ({ ...p, [`${quizTarget.id}::${stu.id}`]: passed ? 'ok' : 'weak' }));
       }
 
@@ -564,13 +604,22 @@ export function TodaySession() {
     if (!sessionId || stus.length === 0) return;
     const now = new Date().toISOString();
     try {
-      const rows = stus.map(s => ({
+      const baseRows = stus.map(s => ({
         design_id: designId, student_id: s.id, goal_id: goal.id,
         status: result === 'ok' ? 'verified_ok' : 'verified_weak',
         verified_at: now, session_id: sessionId,
       }));
-      const { error } = await db.from('plan_goal_progress')
+      // PLAN-REVIEW-SM2-V1: 확인 결과에 따라 다음 복습일 세팅 (마이그레이션 전이면 기본 필드로 폴백)
+      const rows = baseRows.map((r, i) => {
+        const prev = progress.find(p => p.goal_id === goal.id && p.student_id === stus[i].id);
+        return { ...r, ...reviewFields(result, prev?.review_count, todayStr) };
+      });
+      let { error } = await db.from('plan_goal_progress')
         .upsert(rows, { onConflict: 'design_id,student_id,goal_id' });
+      if (error && /column|schema/i.test(String(error.message))) {
+        ({ error } = await db.from('plan_goal_progress')
+          .upsert(baseRows, { onConflict: 'design_id,student_id,goal_id' }));
+      }
       if (error) throw error;
       setVerifiedLocal(prev => {
         const next = { ...prev };
@@ -1160,6 +1209,47 @@ export function TodaySession() {
                   </div>
                 );
               })}
+            </CardContent></Card>
+          )}
+
+          {/* PLAN-REVIEW-SM2-V1: 🔁 오늘 복습 확인 — 망각곡선 처방 */}
+          {reviewBlocks.length > 0 && (
+            <Card className="border-violet-300/60"><CardContent className="p-4 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                🔁 오늘 복습 확인 (망각곡선) — 잊기 전에 다시 도장
+                <span className="ml-1 font-normal">(✓기억 → 다음 간격 늘어남 · ✗잊음 → 재학습 큐 + 3일 뒤 다시)</span>
+              </p>
+              {reviewBlocks.map(({ goal, stus }) => (
+                <div key={goal.id} className="border rounded-lg px-3 py-2 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold">{goal.order_index}. {goal.title}</span>
+                    <span className="text-[11px] text-muted-foreground">{formatPages(goal.pages)}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {stus.map(s => {
+                      const v = verifiedLocal[`${goal.id}::${s.id}`];
+                      return (
+                        <div key={s.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs
+                          ${v === 'ok' ? 'border-green-300 bg-green-50 text-green-700'
+                            : v === 'weak' ? 'border-red-300 bg-red-50 text-red-600' : 'border-violet-200 bg-violet-50/40'}`}>
+                          <b>{s.name}</b>
+                          <span className="text-[10px] text-violet-700">🔁 {s.due.slice(5).replace('-', '/')} due</span>
+                          {v === 'ok' && <span className="font-bold">✓ 기억</span>}
+                          {v === 'weak' && <span className="font-bold">✗ 잊음</span>}
+                          {!v && (
+                            <>
+                              <button className="rounded-full border border-green-300 text-green-700 px-1.5 font-bold hover:bg-green-100"
+                                onClick={() => verifyStudents(goal, [s], 'ok')} title="기억함 — 복습 간격 늘어남">✓</button>
+                              <button className="rounded-full border border-red-300 text-red-600 px-1.5 font-bold hover:bg-red-100"
+                                onClick={() => verifyStudents(goal, [s], 'weak')} title="잊음 — 재학습 큐 + 3일 뒤 재복습">✗</button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </CardContent></Card>
           )}
 

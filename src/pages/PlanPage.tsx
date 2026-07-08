@@ -133,7 +133,7 @@ function PlanHome() {
       const [rosterMap, intensiveToday, briefMap, printMap, progMap, statusMap] = await Promise.all([
         fetchRostersFor(ids),
         fetchTodayIntensiveDesignIds(todayStr),
-        fetchBriefings(ids),
+        fetchBriefings(ids, todayStr),
         fetchPlannerStatus(list.map((d: any) => ({ id: d.id, updated_at: d.updated_at })), periodMonth),
         fetchTrackProgress(list.map((d: any) => ({ id: d.id, track_id: d.track_id, end_goal_id: d.end_goal_id }))),
         fetchSessionStatusFor(ids, todayStr),
@@ -340,6 +340,7 @@ function PlanHome() {
                             { label: '재시험', names: b.retest, cls: 'text-red-600' },
                             { label: '보충', names: b.makeup, cls: 'text-amber-700' },
                             { label: '미흡', names: b.weak, cls: 'text-amber-700' },
+                            { label: '🔁 복습', names: b.review, cls: 'text-violet-700' },
                             { label: '신호 주의', names: b.flagged, cls: 'text-red-600' },
                           ].filter(x => x.names.length > 0);
                           if (items.length === 0) {
