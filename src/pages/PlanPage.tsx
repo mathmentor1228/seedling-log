@@ -1,7 +1,6 @@
 // LESSON-PLAN-CORE-V1: 수업 계획 — 오늘 수업(자동) + 전체 설계 관리
 import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { DesignWizard } from '@/components/plan/DesignWizard';
 import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
@@ -615,9 +614,7 @@ function PlanHome() {
 export default function PlanPage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher']}>
-      <AppLayout>
         <PlanHome />
-      </AppLayout>
     </ProtectedRoute>
   );
 }

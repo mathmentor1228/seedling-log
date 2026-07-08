@@ -1,5 +1,4 @@
 import { useParams } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -436,11 +435,9 @@ export default function SubjectMaterialPage() {
   if (!config) {
     return (
       <ProtectedRoute>
-        <AppLayout>
           <div className="flex items-center justify-center min-h-[400px]">
             <p className="text-muted-foreground">존재하지 않는 과목입니다.</p>
           </div>
-        </AppLayout>
       </ProtectedRoute>
     );
   }
@@ -449,7 +446,6 @@ export default function SubjectMaterialPage() {
 
   return (
     <ProtectedRoute>
-      <AppLayout>
         <div className="space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -778,7 +774,6 @@ export default function SubjectMaterialPage() {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-      </AppLayout>
     </ProtectedRoute>
   );
 }

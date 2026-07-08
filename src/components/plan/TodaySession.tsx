@@ -929,6 +929,27 @@ export function TodaySession() {
               {pace != null && ` · 회당 ${pace.toFixed(1)}개 페이스`}
               {intensiveExtra > 0 && ` (특강 +${intensiveExtra}회)`}
             </p>
+            {/* 오늘 할 일 한눈 요약 — 뭐가 몇 건 기다리는지 헤더에서 바로 */}
+            {(() => {
+              const verifyN = verifyBlocks.reduce((a, b) => a + b.stus.filter(s => !verifiedLocal[`${b.goal.id}::${s.id}`]).length, 0);
+              const reviewN = reviewBlocks.reduce((a, b) => a + b.stus.filter(s => !verifiedLocal[`${b.goal.id}::${s.id}`]).length, 0);
+              const chips = [
+                verifyN > 0 && { label: `🔍 확인 도장 ${verifyN}`, cls: 'bg-sky-50 border-sky-300 text-sky-800' },
+                reviewN > 0 && { label: `🔁 복습 ${reviewN}`, cls: 'bg-violet-50 border-violet-300 text-violet-800' },
+                queue.length > 0 && { label: `⏳ 밀린 할 일 ${queue.length}`, cls: 'bg-amber-50 border-amber-300 text-amber-800' },
+                openHws.length > 0 && { label: `📝 숙제 확인 ${openHws.length}`, cls: 'bg-emerald-50 border-emerald-300 text-emerald-800' },
+              ].filter(Boolean) as { label: string; cls: string }[];
+              if (chips.length === 0) {
+                return <p className="text-[11px] text-green-700 mt-1.5">✓ 시작 전 확인할 것 없음 — 출결 체크 후 바로 진도</p>;
+              }
+              return (
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {chips.map(c => (
+                    <span key={c.label} className={`text-[11px] font-bold rounded-full border px-2 py-0.5 ${c.cls}`}>{c.label}</span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 ${isPastDate ? 'border-amber-400 bg-amber-50 dark:bg-amber-500/10' : 'border-primary/30 bg-background'}`}>
@@ -1196,9 +1217,9 @@ export function TodaySession() {
                             {v === 'weak' && <span className="font-bold">✗ 미흡</span>}
                             {!v && (
                               <>
-                                <button className="rounded-full border border-green-300 text-green-700 px-1.5 font-bold hover:bg-green-100"
+                                <button className="rounded-full border border-green-300 text-green-700 px-2.5 py-0.5 text-sm font-bold hover:bg-green-100"
                                   onClick={() => verifyStudents(goal, [s], 'ok')} title="이해 확인">✓</button>
-                                <button className="rounded-full border border-red-300 text-red-600 px-1.5 font-bold hover:bg-red-100"
+                                <button className="rounded-full border border-red-300 text-red-600 px-2.5 py-0.5 text-sm font-bold hover:bg-red-100"
                                   onClick={() => verifyStudents(goal, [s], 'weak')} title="미흡 — 재학습 큐 등록">✗</button>
                               </>
                             )}
@@ -1238,9 +1259,9 @@ export function TodaySession() {
                           {v === 'weak' && <span className="font-bold">✗ 잊음</span>}
                           {!v && (
                             <>
-                              <button className="rounded-full border border-green-300 text-green-700 px-1.5 font-bold hover:bg-green-100"
+                              <button className="rounded-full border border-green-300 text-green-700 px-2.5 py-0.5 text-sm font-bold hover:bg-green-100"
                                 onClick={() => verifyStudents(goal, [s], 'ok')} title="기억함 — 복습 간격 늘어남">✓</button>
-                              <button className="rounded-full border border-red-300 text-red-600 px-1.5 font-bold hover:bg-red-100"
+                              <button className="rounded-full border border-red-300 text-red-600 px-2.5 py-0.5 text-sm font-bold hover:bg-red-100"
                                 onClick={() => verifyStudents(goal, [s], 'weak')} title="잊음 — 재학습 큐 + 3일 뒤 재복습">✗</button>
                             </>
                           )}
