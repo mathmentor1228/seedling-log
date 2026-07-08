@@ -6,16 +6,19 @@ import { DesignWizard } from '@/components/plan/DesignWizard';
 import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
   fetchBriefings, fetchPlannerStatus, fetchTrackProgress, fetchTracks, fetchGoals,
+  cancelSession, uncancelSession, fetchSessionStatusFor, SessionStatusInfo,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
   PlanBriefing, PrinterStatus, PlanProgress,
 } from '@/components/plan/planApi';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog, MapPin, ShieldCheck } from 'lucide-react';
+import { NotebookPen, Plus, CalendarClock, Play, Sparkles, Users, Sun, UserCheck, Check, Printer, ClipboardCheck, UserCog, MapPin, ShieldCheck, CalendarX } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { IntensiveModal } from '@/components/plan/IntensiveModal';
 import { CoTeacherModal } from '@/components/plan/CoTeacherModal';
@@ -77,6 +80,10 @@ function PlanHome() {
   // 대상 선택(전체/개인) 다이얼로그
   const [startFor, setStartFor] = useState<{ id: string; title: string; roster: RosterStudent[] } | null>(null);
   const [pickIds, setPickIds] = useState<Set<string>>(new Set());
+  // PLAN-CANCEL-V1: 휴강 처리
+  const [sessionStatus, setSessionStatus] = useState<Record<string, SessionStatusInfo>>({});
+  const [cancelFor, setCancelFor] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   function openStart(d: any) {
     setPickIds(new Set());
@@ -89,6 +96,23 @@ function PlanHome() {
     if (!isRealToday) params.set('date', selectedDate);
     const qs = params.toString();
     navigate(`/plan/${startFor.id}/today${qs ? `?${qs}` : ''}`);
+  }
+
+  // PLAN-CANCEL-V1: 휴강 확정 — 세션 cancelled + 이날 마감 숙제를 다음 수업일로
+  async function doCancel() {
+    if (!cancelFor) return;
+    try {
+      const { hwShifted, nextDate } = await cancelSession(cancelFor, todayStr, cancelReason);
+      toast.success(`휴강 처리 완료${hwShifted > 0 && nextDate ? ` — 숙제 마감 ${hwShifted}건 → ${nextDate}로 밀림` : ''}`);
+      setCancelFor(null);
+      setCancelReason('');
+      load();
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      toast.error(msg.includes('constraint') || msg.includes('cancel_reason') || msg.includes('column')
+        ? '휴강 기능의 DB 반영이 필요해요 — plan_session_cancel 마이그레이션을 먼저 적용해주세요'
+        : `휴강 처리 실패: ${msg}`);
+    }
   }
 
   const realToday = new Date();
@@ -106,18 +130,20 @@ function PlanHome() {
       const list = await fetchDesigns();
       setDesigns(list);
       const ids = list.map((d: any) => d.id);
-      const [rosterMap, intensiveToday, briefMap, printMap, progMap] = await Promise.all([
+      const [rosterMap, intensiveToday, briefMap, printMap, progMap, statusMap] = await Promise.all([
         fetchRostersFor(ids),
         fetchTodayIntensiveDesignIds(todayStr),
         fetchBriefings(ids),
         fetchPlannerStatus(list.map((d: any) => ({ id: d.id, updated_at: d.updated_at })), periodMonth),
         fetchTrackProgress(list.map((d: any) => ({ id: d.id, track_id: d.track_id, end_goal_id: d.end_goal_id }))),
+        fetchSessionStatusFor(ids, todayStr),
       ]);
       setRosters(rosterMap);
       setTodayIntensive(intensiveToday);
       setBriefings(briefMap);
       setPrintStatus(printMap);
       setProgressMap(progMap);
+      setSessionStatus(statusMap);
       const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
       await Promise.all(list.map(async (d: any) => {
         const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
@@ -337,6 +363,30 @@ function PlanHome() {
                             </div>
                           );
                         })()}
+                        {/* PLAN-CANCEL-V1: 휴강이면 시작 대신 휴강 배너 */}
+                        {sessionStatus[d.id]?.status === 'cancelled' ? (
+                          <div className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2.5 space-y-1.5">
+                            <p className="text-sm font-bold text-orange-800 flex items-center gap-1.5">
+                              <CalendarX className="w-4 h-4" />오늘 휴강
+                              {sessionStatus[d.id]?.cancelReason && (
+                                <span className="font-normal text-orange-700">— {sessionStatus[d.id].cancelReason}</span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-orange-700">
+                              진도는 남은 수업에 자동 재분배되고, 오늘 마감 숙제는 다음 수업일로 밀렸어요.
+                            </p>
+                            <Button size="sm" variant="outline" className="h-7 text-xs border-orange-400 text-orange-800"
+                              onClick={async () => {
+                                try {
+                                  await uncancelSession(d.id, todayStr);
+                                  toast.success('휴강을 취소했어요 — 수업을 열 수 있습니다');
+                                  load();
+                                } catch (e: any) { toast.error(e.message || String(e)); }
+                              }}>
+                              휴강 취소
+                            </Button>
+                          </div>
+                        ) : (
                         <div className="flex gap-2">
                           <Button asChild className="flex-1">
                             <Link to={`/plan/${d.id}/today${isRealToday ? '' : `?date=${selectedDate}`}`}>
@@ -357,7 +407,13 @@ function PlanHome() {
                           <Button asChild variant="outline" title="학생 플래너 인쇄">
                             <Link to={`/plan/${d.id}/planner`}><Printer className="w-4 h-4" /></Link>
                           </Button>
+                          <Button variant="outline" title="휴강 처리 — 사유 기록, 진도·숙제 자동 밀림"
+                            className="text-orange-700 border-orange-300 hover:bg-orange-50"
+                            onClick={() => { setCancelReason(''); setCancelFor(d); }}>
+                            <CalendarX className="w-4 h-4" />
+                          </Button>
                         </div>
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -495,6 +551,36 @@ function PlanHome() {
             <Button className="w-full" disabled={pickIds.size === 0} onClick={() => goStart(true)}>
               선택한 {pickIds.size}명과 개인 수업 시작
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PLAN-CANCEL-V1: 휴강 처리 — 사유 입력 */}
+      <Dialog open={!!cancelFor} onOpenChange={o => !o && setCancelFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <CalendarX className="w-4 h-4 text-orange-600" />
+              {cancelFor?.title || cancelFor?.plan_tracks?.title} — {now.getMonth() + 1}/{now.getDate()} 휴강 처리
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="text-muted-foreground text-xs">
+              휴강하면 이 날 수업은 기록 없이 닫히고, 남은 목표는 이후 수업에 <b>자동 재분배</b>됩니다.
+              오늘 마감이던 숙제는 <b>다음 수업일로 마감이 밀려</b> 숙제검사도 다음 시간에 하게 돼요.
+            </p>
+            <div>
+              <p className="text-xs font-bold text-muted-foreground mb-1">휴강 사유</p>
+              <Input placeholder="예: 학교 시험 전날 / 원장 지시 / 태풍 휴원"
+                value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') doCancel(); }} autoFocus />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setCancelFor(null)}>닫기</Button>
+              <Button className="flex-1 bg-orange-600 hover:bg-orange-700" onClick={doCancel}>
+                휴강 확정
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

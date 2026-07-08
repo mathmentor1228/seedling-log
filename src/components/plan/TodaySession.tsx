@@ -13,9 +13,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ArrowRight, Check, StickyNote, Save,
-  AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck, ChevronDown,
+  AlertTriangle, UserX, Undo2, UserPlus, Search, UserCheck, ChevronDown, CalendarX,
 } from 'lucide-react';
-import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions } from './planApi';
+import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions, cancelSession, uncancelSession } from './planApi';
 import { ProgressAdjustModal } from './ProgressAdjustModal';
 
 const db = supabase as any;
@@ -56,7 +56,10 @@ export function TodaySession() {
   const [memo, setMemo] = useState<{ id: string; content: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   // 특강·투트랙 (INTENSIVE-COTEACH-V1)
-  const [sessionMeta, setSessionMeta] = useState<{ intensive_id: string | null; assigned_teacher_id: string | null }>({ intensive_id: null, assigned_teacher_id: null });
+  const [sessionMeta, setSessionMeta] = useState<{ intensive_id: string | null; assigned_teacher_id: string | null; status: string; cancel_reason: string | null }>({ intensive_id: null, assigned_teacher_id: null, status: 'draft', cancel_reason: null });
+  // PLAN-CANCEL-V1: 휴강 처리 다이얼로그
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [intensiveExtra, setIntensiveExtra] = useState(0); // 기한 내 남은 특강 회차 (정규 요일과 안 겹치는 것)
   const [coTeachers, setCoTeachers] = useState<{ teacher_id: string; name: string; start_date: string; end_date: string }[]>([]);
   const [mainTeacherName, setMainTeacherName] = useState('');
@@ -155,11 +158,16 @@ export function TodaySession() {
         // 오늘 세션 확보 (있으면 재사용 — 특강으로 미리 생성된 세션 포함)
         const role: SessionRole = (d.rhythm || {})[String(sessionDay)] || 'progress';
         const { data: existing } = await db.from('plan_sessions')
-          .select('id, note, intensive_id, assigned_teacher_id')
+          .select('*')
           .eq('design_id', designId).eq('session_date', todayStr).maybeSingle();
         if (existing) {
           setSessionId(existing.id); setNote(existing.note || '');
-          setSessionMeta({ intensive_id: existing.intensive_id || null, assigned_teacher_id: existing.assigned_teacher_id || null });
+          setSessionMeta({
+            intensive_id: existing.intensive_id || null,
+            assigned_teacher_id: existing.assigned_teacher_id || null,
+            status: existing.status || 'draft',
+            cancel_reason: existing.cancel_reason ?? null,
+          });
         } else {
           const { data: created, error } = await db.from('plan_sessions')
             .insert({ design_id: designId, session_date: todayStr, role }).select().single();
@@ -803,6 +811,44 @@ export function TodaySession() {
     );
   }
 
+  // PLAN-CANCEL-V1: 휴강된 날 — 기록 화면 대신 휴강 안내
+  if (sessionMeta.status === 'cancelled') {
+    return (
+      <div className="max-w-3xl mx-auto space-y-4">
+        <div className="rounded-2xl border border-orange-300 bg-orange-50/60 p-5">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <Badge variant="outline" className="border-orange-400 text-orange-700 text-[11px]">
+              <CalendarX className="w-3 h-3 mr-1" />휴강
+            </Badge>
+            <Badge variant="secondary" className="text-[11px]">📅 {sessionDate}</Badge>
+          </div>
+          <h1 className="text-xl font-extrabold tracking-tight">{design.title}</h1>
+          <p className="text-sm text-orange-800 mt-2 font-medium">
+            이 날은 휴강 처리됐습니다{sessionMeta.cancel_reason ? ` — 사유: ${sessionMeta.cancel_reason}` : ''}.
+          </p>
+          <p className="text-xs text-orange-700 mt-1">
+            진도는 남은 수업에 자동 재분배되고, 이날 마감이던 숙제는 다음 수업일로 밀렸어요. 기록할 것 없음.
+          </p>
+          <div className="flex gap-2 mt-4">
+            <Button variant="outline" onClick={() => navigate('/plan')}>
+              <Undo2 className="w-4 h-4 mr-1" />목록으로
+            </Button>
+            <Button variant="outline" className="border-orange-400 text-orange-800 hover:bg-orange-100"
+              onClick={async () => {
+                try {
+                  await uncancelSession(designId!, todayStr);
+                  setSessionMeta(p => ({ ...p, status: 'draft', cancel_reason: null }));
+                  toast.success('휴강을 취소했어요 — 수업을 진행할 수 있습니다');
+                } catch (e: any) { toast.error(e.message || String(e)); }
+              }}>
+              휴강 취소하고 수업 열기
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const stepDefs = [
     { n: 1, t: '수업 시작', s: '출결 · 확인' },
     { n: 2, t: isTestDay ? '테스트·복습' : '진도', s: isTestDay ? '밀린 확인 소화' : `오늘 ${todayGoals.length}개` },
@@ -854,9 +900,16 @@ export function TodaySession() {
                 </Button>
               )}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/plan')}>
-              <Undo2 className="w-4 h-4 mr-1" />목록
-            </Button>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" className="text-orange-700 hover:text-orange-800 hover:bg-orange-50"
+                title="휴강 처리 — 사유 기록, 진도·숙제 자동 밀림"
+                onClick={() => { setCancelReason(''); setCancelOpen(true); }}>
+                <CalendarX className="w-4 h-4 mr-1" />휴강
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/plan')}>
+                <Undo2 className="w-4 h-4 mr-1" />목록
+              </Button>
+            </div>
             {coTeachers.length > 0 && (
               <select
                 className="h-8 rounded-md border bg-background px-2 text-xs font-medium"
@@ -1628,6 +1681,47 @@ export function TodaySession() {
             {walkinPool.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">불러오는 중…</p>}
           </div>
           <Button onClick={() => setWalkinPickerOpen(false)}>완료 ({walkinIds.size}명 선택)</Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* PLAN-CANCEL-V1: 휴강 처리 — 사유 입력 */}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <CalendarX className="w-4 h-4 text-orange-600" />{design.title} — {sessionDate} 휴강 처리
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="text-muted-foreground text-xs">
+              휴강하면 이 날 수업은 기록 없이 닫히고, 남은 목표는 이후 수업에 <b>자동 재분배</b>됩니다.
+              이날 마감이던 숙제는 <b>다음 수업일로 마감이 밀려</b> 숙제검사도 다음 시간에 하게 돼요.
+            </p>
+            <div>
+              <p className="text-xs font-bold text-muted-foreground mb-1">휴강 사유</p>
+              <Input placeholder="예: 학교 시험 전날 / 원장 지시 / 태풍 휴원"
+                value={cancelReason} onChange={e => setCancelReason(e.target.value)} autoFocus />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setCancelOpen(false)}>닫기</Button>
+              <Button className="flex-1 bg-orange-600 hover:bg-orange-700"
+                onClick={async () => {
+                  try {
+                    const { hwShifted, nextDate } = await cancelSession(design, todayStr, cancelReason);
+                    setSessionMeta(p => ({ ...p, status: 'cancelled', cancel_reason: cancelReason.trim() || null }));
+                    setCancelOpen(false);
+                    toast.success(`휴강 처리 완료${hwShifted > 0 && nextDate ? ` — 숙제 마감 ${hwShifted}건 → ${nextDate}로 밀림` : ''}`);
+                  } catch (e: any) {
+                    const msg = String(e?.message || e);
+                    toast.error(msg.includes('constraint') || msg.includes('cancel_reason') || msg.includes('column')
+                      ? '휴강 기능의 DB 반영이 필요해요 — plan_session_cancel 마이그레이션을 먼저 적용해주세요'
+                      : `휴강 처리 실패: ${msg}`);
+                  }
+                }}>
+                휴강 확정
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

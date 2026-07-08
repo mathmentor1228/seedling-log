@@ -223,7 +223,9 @@ export async function fetchTrackProgress(
   ]);
   const goalsByTrack = new Map<string, any[]>();
   ((goalsRes.data || []) as any[]).forEach(g => { (goalsByTrack.get(g.track_id) || goalsByTrack.set(g.track_id, []).get(g.track_id))!.push(g); });
-  const ADVANCED = new Set(['advanced', 'partial', 'verified_ok', 'verified_weak']);
+  // 완료로 치는 상태 vs 위치에만 반영하는 상태를 분리.
+  // partial(일부만)은 위치엔 포함하되 완료가 아니다 — 다 안 나갔는데 "지금: 다음 목표"로 표시되던 버그 수정.
+  const FULL = new Set(['advanced', 'verified_ok', 'verified_weak']);
   const progByDesign = new Map<string, any[]>();
   ((progRes.data || []) as any[]).forEach(p => { (progByDesign.get(p.design_id) || progByDesign.set(p.design_id, []).get(p.design_id))!.push(p); });
 
@@ -233,17 +235,23 @@ export async function fetchTrackProgress(
     const trackGoals = allGoals.slice(0, (endIdx >= 0 ? endIdx : allGoals.length - 1) + 1);
     const total = trackGoals.length;
     const prog = progByDesign.get(d.id) || [];
-    const advancedGoalIds = new Set(prog.filter(p => ADVANCED.has(p.status)).map(p => p.goal_id));
-    // 그룹 현재 위치 = advanced된 목표 중 가장 뒤 index
+    const fullGoalIds = new Set(prog.filter(p => FULL.has(p.status)).map(p => p.goal_id));
+    const partialGoalIds = new Set(prog.filter(p => p.status === 'partial').map(p => p.goal_id));
+    // 그룹 현재 위치 = 나간(완료 또는 일부) 목표 중 가장 뒤 index
     let currentIdx = -1;
-    trackGoals.forEach((g, i) => { if (advancedGoalIds.has(g.id)) currentIdx = i; });
-    const done = trackGoals.filter(g => advancedGoalIds.has(g.id)).length;
+    trackGoals.forEach((g, i) => { if (fullGoalIds.has(g.id) || partialGoalIds.has(g.id)) currentIdx = i; });
+    const done = trackGoals.filter(g => fullGoalIds.has(g.id)).length;
+    // 현재 위치가 '일부만'이면 그 목표를 이어서 — 아니면 다음 목표
+    const curGoal = currentIdx >= 0 ? trackGoals[currentIdx] : null;
+    const curIsPartial = curGoal ? (!fullGoalIds.has(curGoal.id) && partialGoalIds.has(curGoal.id)) : false;
     const currentTitle = currentIdx >= 0 && currentIdx < trackGoals.length
-      ? trackGoals[Math.min(currentIdx + 1, trackGoals.length - 1)]?.title || trackGoals[currentIdx]?.title
+      ? (curIsPartial
+        ? `${curGoal!.title} — 이어서`
+        : trackGoals[Math.min(currentIdx + 1, trackGoals.length - 1)]?.title || curGoal?.title)
       : (trackGoals[0]?.title || null);
-    // 학생별 나간 수 (편차)
+    // 학생별 나간 수 (편차) — 완료 기준
     const perMap = new Map<string, Set<string>>();
-    prog.filter(p => ADVANCED.has(p.status)).forEach(p => {
+    prog.filter(p => FULL.has(p.status)).forEach(p => {
       (perMap.get(p.student_id) || perMap.set(p.student_id, new Set()).get(p.student_id))!.add(p.goal_id);
     });
     const perStudent = Array.from(perMap.entries()).map(([studentId, gset]) => ({ studentId, done: gset.size }));
@@ -295,6 +303,71 @@ export async function setDesignPosition(
       if (error) throw error;
     }
   }
+}
+
+// PLAN-CANCEL-V1: 휴강 처리 — 세션을 cancelled로 표시(사유 기록).
+// 진도는 저절로 밀린다(그날 기록이 없으니 남은 목표가 풀에 남아 자동 재분배).
+// 그날 마감이던 숙제는 다음 수업일로 마감을 밀어 숙제검사도 다음 시간으로 넘어간다.
+export function nextRhythmDate(rhythm: Record<string, SessionRole>, fromDate: string): string | null {
+  const days = Object.keys(rhythm || {}).map(Number);
+  if (days.length === 0) return null;
+  const base = new Date(fromDate + 'T12:00:00');
+  for (let i = 1; i <= 14; i++) {
+    const dt = new Date(base); dt.setDate(dt.getDate() + i);
+    if (days.includes(dt.getDay())) return dt.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+export async function cancelSession(design: any, dateStr: string, reason: string): Promise<{ hwShifted: number; nextDate: string | null }> {
+  const role = (design.rhythm || {})[String(new Date(dateStr + 'T12:00:00').getDay())] || 'progress';
+  const { error } = await db.from('plan_sessions').upsert({
+    design_id: design.id, session_date: dateStr, role,
+    status: 'cancelled', cancel_reason: reason.trim() || null,
+  }, { onConflict: 'design_id,session_date' });
+  if (error) throw error;
+
+  // 이날 마감 숙제 → 다음 수업일로
+  let hwShifted = 0;
+  const subject = design.plan_tracks?.subject;
+  const nextDate = nextRhythmDate(design.rhythm || {}, dateStr);
+  if (subject && nextDate) {
+    const { data: ps } = await db.from('plan_students').select('student_id').eq('design_id', design.id);
+    const sids = ((ps || []) as any[]).map(r => r.student_id);
+    if (sids.length > 0) {
+      const { data: hws } = await db.from('homework_assignments')
+        .select('id').in('student_id', sids).eq('subject', subject)
+        .in('check_status', ['pending', 'assigned']).eq('end_date', dateStr);
+      const ids = ((hws || []) as any[]).map(h => h.id);
+      if (ids.length > 0) {
+        const { error: hwErr } = await db.from('homework_assignments')
+          .update({ end_date: nextDate }).in('id', ids);
+        if (!hwErr) hwShifted = ids.length;
+      }
+    }
+  }
+  return { hwShifted, nextDate };
+}
+
+export async function uncancelSession(designId: string, dateStr: string): Promise<void> {
+  const { error } = await db.from('plan_sessions')
+    .update({ status: 'draft', cancel_reason: null })
+    .eq('design_id', designId).eq('session_date', dateStr);
+  if (error) throw error;
+}
+
+// 특정 날짜의 설계별 세션 상태 (휴강 표시용)
+export type SessionStatusInfo = { status: string; cancelReason: string | null };
+export async function fetchSessionStatusFor(designIds: string[], dateStr: string): Promise<Record<string, SessionStatusInfo>> {
+  const out: Record<string, SessionStatusInfo> = {};
+  if (designIds.length === 0) return out;
+  const { data } = await db.from('plan_sessions')
+    .select('design_id, status, cancel_reason')
+    .in('design_id', designIds).eq('session_date', dateStr);
+  ((data || []) as any[]).forEach(r => {
+    out[r.design_id] = { status: r.status, cancelReason: r.cancel_reason || null };
+  });
+  return out;
 }
 
 // 오늘 특강 세션이 있는 설계 id 집합 (materialize된 plan_sessions 기준)
