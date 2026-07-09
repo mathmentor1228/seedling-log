@@ -145,8 +145,10 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
           understanding_score: null,
         }));
 
-        const { error } = await supabase.from('lesson_records').insert(records);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(records as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
+
       }
 
       const createdCount = newStudents.length;
