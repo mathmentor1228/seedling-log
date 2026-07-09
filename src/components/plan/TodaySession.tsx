@@ -25,6 +25,7 @@ type StudentInfo = { id: string; name: string; grade: string | null; type: 'A' |
 type ProgressRow = {
   student_id: string; goal_id: string; status: string; partial_upto: string | null;
   review_count?: number | null; next_review_date?: string | null;
+  session_id?: string | null;
 };
 
 // PLAN-REVIEW-SM2-V1: 망각곡선 복습 사다리 — 확인 성공마다 간격이 늘고, 실패하면 3일로 리셋
