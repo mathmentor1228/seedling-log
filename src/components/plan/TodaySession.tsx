@@ -829,12 +829,15 @@ export function TodaySession() {
                 assigned_date: todayStr,
                 end_date: nextHwDue || null,
                 content: hwContent,
-                check_status: 'pending',
+                check_status: 'unchecked',
                 homework_type: 'written',
                 required_submissions: 1,
                 created_by: user?.id || null,
               });
-              if (!nhErr) hwNewCount++;
+              if (nhErr) {
+                throw new Error(`다음 숙제 등록 실패(${s.name}): ${nhErr.message}`);
+              }
+              hwNewCount++;
             }
           }
         }
