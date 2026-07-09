@@ -555,7 +555,7 @@ export function TeacherAttendanceView() {
 
       if (supplementaryDate) {
         const notesContent = `[보충 시간: ${supplementaryTime}]`;
-        const { error: supplementaryInsertError } = await supabase.from('lesson_records').insert({
+        const { error: supplementaryInsertError } = await safeUpsertLessonRecord({
           teacher_id: teacherId,
           student_id: studentId,
           class_id: activeSlot.classId,
@@ -567,8 +567,9 @@ export function TeacherAttendanceView() {
           attendance_status: ['정상등원'],
           notes: notesContent,
           submitted: false,
-        } as any);
+        });
         if (supplementaryInsertError) throw supplementaryInsertError;
+
       }
 
       sonnerToast.success(`${student.name} → ${newStatus}`, { duration: 1500 });
