@@ -451,9 +451,11 @@ function QuickLessonEntryContent() {
       }
 
       if (inserts.length > 0) {
-        const { error } = await supabase.from('lesson_records').insert(inserts);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(inserts as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
       }
+
       for (const u of updates) {
         const { error } = await supabase.from('lesson_records').update(u.payload).eq('id', u.id);
         if (error) throw error;
