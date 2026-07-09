@@ -1381,27 +1381,24 @@ export function LessonRecordForm({
           .eq('id', draftId);
         if (error) throw error;
       } else {
-        // DRAFT-OVERWRITE-V2: Check for existing record with same student+class+date+subject before inserting
-        // Use .is() for null class_id (exam prep / supplementary) since .eq() never matches NULL
-        let existingQuery = supabase
+        // LESSON-DEDUP-V1: 같은 학생·과목·날짜의 기존 레코드가 있으면 (draft/submitted 무관, class_id 무관)
+        // 항상 그 레코드에 병합 update. 새 insert는 진짜 없을 때만.
+        const { data: existingRecord } = await supabase
           .from('lesson_records')
-          .select('id')
+          .select('id, submitted')
           .eq('student_id', payload.student_id)
           .eq('lesson_date', payload.lesson_date)
           .eq('subject', payload.subject)
-          .eq('submitted', false);
-        existingQuery = payload.class_id === null
-          ? existingQuery.is('class_id', null)
-          : existingQuery.eq('class_id', payload.class_id);
-        const { data: existingRecord } = await existingQuery.maybeSingle();
+          .maybeSingle();
 
         if (existingRecord) {
-          // Overwrite existing draft with latest data
-          console.log('[DRAFT-OVERWRITE-V1] Found existing draft, overwriting:', existingRecord.id);
+          console.log('[LESSON-DEDUP-V1] Merging into existing record:', existingRecord.id);
           const { homework_status: _hwIgnored, ...updatePayload } = payload;
+          // 이미 제출된 레코드면 submitted 상태 보존, 아니면 draft로
+          const nextSubmitted = existingRecord.submitted ? {} : { submitted: false };
           const { error } = await supabase
             .from('lesson_records')
-            .update({ ...updatePayload, submitted: false })
+            .update({ ...updatePayload, ...nextSubmitted })
             .eq('id', existingRecord.id);
           if (error) throw error;
           setCurrentDraftId(existingRecord.id);
@@ -1417,6 +1414,7 @@ export function LessonRecordForm({
           finalDraftId = data.id;
         }
       }
+
 
       // MULTI-HW-ASSIGN-V1: Save multiple homework items
       const validItems = newHomeworkItems.filter(item => item.content.trim());
