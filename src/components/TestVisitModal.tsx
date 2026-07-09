@@ -34,6 +34,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
+
 import { useAuth } from '@/lib/auth';
 import { getKSTDateObject, getTodayKST } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -353,7 +355,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
           } else {
             // Create new lesson_record tagged as 테스트방문
             // TEST-CONTENT-REQUIRED-V1: Save test_content as primary field
-            const { error } = await supabase.from('lesson_records').insert({
+            const { error } = await safeUpsertLessonRecord({
               student_id: selectedStudentId,
               subject: row.subject as SubjectType,
               lesson_date: dateStr,
@@ -363,8 +365,8 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
               homework_status: 'none',
               lesson_range: '테스트만',
               understanding_score: 0,
-              test_content: row.testContent.trim(), // Primary content field
-              test_title: row.testContent.trim(), // Backward compatibility
+              test_content: row.testContent.trim(),
+              test_title: row.testContent.trim(),
               test_name: '재시험/테스트',
               test_result_text: row.testResultText.trim(),
               test_result:
@@ -382,6 +384,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
 
             if (error) throw error;
           }
+
 
           successCount++;
         } catch (err: any) {

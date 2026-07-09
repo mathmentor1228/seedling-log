@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from '@/components/lessons/useTeachersList';
 import {
@@ -451,9 +453,11 @@ function QuickLessonEntryContent() {
       }
 
       if (inserts.length > 0) {
-        const { error } = await supabase.from('lesson_records').insert(inserts);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(inserts as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
       }
+
       for (const u of updates) {
         const { error } = await supabase.from('lesson_records').update(u.payload).eq('id', u.id);
         if (error) throw error;
