@@ -617,24 +617,25 @@ export function TeacherAttendanceView() {
       if (existingLesson) {
         await supabase.from('lesson_records').update(lessonPayload as any).eq('id', existingLesson.id);
       } else {
-        await supabase.from('lesson_records').insert({
+        await safeUpsertLessonRecord({
           teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
           subject: activeSlot.subject as any, lesson_date: today,
           lesson_range: lessonRangeText, understanding_score: null,
           homework_status: 'none_assigned', learning_issues: [],
           attendance_status: lessonAttendanceStatus, submitted: true, submitted_at: nowIso,
-        } as any);
+        });
       }
 
       if (hasSupplementary && supplementaryDate) {
-        await supabase.from('lesson_records').insert({
+        await safeUpsertLessonRecord({
           teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
           subject: activeSlot.subject as any, lesson_date: supplementaryDate,
           lesson_range: '보충수업 예정', homework_status: 'none_assigned',
           lesson_types: ['보충수업'], attendance_status: ['정상등원'],
           notes: `[보충 시간: ${supplementaryTime}]`, submitted: false,
-        } as any);
+        });
       }
+
 
       sonnerToast.success(`${student.name} → 결석 처리 완료`, { duration: 1500 });
       setAbsenceDialog(d => ({ ...d, open: false, submitting: false }));
