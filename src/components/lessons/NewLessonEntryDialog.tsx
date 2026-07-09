@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from './useTeachersList';
 import { fetchStudentsByIds, fetchTeacherStudentIds, groupStudentsByGrade, getStudentGroupLabel } from './studentSelection';
