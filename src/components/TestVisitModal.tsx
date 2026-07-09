@@ -34,6 +34,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
+
 import { useAuth } from '@/lib/auth';
 import { getKSTDateObject, getTodayKST } from '@/lib/utils';
 import { format } from 'date-fns';
