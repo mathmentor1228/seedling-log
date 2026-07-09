@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, X, Users } from 'lucide-react';
