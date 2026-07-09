@@ -1477,10 +1477,28 @@ export function LessonRecordForm({
         const { error } = await supabase.from('lesson_records').update(updatePayload).eq('id', recordId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from('lesson_records').insert(payload).select().single();
-        if (error) throw error;
-        finalRecordId = data.id;
+        // LESSON-DEDUP-V1: 같은 학생·과목·날짜의 기존 레코드가 있으면 그 위에 병합 update (submitted=true 처리)
+        const { data: existingRecord } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', payload.student_id)
+          .eq('lesson_date', payload.lesson_date)
+          .eq('subject', payload.subject)
+          .maybeSingle();
+
+        if (existingRecord) {
+          console.log('[LESSON-DEDUP-V1] Submitting into existing record:', existingRecord.id);
+          const { homework_status: _hwIgnored, ...updatePayload } = payload;
+          const { error } = await supabase.from('lesson_records').update(updatePayload).eq('id', existingRecord.id);
+          if (error) throw error;
+          finalRecordId = existingRecord.id;
+        } else {
+          const { data, error } = await supabase.from('lesson_records').insert(payload).select().single();
+          if (error) throw error;
+          finalRecordId = data.id;
+        }
       }
+
 
       // MULTI-HW-ASSIGN-V1: Save multiple homework items
       const validItems = newHomeworkItems.filter(item => item.content.trim());
