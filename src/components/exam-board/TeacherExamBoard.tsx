@@ -593,6 +593,13 @@ export function TeacherExamBoard() {
         </span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           {!isTeacherRole && (
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link to="/exam-board/principal">
+                <GraduationCap className="w-4 h-4 mr-1" />원장 디렉션
+              </Link>
+            </Button>
+          )}
+          {!isTeacherRole && (
             <Select value={teacherFilter || 'all'} onValueChange={v => setTeacherFilter(v === 'all' ? '' : v)}>
               <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="선생님 전체" /></SelectTrigger>
               <SelectContent>

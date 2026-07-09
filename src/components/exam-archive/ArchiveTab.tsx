@@ -27,7 +27,7 @@ const EXAM_TYPES = ['중간고사', '기말고사', '기타'];
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '수학(대수)', '수학(기하)', '수학(미적분)', '수학(확률과통계)', '영어I', '영어II', '공통', '기타'];
 const SCHOOL_LEVELS = ['초', '중', '고'];
 const DIFFICULTY_LEVELS = ['매우 쉬움', '쉬움', '보통', '어려움', '매우 어려움'];
-const STATUS_OPTIONS = [
+export const STATUS_OPTIONS = [
   { value: '자료수집전', label: '자료수집전', color: 'bg-muted text-muted-foreground' },
   { value: '자료수집완료', label: '자료수집완료', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
   { value: '시험대비중', label: '시험 D-Day', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' },

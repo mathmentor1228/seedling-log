@@ -50,6 +50,7 @@ const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
 const VocabTestGeneratorPage = lazy(() => import("./pages/VocabTestGeneratorPage"));
 const SchoolExamArchivePage = lazy(() => import("./pages/SchoolExamArchivePage"));
 const ExamBoardPage = lazy(() => import("./pages/ExamBoardPage"));
+const ExamDirectionPage = lazy(() => import("./pages/ExamDirectionPage"));
 const PlanPage = lazy(() => import("./pages/PlanPage"));
 const PlanTodayPage = lazy(() => import("./pages/PlanTodayPage"));
 const PlanPlannerPage = lazy(() => import("./pages/PlanPlannerPage"));
@@ -193,6 +194,7 @@ const App = () => (
                 <Route path="/plan/:designId/today" element={<PlanTodayPage />} />
                 <Route path="/plan/:designId/planner" element={<PlanPlannerPage />} />
                 <Route path="/exam-board" element={<ExamBoardPage />} />
+                <Route path="/exam-board/principal" element={<ExamDirectionPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
                 <Route path="/exam-trends" element={<ExamScoreTrendsPage />} />
