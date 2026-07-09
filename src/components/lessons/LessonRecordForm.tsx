@@ -833,24 +833,22 @@ export function LessonRecordForm({
       let recordId = existingRecordId;
 
       // PREFILL-FIX-V6: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
-      // For exam prep / supplementary, initialContext.class_id may be '' — still look up by null class_id.
+      // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜). class_id·교사·입력 경로가 달라도
+      // 같은 날 같은 과목 일지는 하나로 — 기존 기록이 있으면 새 draft 대신 그걸 이어서 편집.
+      // 제출본 우선, 그다음 오래된 것(원본) 우선.
       if (!forceNewRecord && !recordId && initialContext?.student_id) {
-        const hasClassId = !!initialContext.class_id;
-        const lookupTypes = initialContext.lesson_types || [];
-        const isExamPrepOrSupp = lookupTypes.includes('시험특강') || lookupTypes.includes('보충수업');
-        if (hasClassId || isExamPrepOrSupp) {
-          let q = supabase
-            .from('lesson_records')
-            .select('id')
-            .eq('student_id', initialContext.student_id)
-            .eq('lesson_date', initialContext.lesson_date || getTodayKST())
-            .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType);
-          q = hasClassId ? q.eq('class_id', initialContext.class_id) : q.is('class_id', null);
-          const { data: existing } = await q.maybeSingle();
-          if (existing) {
-            recordId = existing.id;
-            console.log('[PREFILL-FIX-V6] Found existing record for context:', existing.id);
-          }
+        const { data: existingList } = await supabase
+          .from('lesson_records')
+          .select('id, submitted')
+          .eq('student_id', initialContext.student_id)
+          .eq('lesson_date', initialContext.lesson_date || getTodayKST())
+          .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType)
+          .order('submitted', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1);
+        if (existingList && existingList.length > 0) {
+          recordId = existingList[0].id;
+          console.log('[UNIFY-LESSON-KEY-V1] Found existing record for (student,subject,date):', recordId);
         }
       } else if (forceNewRecord) {
         console.log('[PREFILL-FIX-V6] forceNewRecord=true, skipping DB lookup for existing drafts');

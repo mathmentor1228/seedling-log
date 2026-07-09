@@ -811,14 +811,17 @@ export function TodaySession() {
           const quiz = quizSaved[s.id];
           const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
 
-          // 기존 lesson_record 있는지 확인 (관찰노트는 보존·병합 위해 함께 조회)
-          const { data: existingLR } = await db.from('lesson_records')
+          // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
+          // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
+          const { data: existingList } = await db.from('lesson_records')
             .select('id, learning_issues_note')
-            .eq('teacher_id', teacherId)
             .eq('student_id', s.id)
             .eq('subject', subject)
             .eq('lesson_date', todayStr)
-            .maybeSingle();
+            .order('submitted', { ascending: false })
+            .order('created_at', { ascending: true })
+            .limit(1);
+          const existingLR = (existingList || [])[0] || null;
 
           // PLAN-REPORT-BRIDGE-V1: 교사가 직접 쓴 관찰노트는 보존, 자동 기록 줄만 교체
           const autoNote = isAbsent ? '' : planAutoNote(s.id);
@@ -829,20 +832,20 @@ export function TodaySession() {
             .trim();
           const mergedNote = [manualNote, autoNote].filter(Boolean).join('\n') || null;
 
+          // UNIFY-LESSON-KEY-V1: 계획 데이터가 채우는 필드만 담는다.
+          // notes·understanding은 값이 있을 때만 — 다른 경로의 수기 입력을 null로 지우지 않기.
           const payload: any = {
-            teacher_id: teacherId,
             student_id: s.id,
-            class_id: design.class_id || null,
             subject,
             lesson_date: todayStr,
             lesson_range: range,
             homework_status: hwStatus,
             next_lesson_goal: summary.nextGoalTitle || null,
-            notes: note.trim() || null,
-            understanding_score: understanding,
             attendance_status: isAbsent ? ['결석'] : ['출석'],
             // PLAN-REPORT-BRIDGE-V1: 주간리포트 AI가 읽는 서술 근거 채우기
             learning_issues_note: mergedNote,
+            ...(note.trim() ? { notes: note.trim() } : {}),
+            ...(understanding != null ? { understanding_score: understanding } : {}),
             ...(quiz && quizTarget ? {
               test_title: `쪽지시험 — ${quizTarget.title}`,
               test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
@@ -852,11 +855,14 @@ export function TodaySession() {
 
           let lessonRecordId: string | null = null;
           if (existingLR?.id) {
+            // 병합 — 기존 일지의 소유자(teacher_id)·class_id는 건드리지 않는다
             lessonRecordId = existingLR.id;
             const { error: upErr } = await db.from('lesson_records').update(payload).eq('id', existingLR.id);
             if (upErr) throw new Error(`수업일지 갱신 실패(${s.name}): ${upErr.message}`);
           } else {
-            const { data: ins, error: insErr } = await db.from('lesson_records').insert(payload).select('id').single();
+            const { data: ins, error: insErr } = await db.from('lesson_records')
+              .insert({ ...payload, teacher_id: teacherId, class_id: design.class_id || null })
+              .select('id').single();
             if (insErr) throw new Error(`수업일지 저장 실패(${s.name}): ${insErr.message}`);
             lessonRecordId = ins?.id || null;
           }

@@ -185,15 +185,21 @@ export function BatchTestEntryModal({
     setSaving(true);
     try {
       // BATCH-TEST-AUTOCREATE-V2: Auto-create lesson records for students without one
+      // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사가 달라도 그날 일지에 테스트를 병합.
+      // 같은 학생에 여러 행이면 제출본 우선, 그다음 오래된 것(원본)을 대상으로.
       const { data: existingRecords } = await supabase
         .from('lesson_records')
         .select('id, student_id')
         .eq('lesson_date', date)
         .eq('subject', subject as any)
-        .eq('teacher_id', effectiveTeacherId)
-        .in('student_id', selected.map(s => s.student_id));
+        .in('student_id', selected.map(s => s.student_id))
+        .order('submitted', { ascending: false })
+        .order('created_at', { ascending: true });
 
-      const recordMap = new Map((existingRecords || []).map(r => [r.student_id, r.id]));
+      const recordMap = new Map<string, string>();
+      (existingRecords || []).forEach(r => {
+        if (!recordMap.has(r.student_id)) recordMap.set(r.student_id, r.id);
+      });
 
       const missingStudents = selected.filter(e => !recordMap.has(e.student_id));
       if (missingStudents.length > 0) {
