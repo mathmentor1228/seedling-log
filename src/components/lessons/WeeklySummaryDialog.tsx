@@ -85,7 +85,7 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
         if (error) throw error;
       } else {
         // No lesson this week yet — create a placeholder draft to hold the comment.
-        const { error } = await supabase.from('lesson_records').insert({
+        const { error } = await safeUpsertLessonRecord({
           teacher_id: user.id,
           student_id: studentId,
           lesson_date: week,
@@ -97,6 +97,7 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
           weekly_summary_week: week,
         });
         if (error) throw error;
+
       }
       toast({ title: '주간 코멘트 저장 완료' });
       onSaved?.();
