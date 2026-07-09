@@ -520,7 +520,7 @@ export function TeacherAttendanceView() {
           const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
           if (updateLessonError) throw updateLessonError;
         } else {
-          const { error: insertLessonError } = await supabase.from('lesson_records').insert({
+          const { error: insertLessonError } = await safeUpsertLessonRecord({
             teacher_id: teacherId,
             student_id: studentId,
             class_id: activeSlot.classId,
@@ -532,8 +532,9 @@ export function TeacherAttendanceView() {
             learning_issues: [],
             attendance_status: lessonAttendanceStatus,
             submitted: false,
-          } as any);
+          });
           if (insertLessonError) throw insertLessonError;
+
         }
       }
 
