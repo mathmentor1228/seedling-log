@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from './useTeachersList';
 import { fetchStudentsByIds, fetchTeacherStudentIds, groupStudentsByGrade, getStudentGroupLabel } from './studentSelection';
@@ -143,8 +145,10 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
           understanding_score: null,
         }));
 
-        const { error } = await supabase.from('lesson_records').insert(records);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(records as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
+
       }
 
       const createdCount = newStudents.length;

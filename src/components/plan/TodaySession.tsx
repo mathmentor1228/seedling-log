@@ -25,6 +25,7 @@ type StudentInfo = { id: string; name: string; grade: string | null; type: 'A' |
 type ProgressRow = {
   student_id: string; goal_id: string; status: string; partial_upto: string | null;
   review_count?: number | null; next_review_date?: string | null;
+  session_id?: string | null;
 };
 
 // PLAN-REVIEW-SM2-V1: 망각곡선 복습 사다리 — 확인 성공마다 간격이 늘고, 실패하면 3일로 리셋
@@ -330,11 +331,13 @@ export function TodaySession() {
       if (todayIds.has(g.id)) continue;
       if (hasQuiz && quizTarget?.id === g.id) continue;
       const stus = students.filter(s => !absent.has(s.id)
-        && progress.some(p => p.goal_id === g.id && p.student_id === s.id && p.status === 'advanced'));
+        && progress.some(p => p.goal_id === g.id && p.student_id === s.id && p.status === 'advanced'
+          // 이번 세션(오늘)에 방금 찍은 진도는 "지난 진도"가 아니다 — 명단수정 후 재진입 시 밀림 방지
+          && p.session_id !== sessionId));
       if (stus.length > 0) blocks.push({ goal: g, stus });
     }
     return blocks;
-  }, [trackGoals, todayGoals, students, absent, progress, hasQuiz, quizTarget]);
+  }, [trackGoals, todayGoals, students, absent, progress, hasQuiz, quizTarget, sessionId]);
 
   // PLAN-REVIEW-SM2-V1: 오늘 복습 due — 확인 완료(verified_ok)했지만 복습 예정일이 지난 목표
   const reviewBlocks = useMemo(() => {
@@ -879,12 +882,15 @@ export function TodaySession() {
                 assigned_date: todayStr,
                 end_date: nextHwDue || null,
                 content: hwContent,
-                check_status: 'pending',
+                check_status: 'unchecked',
                 homework_type: 'written',
                 required_submissions: 1,
                 created_by: user?.id || null,
               });
-              if (!nhErr) hwNewCount++;
+              if (nhErr) {
+                throw new Error(`다음 숙제 등록 실패(${s.name}): ${nhErr.message}`);
+              }
+              hwNewCount++;
             }
           }
         }

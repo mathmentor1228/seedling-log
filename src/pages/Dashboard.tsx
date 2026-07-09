@@ -4,6 +4,8 @@ import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import AssistantDashboard from '@/components/AssistantDashboard';
 import AdminStatsSection from '@/components/AdminStatsSection';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { StatCard } from '@/components/ui/stat-card';
 import { AttentionSummaryBar, type AttentionItem } from '@/components/dashboard/AttentionSummaryBar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
@@ -2179,10 +2181,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
       let createdCount = 0;
       if (toCreate.length > 0) {
-        const { error } = await supabase.from('lesson_records').insert(toCreate);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(toCreate as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
         createdCount = toCreate.length;
       }
+
 
       // 2. Touch existing draft records (update updated_at to confirm save)
       const draftRecordIds = [

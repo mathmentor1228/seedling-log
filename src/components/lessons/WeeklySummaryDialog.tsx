@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
+
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Sparkles } from 'lucide-react';
@@ -83,7 +85,7 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
         if (error) throw error;
       } else {
         // No lesson this week yet — create a placeholder draft to hold the comment.
-        const { error } = await supabase.from('lesson_records').insert({
+        const { error } = await safeUpsertLessonRecord({
           teacher_id: user.id,
           student_id: studentId,
           lesson_date: week,
@@ -95,6 +97,7 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
           weekly_summary_week: week,
         });
         if (error) throw error;
+
       }
       toast({ title: '주간 코멘트 저장 완료' });
       onSaved?.();

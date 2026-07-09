@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, X, Users } from 'lucide-react';
@@ -152,8 +154,10 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
         };
       });
 
-      const { error } = await supabase.from('lesson_records').insert(records);
-      if (error) throw error;
+      const results = await safeUpsertLessonRecords(records as any);
+      const firstErr = results.find(r => r.error)?.error;
+      if (firstErr) throw firstErr;
+
 
       toast({ title: '보충수업 일괄 등록 완료', description: `${entries.length}명의 보충수업이 등록되었습니다.` });
       onOpenChange(false);
