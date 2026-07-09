@@ -95,7 +95,8 @@ export function TeacherExamBoard() {
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [reports, setReports] = useState<ReportRow[]>([]);
-  const [enrolledStudentIds, setEnrolledStudentIds] = useState<Set<string>>(new Set());
+  // 특강 등록 — 학생별 등록된 특강의 (학교, 과목) 목록. 배지는 이번 시험 학교·과목이 맞을 때만.
+  const [prepEnrollMap, setPrepEnrollMap] = useState<Map<string, { school: string | null; subject: string | null }[]>>(new Map());
   const [teacherFilter, setTeacherFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [detailStudent, setDetailStudent] = useState<StudentRow | null>(null);
@@ -155,7 +156,7 @@ export function TeacherExamBoard() {
           .gte('start_at', `${windowStart}T00:00:00`),
         supabase.from('exam_analysis_reports')
           .select('school_name, grade, subject, exam_year, exam_period, is_published'),
-        supabase.from('exam_prep_courses').select('id, subject').is('deleted_at', null),
+        supabase.from('exam_prep_courses').select('id, subject, school_name').is('deleted_at', null),
       ]);
 
       setStudents((stuRes.data as StudentRow[]) || []);
@@ -183,11 +184,21 @@ export function TeacherExamBoard() {
         setReviews(m);
       }
 
-      const courseIds = ((courseRes.data || []) as any[]).map(c => c.id);
-      if (courseIds.length > 0) {
+      const courses = (courseRes.data || []) as any[];
+      if (courses.length > 0) {
+        const courseById = new Map(courses.map(c => [c.id, c]));
         const { data: enr } = await supabase.from('exam_prep_enrollments')
-          .select('student_id, course_id').in('course_id', courseIds);
-        setEnrolledStudentIds(new Set(((enr || []) as any[]).map(e => e.student_id)));
+          .select('student_id, course_id').in('course_id', courses.map(c => c.id));
+        const m = new Map<string, { school: string | null; subject: string | null }[]>();
+        ((enr || []) as any[]).forEach(e => {
+          const c = courseById.get(e.course_id);
+          if (!c) return;
+          (m.get(e.student_id) || m.set(e.student_id, []).get(e.student_id))!.push({
+            school: c.school_name ? normalizeSchool(c.school_name) : null,
+            subject: c.subject || null,
+          });
+        });
+        setPrepEnrollMap(m);
       }
       setLoading(false);
     })();
@@ -453,8 +464,10 @@ export function TeacherExamBoard() {
       const line = lineRows.map(r => Number(r.actual_score));
       const perf = rows.filter(r => r.exam_type === 'performance').map(r => Number(r.actual_score));
       const last = line[line.length - 1] ?? null;
-      const delta = line.length >= 2 ? line[line.length - 1] - line[line.length - 2] : null;
-      const delta2 = line.length >= 3 ? line[line.length - 2] - line[line.length - 3] : null;
+      // 소수 점수 뺄셈의 부동소수점 쓰레기(+4.7000000000001 표시) 방지 — 소수 1자리 반올림
+      const round1 = (n: number) => Math.round(n * 10) / 10;
+      const delta = line.length >= 2 ? round1(line[line.length - 1] - line[line.length - 2]) : null;
+      const delta2 = line.length >= 3 ? round1(line[line.length - 2] - line[line.length - 3]) : null;
       const doubleDrop = delta != null && delta < 0 && delta2 != null && delta2 < 0;
       const scopeRows = archives
         .filter(a => a.school_name === school && a.subject?.startsWith(subject)
@@ -476,7 +489,11 @@ export function TeacherExamBoard() {
       const reportOk = reports.some(r => r.school_name === school
         && (r.grade == null || r.grade === student.grade_year)
         && targets.some(t => r.subject?.startsWith(t)));
-      prep = { scopeOk, reportOk, prepEnrolled: enrolledStudentIds.has(student.id) };
+      // 특강 배지 — 이 학생의 학교·담당 과목과 맞는 특강에 등록됐을 때만 (학교/과목 미지정 특강은 통과)
+      const prepEnrolled = (prepEnrollMap.get(student.id) || []).some(e =>
+        (!e.school || e.school === school)
+        && (!e.subject || targets.some(t => e.subject!.startsWith(t) || t.startsWith(e.subject!))));
+      prep = { scopeOk, reportOk, prepEnrolled };
     }
 
     let followup: { hasResult: boolean; reviewed: boolean; published: boolean } | null = null;
@@ -548,7 +565,7 @@ export function TeacherExamBoard() {
     });
     return rows;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schoolGroups, teacherNameByStudentSubject, tableSort, reports, enrolledStudentIds, reviews]);
+  }, [schoolGroups, teacherNameByStudentSubject, tableSort, reports, prepEnrollMap, reviews]);
 
   if (loading) {
     return (
