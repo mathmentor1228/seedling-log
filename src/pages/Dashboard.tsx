@@ -4,6 +4,8 @@ import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import AssistantDashboard from '@/components/AssistantDashboard';
 import AdminStatsSection from '@/components/AdminStatsSection';
 import { supabase } from '@/integrations/supabase/client';
+import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+
 import { StatCard } from '@/components/ui/stat-card';
 import { AttentionSummaryBar, type AttentionItem } from '@/components/dashboard/AttentionSummaryBar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
