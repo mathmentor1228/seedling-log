@@ -55,9 +55,10 @@ export async function safeUpsertLessonRecord(
 
     const { data: ins, error: insErr } = await supabase
       .from('lesson_records')
-      .insert(payload)
+      .insert(payload as any)
       .select('id')
       .single();
+
     return { id: ins?.id || '', created: true, error: insErr };
   } catch (e: any) {
     return { id: '', created: false, error: e };
