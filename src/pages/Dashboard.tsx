@@ -2179,10 +2179,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
       let createdCount = 0;
       if (toCreate.length > 0) {
-        const { error } = await supabase.from('lesson_records').insert(toCreate);
-        if (error) throw error;
+        const results = await safeUpsertLessonRecords(toCreate as any);
+        const firstErr = results.find(r => r.error)?.error;
+        if (firstErr) throw firstErr;
         createdCount = toCreate.length;
       }
+
 
       // 2. Touch existing draft records (update updated_at to confirm save)
       const draftRecordIds = [
