@@ -1182,12 +1182,13 @@ export function TodaySession() {
             )}
           </CardContent></Card>
 
-          {hasQuiz && quizTarget && (
-            <Card><CardContent className="p-4 space-y-3">
+          {(hasQuiz || isTestDay) && quizTarget && (
+            <Card className={isTestDay ? 'border-amber-300/60' : undefined}><CardContent className="p-4 space-y-3">
               <p className="text-xs font-bold text-muted-foreground">
-                쪽지시험 — <span className="text-foreground">{quizTarget.title}</span> {quizTarget.pages}
-                <Badge variant="secondary" className="ml-2 text-[10px]">룰셋 자동</Badge>
+                {isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — <span className="text-foreground">{quizTarget.title}</span> {quizTarget.pages}
+                <Badge variant="secondary" className="ml-2 text-[10px]">{isTestDay ? '테스트·복습 데이' : '룰셋 자동'}</Badge>
               </p>
+
               <div className="grid gap-2 sm:grid-cols-3">
                 {effectiveStudents.filter(s => !absent.has(s.id)).map(s => {
                   const saved = quizSaved[s.id];
