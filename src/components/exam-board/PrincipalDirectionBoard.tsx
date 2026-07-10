@@ -43,6 +43,7 @@ const statusMeta = (status: string) => STATUS_OPTIONS.find(o => o.value === stat
 
 export function PrincipalDirectionBoard() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [classInfos, setClassInfos] = useState<ClassInfo[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -59,6 +60,7 @@ export function PrincipalDirectionBoard() {
 
   async function load() {
     setLoading(true);
+    setLoadError(null);
     try {
       const [stuRes, ciRes, tRes, resRes, arcRes, repRes] = await Promise.all([
         supabase.from('students').select('id, name, school, school_level, grade_year').in('enrollment_status', ['재학', '재등원']),
@@ -81,17 +83,29 @@ export function PrincipalDirectionBoard() {
       setResults(resultRows);
       setArchives(((arcRes.data || []) as any[]).map(a => ({ ...a, school_name: normalizeSchool(a.school_name) })));
       setReports(((repRes.data || []) as any[]).map(r => ({ ...r, school_name: normalizeSchool(r.school_name) })));
-
-      const resultIds = resultRows.map(r => r.id);
-      if (resultIds.length > 0) {
-        const { data: rev } = await supabase.from('exam_reviews').select('result_id, reviewed_at').in('result_id', resultIds);
-        setReviews((rev as ReviewRow[]) || []);
-      }
+    } catch (e: any) {
+      console.error('[EXAM-DIRECTION-V1] load failed:', e);
+      setLoadError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
   }
   useEffect(() => { load(); }, []);
+
+  // 채점 상태(exam_reviews)는 "이번 사이클" 결과에 대해서만 조회.
+  // 전체 학생·전체 연도 결과 ID를 한 번에 .in()에 넣으면 URL이 수천 자로 커져 요청이 멈추던 버그(EXAM-DIRECTION-V1 배포 직후 발견) 수정.
+  useEffect(() => {
+    const typeMap: Record<string, string> = { '중간고사': 'midterm', '기말고사': 'final' };
+    const period = `${cycleSemester.startsWith('1') ? '1' : '2'}-${cycleType === '중간고사' ? 'a' : 'b'}`;
+    const cycleResultIds = results
+      .filter(r => r.exam_type === typeMap[cycleType] && r.exam_year === cycleYear && r.exam_period === period)
+      .map(r => r.id);
+    if (cycleResultIds.length === 0) { setReviews([]); return; }
+    (async () => {
+      const { data: rev } = await supabase.from('exam_reviews').select('result_id, reviewed_at').in('result_id', cycleResultIds);
+      setReviews((rev as ReviewRow[]) || []);
+    })();
+  }, [results, cycleYear, cycleSemester, cycleType]);
 
   const teacherName = useMemo(() => new Map(teachers.map(t => [t.id, t.full_name])), [teachers]);
 
@@ -203,6 +217,16 @@ export function PrincipalDirectionBoard() {
       .map(([teacherId, count]) => ({ teacherId, count, name: teacherName.get(teacherId) || '?' }))
       .sort((a, b) => b.count - a.count);
   }, [results, reviews, teacherFor, teacherName, cycleYear, cycleSemester, cycleType]);
+
+  if (loadError) {
+    return (
+      <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 space-y-2">
+        <p className="font-bold">불러오기 실패</p>
+        <p>{loadError}</p>
+        <Button size="sm" variant="outline" onClick={load}><RefreshCw className="w-3.5 h-3.5 mr-1" />다시 시도</Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
