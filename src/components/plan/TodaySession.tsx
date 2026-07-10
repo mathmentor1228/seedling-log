@@ -308,19 +308,26 @@ export function TodaySession() {
     return list;
   }, [partialCarry, groupPosIdx, trackGoals, todayCount]);
 
-  // 쪽지시험 대상 = 마지막으로 나간, 아직 확인 안 된 목표
-  const quizTarget = useMemo(() => {
-    if (groupPosIdx < 0) return null;
-    for (let i = groupPosIdx; i >= 0 && i > groupPosIdx - 2; i--) {
-      const g = trackGoals[i];
-      const verified = progress.some(p => p.goal_id === g.id && p.status.startsWith('verified'));
-      if (!verified) return g;
-    }
-    return trackGoals[groupPosIdx];
-  }, [groupPosIdx, trackGoals, progress]);
-
   const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
+
+  // 쪽지시험 대상 = 마지막으로 나간, 아직 확인 안 된 목표
+  // 테스트·복습 데이에는 quiz check_method가 꺼져있어도 단원 마무리 테스트 결과를 기록해야 하므로
+  // 진도가 아직 시작 전이어도 첫 목표를 대상으로 폴백한다.
+  const quizTarget = useMemo(() => {
+    if (groupPosIdx >= 0) {
+      for (let i = groupPosIdx; i >= 0 && i > groupPosIdx - 2; i--) {
+        const g = trackGoals[i];
+        const verified = progress.some(p => p.goal_id === g.id && p.status.startsWith('verified'));
+        if (!verified) return g;
+      }
+      return trackGoals[groupPosIdx];
+    }
+    // 진도 시작 전: 테스트 데이인 경우에만 첫 목표를 폴백으로 노출
+    if (isTestDay && trackGoals.length > 0) return trackGoals[0];
+    return null;
+  }, [groupPosIdx, trackGoals, progress, isTestDay]);
+
 
   // PLAN-VERIFY-LOOP-V1: 확인 대기 목록 — 나갔지만(advanced) 아직 확인 도장 없는 지난 진행분.
   // 오늘 나갈 목표와, 쪽지시험이 다루는 목표는 제외. 학생별로 도장 대상이 다를 수 있어 목표 단위로 묶는다.
