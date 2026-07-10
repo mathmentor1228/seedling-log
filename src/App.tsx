@@ -17,6 +17,8 @@ const QuizSubmitPage = lazy(() => import("./pages/QuizSubmitPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const TrialSignup = lazy(() => import("./pages/TrialSignup"));
 const PublicReport = lazy(() => import("./pages/PublicReport"));
+const IntensiveApplyPage = lazy(() => import("./pages/IntensiveApplyPage"));
+const IntensiveApplicationsPage = lazy(() => import("./pages/IntensiveApplicationsPage"));
 const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
 const StudentLayout = lazy(() =>
@@ -106,6 +108,7 @@ const App = () => (
         <Routes>
           {/* Public route - NO AuthProvider, accessible without login */}
           <Route path="/report/view" element={<PublicReport />} />
+          <Route path="/summer-intensive" element={<IntensiveApplyPage />} />
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
           <Route path="/trial" element={<TrialSignup />} />
@@ -195,6 +198,7 @@ const App = () => (
                 <Route path="/plan/:designId/planner" element={<PlanPlannerPage />} />
                 <Route path="/exam-board" element={<ExamBoardPage />} />
                 <Route path="/exam-board/principal" element={<ExamDirectionPage />} />
+                <Route path="/admin/intensive-applications" element={<IntensiveApplicationsPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
                 <Route path="/exam-trends" element={<ExamScoreTrendsPage />} />
