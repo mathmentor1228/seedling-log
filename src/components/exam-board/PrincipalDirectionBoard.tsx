@@ -65,7 +65,9 @@ export function PrincipalDirectionBoard() {
       const [stuRes, ciRes, tRes, resRes, arcRes, repRes] = await Promise.all([
         supabase.from('students').select('id, name, school, school_level, grade_year').in('enrollment_status', ['재학', '재등원']),
         supabase.from('class_students').select('student_id, classes(subject, teacher_id)'),
-        supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
+        // is_active 필터 없음 — 비활성 처리된 선생님도 과거 반 배정(teacher_id)이 남아있으면
+        // 채점/분석지 카드에서 이름을 찾아야 하므로 전체 프로필에서 조회 ("?" 표시 방지)
+        supabase.from('profiles').select('id, full_name').order('full_name'),
         supabase.from('student_exam_results')
           .select('id, student_id, subject, exam_type, exam_year, exam_period, actual_score, exam_date')
           .in('exam_type', ['midterm', 'final']),
