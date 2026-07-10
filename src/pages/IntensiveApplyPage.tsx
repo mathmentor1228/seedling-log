@@ -10,20 +10,20 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Loader2, GraduationCap, BookOpen, CalendarClock, CreditCard } from 'lucide-react';
 
 const db = supabase as any;
 
-// TODO(POSTER CONTENT): 원장님이 주시는 실제 포스터 문구로 교체
-const GRADES = ['초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3'];
+// 2026 멘토수학 여름특강 — 현 고1·고2 대상, 원장 직강 (포스터 기준 2026-07-10)
+const GRADES = ['고1', '고2'];
 
 const EXPECTATION_OPTIONS = [
-  '부족한 개념 완전정복',
-  '2학기 선행 진도',
-  '취약 유형 집중 훈련',
-  '내신 대비 심화',
-  '꾸준한 공부 습관',
-  '기초 체력(연산·독해) 다지기',
+  '2학기 개념 선행 완성',
+  '부족한 개념 보완',
+  '내신 대비 미리 준비',
+  '심화 문제 풀이 연습',
+  '꾸준한 학습 습관 잡기',
+  '학교 진도보다 앞서가기',
 ];
 
 export default function IntensiveApplyPage() {
@@ -87,28 +87,76 @@ export default function IntensiveApplyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-8">
       <div className="max-w-lg mx-auto space-y-6">
         {/* 헤더 */}
-        <div className="flex flex-col items-center text-center">
-          <div className="w-10 h-10 bg-primary rounded flex items-center justify-center mb-3">
-            <span className="text-primary-foreground font-bold text-lg">M</span>
-          </div>
-          <h1 className="text-lg font-semibold text-foreground">더멘토학원</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">2026 여름방학 특강 안내</p>
+        <div className="flex items-center justify-between text-xs">
+          <span className="rounded-full bg-primary/10 text-primary font-bold px-3 py-1">멘토수학과학학원 · 원내 안내</span>
+          <span className="font-bold text-muted-foreground">2026 여름특강</span>
         </div>
 
-        {/* ══════ POSTER CONTENT — 여기를 실제 포스터 문구로 교체 ══════ */}
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-6 pb-6 space-y-3">
-            <p className="flex items-center gap-1.5 text-sm font-bold text-primary">
-              <Sparkles className="w-4 h-4" />2026 여름방학 특강
+        {/* ══════ POSTER CONTENT (2026-07-10 기획 이미지 반영) ══════ */}
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-primary">현 고1 · 고2 대상 · 원장 직강 집중 특강</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">2026 멘토수학 여름특강 ✏️</h1>
+          <p className="text-sm text-muted-foreground">짧은 방학, 2학기 진도를 미리 끝내고 갑니다.</p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-xs font-bold px-3 py-1.5">
+          <GraduationCap className="w-3.5 h-3.5" />전 과정 원장 직강
+        </span>
+
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              {[
+                { label: '대상', value: '고1 · 고2' },
+                { label: '횟수', value: '총 8회', sub: '회당 120분' },
+                { label: '수강료', value: '25만원' },
+                { label: '일정', value: '개별 공지' },
+              ].map(item => (
+                <div key={item.label}>
+                  <p className="text-[11px] text-muted-foreground">{item.label}</p>
+                  <p className="font-extrabold text-primary">{item.value}</p>
+                  {item.sub && <p className="text-[10px] text-muted-foreground">{item.sub}</p>}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-5 pb-5 space-y-3">
+            <p className="flex items-center gap-1.5 text-sm font-bold">
+              <BookOpen className="w-4 h-4 text-primary" />수업 안내
             </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              (안내 문구 준비 중 — 기간·과목·시간표·특강비 등 상세 내용이 이 자리에 들어갑니다)
+            <p className="text-sm leading-relaxed text-foreground">
+              고1은 <b className="text-primary">공통수학2</b>, 고2는 <b className="text-primary">미적분1</b> 과정을 진행합니다.<br />
+              고등 정규수업 3시간×2회에 더해, <b>주 3회 2시간씩 추가</b>됩니다.<br />
+              최대 효율로 2학기 학습 개념을 최대한 훑고 가는 것을 목표로 합니다.
+            </p>
+            <p className="rounded-lg bg-muted text-center text-sm font-bold py-2.5">
+              정규수업 2회 + 방학특강 3회 = 주 5회 집중
             </p>
           </CardContent>
         </Card>
+
+        <div className="flex items-start gap-3 rounded-lg border px-4 py-3.5 bg-sky-50 dark:bg-sky-950/30">
+          <CalendarClock className="w-5 h-5 text-sky-700 dark:text-sky-300 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold">방학 중 일정은 최대한 조율해 진행합니다</p>
+            <p className="text-xs text-muted-foreground mt-0.5">시수가 부족한 학생은 개학 후 주말 일정으로 보충 예정</p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-lg border border-rose-200 px-4 py-3.5 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-900">
+          <CreditCard className="w-5 h-5 text-rose-700 dark:text-rose-300 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold text-rose-800 dark:text-rose-200">특강료는 8월 수강료에 합산되어 결제됩니다</p>
+            <p className="text-xs text-rose-700/80 dark:text-rose-300/80 mt-0.5">별도 결제 없이 8월분에 포함 · 참고 부탁드립니다</p>
+          </div>
+        </div>
+
+        <p className="text-center font-bold text-lg py-2">2학기 수학 농사, 이번 여름에 결정됩니다 💪</p>
         {/* ══════════════════════════════════════════════════════════ */}
 
         {/* 기대하는 점 설문 */}
@@ -184,6 +232,11 @@ export default function IntensiveApplyPage() {
           </CardContent>
         </Card>
 
+        <div className="text-center pb-2">
+          <span className="inline-block rounded-full bg-primary text-primary-foreground font-bold px-6 py-2.5">
+            멘토수학과학학원
+          </span>
+        </div>
         <p className="text-center text-[11px] text-muted-foreground pb-4">
           더 멘토 학원 | 대표: 황은지
         </p>
