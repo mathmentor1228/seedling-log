@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { ClipboardList, RefreshCw, Copy } from 'lucide-react';
+import { ClipboardList, RefreshCw, Copy, Trash2 } from 'lucide-react';
 
 const db = supabase as any;
 
@@ -39,6 +39,18 @@ function IntensiveApplications() {
     const url = `${window.location.origin}/summer-intensive`;
     navigator.clipboard.writeText(url);
     toast.success('신청서 링크를 복사했어요 — 문자에 붙여넣으세요');
+  }
+
+  async function remove(a: Application) {
+    if (!window.confirm(`${a.child_name} 학생 신청을 삭제할까요?`)) return;
+    try {
+      const { error } = await db.from('intensive_applications').delete().eq('id', a.id);
+      if (error) throw error;
+      setApps(prev => prev.filter(x => x.id !== a.id));
+      toast.success('삭제했어요');
+    } catch (e: any) {
+      toast.error(`삭제 실패: ${e.message || e}`);
+    }
   }
 
   if (loading) {
@@ -73,6 +85,13 @@ function IntensiveApplications() {
                   <span className="ml-auto text-[11px] text-muted-foreground">
                     {new Date(a.created_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  <button
+                    className="text-muted-foreground hover:text-destructive transition"
+                    title="삭제"
+                    onClick={() => remove(a)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 {a.expectations.length > 0 && (
                   <div className="flex flex-wrap gap-1">
