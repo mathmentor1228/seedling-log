@@ -2166,6 +2166,36 @@ export type Database = {
           },
         ]
       }
+      intensive_applications: {
+        Row: {
+          child_name: string
+          consent_agreed: boolean
+          created_at: string
+          expectations: string[]
+          grade: string
+          id: string
+          wishes: string | null
+        }
+        Insert: {
+          child_name: string
+          consent_agreed?: boolean
+          created_at?: string
+          expectations?: string[]
+          grade: string
+          id?: string
+          wishes?: string | null
+        }
+        Update: {
+          child_name?: string
+          consent_agreed?: boolean
+          created_at?: string
+          expectations?: string[]
+          grade?: string
+          id?: string
+          wishes?: string | null
+        }
+        Relationships: []
+      }
       lesson_records: {
         Row: {
           attendance_status: string[] | null
@@ -3378,7 +3408,10 @@ export type Database = {
           design_id: string
           goal_id: string
           id: string
+          next_review_date: string | null
           partial_upto: string | null
+          review_count: number
+          review_interval: number | null
           session_id: string | null
           status: string
           student_id: string
@@ -3390,7 +3423,10 @@ export type Database = {
           design_id: string
           goal_id: string
           id?: string
+          next_review_date?: string | null
           partial_upto?: string | null
+          review_count?: number
+          review_interval?: number | null
           session_id?: string | null
           status?: string
           student_id: string
@@ -3402,7 +3438,10 @@ export type Database = {
           design_id?: string
           goal_id?: string
           id?: string
+          next_review_date?: string | null
           partial_upto?: string | null
+          review_count?: number
+          review_interval?: number | null
           session_id?: string | null
           status?: string
           student_id?: string
@@ -3646,6 +3685,7 @@ export type Database = {
       plan_sessions: {
         Row: {
           assigned_teacher_id: string | null
+          cancel_reason: string | null
           created_at: string
           design_id: string
           goal_id: string | null
@@ -3659,6 +3699,7 @@ export type Database = {
         }
         Insert: {
           assigned_teacher_id?: string | null
+          cancel_reason?: string | null
           created_at?: string
           design_id: string
           goal_id?: string | null
@@ -3672,6 +3713,7 @@ export type Database = {
         }
         Update: {
           assigned_teacher_id?: string | null
+          cancel_reason?: string | null
           created_at?: string
           design_id?: string
           goal_id?: string | null
