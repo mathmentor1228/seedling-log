@@ -3165,6 +3165,7 @@ export type Database = {
       }
       plan_checks: {
         Row: {
+          content_note: string | null
           created_at: string
           cutline: number | null
           design_id: string
@@ -3178,6 +3179,7 @@ export type Database = {
           student_id: string
         }
         Insert: {
+          content_note?: string | null
           created_at?: string
           cutline?: number | null
           design_id: string
@@ -3191,6 +3193,7 @@ export type Database = {
           student_id: string
         }
         Update: {
+          content_note?: string | null
           created_at?: string
           cutline?: number | null
           design_id?: string
