@@ -23,6 +23,9 @@ interface LessonFeedback {
   notes: string | null;
   learning_issues: string[] | null;
   teacher_name: string | null;
+  // PLAN-LESSON-SYNC-V1: 수업 중 본 테스트 내용·결과도 학습일지에 표기
+  test_title: string | null;
+  test_result_text: string | null;
 }
 
 export default function StudentFeedback() {
@@ -173,6 +176,16 @@ export default function StudentFeedback() {
                       </div>
                     )}
                     
+                    {fb.test_title && (
+                      <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-xs text-muted-foreground mb-1">📝 테스트</p>
+                        <p className="text-sm font-medium">{fb.test_title}</p>
+                        {fb.test_result_text && (
+                          <p className="text-sm mt-0.5">{fb.test_result_text}</p>
+                        )}
+                      </div>
+                    )}
+
                     {fb.learning_issues && fb.learning_issues.length > 0 && (
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">학습 포인트</p>

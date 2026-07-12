@@ -765,7 +765,7 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase
           .from('lesson_records')
-          .select('id, lesson_date, subject, lesson_range, understanding_score, next_lesson_goal, notes, learning_issues, teacher_id')
+          .select('id, lesson_date, subject, lesson_range, understanding_score, next_lesson_goal, notes, learning_issues, teacher_id, test_title, test_result_text')
           .eq('student_id', student_id)
           .eq('submitted', true)
           .gte('lesson_date', thirtyDaysAgo.toISOString().split('T')[0])
@@ -799,6 +799,9 @@ Deno.serve(async (req) => {
           notes: d.notes,
           learning_issues: d.learning_issues,
           teacher_name: d.teacher_id ? teacherMap[d.teacher_id] || null : null,
+          // PLAN-LESSON-SYNC-V1: 테스트 내용·결과도 학습일지에 표기
+          test_title: d.test_title,
+          test_result_text: d.test_result_text,
         }));
 
         result = { feedback: feedbackData };

@@ -237,14 +237,20 @@ export function TodaySession() {
         setNextSessionDate(nsd);
 
         // 오늘 확인해야 할 숙제: 이 반 학생들 중, 과목 일치 + (마감이 오늘 포함 이전) + 아직 미확인
+        // PLAN-LESSON-SYNC-V1: check_status 실제 값은 unchecked|resubmit|checked — 미확인 = checked가 아닌 것.
+        // 오래 방치된 숙제가 끝없이 쌓이지 않게 최근 30일로 한정.
+        const hwSince = new Date(new Date(todayStr + 'T12:00:00').getTime() - 30 * 86400000)
+          .toISOString().slice(0, 10);
         const studentIds = studs.map(s => s.id);
         if (subj && studentIds.length > 0) {
           const { data: hws } = await db.from('homework_assignments')
             .select('id, student_id, content, assigned_date, end_date, check_status, result')
             .in('student_id', studentIds)
             .eq('subject', subj)
-            .in('check_status', ['pending', 'assigned'])
-            .lte('assigned_date', todayStr)
+            .in('check_status', ['unchecked', 'resubmit'])
+            .gte('assigned_date', hwSince)
+            // 오늘 막 내준 숙제가 "확인할 숙제"로 되돌아오지 않게 오늘 이전 것만
+            .lt('assigned_date', todayStr)
             .order('assigned_date', { ascending: false })
             .limit(300);
           setOpenHws((hws || []) as OpenHw[]);
@@ -834,7 +840,7 @@ export function TodaySession() {
           // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
           // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
           const { data: existingList } = await db.from('lesson_records')
-            .select('id, learning_issues_note')
+            .select('id, learning_issues_note, submitted')
             .eq('student_id', s.id)
             .eq('subject', subject)
             .eq('lesson_date', todayStr)
@@ -866,11 +872,22 @@ export function TodaySession() {
             learning_issues_note: mergedNote,
             ...(note.trim() ? { notes: note.trim() } : {}),
             ...(understanding != null ? { understanding_score: understanding } : {}),
-            ...(quiz && quizTarget ? {
-              test_title: `${isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — ${quiz.label || quizTarget.title}`,
-              test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
-                : `미달${errorPick[s.id] ? ` (원인: ${ERROR_TYPES.find(e => e.key === errorPick[s.id])?.label})` : ''}`}`,
-            } : {}),
+            ...(quiz && quizTarget ? (() => {
+              // PLAN-LESSON-SYNC-V1: 본수업일지 화면은 test_name/test_content를 읽으므로
+              // 통일 규칙(LessonRecordForm과 동일)대로 세 필드에 같은 값을 채운다.
+              const testName = `${isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — ${quiz.label || quizTarget.title}`;
+              return {
+                test_name: testName,
+                test_content: testName,
+                test_title: testName,
+                test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
+                  : `미달${errorPick[s.id] ? ` (원인: ${ERROR_TYPES.find(e => e.key === errorPick[s.id])?.label})` : ''}`}`,
+              };
+            })() : {}),
+            // PLAN-LESSON-SYNC-V1: 계획 저장 = 그날 일지 확정. 초안으로 남기면
+            // 학생 학습일지(submitted=true만 노출)와 각종 집계에서 빠진다.
+            submitted: true,
+            ...(existingLR?.submitted ? {} : { submitted_at: new Date().toISOString() }),
           };
 
           let lessonRecordId: string | null = null;
@@ -900,7 +917,8 @@ export function TodaySession() {
                 end_date: nextHwDue || null,
                 content: hwContent,
                 check_status: 'unchecked',
-                homework_type: 'written',
+                // PLAN-LESSON-SYNC-V1: 다른 입력 경로와 같은 타입 체계(regular|daily) 사용
+                homework_type: 'regular',
                 required_submissions: 1,
                 created_by: user?.id || null,
               });
