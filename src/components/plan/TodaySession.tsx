@@ -91,7 +91,9 @@ export function TodaySession() {
   type AbsentHandling = 'skip' | 'makeup' | 'defer';
   const [absentHandling, setAbsentHandling] = useState<Record<string, AbsentHandling>>({});
   const [quizScores, setQuizScores] = useState<Record<string, string>>({});
-  const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean }>>({});
+  const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean; label: string }>>({});
+  // PLAN-QUIZ-CONTENT-V1: 시험 내용(선택) — 비우면 quizTarget 목표명으로 기록
+  const [quizContent, setQuizContent] = useState('');
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
   const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
   // 학생별 진도 상태 — goalId → studentId → {state, upto}
@@ -409,14 +411,22 @@ export function TodaySession() {
     if (Number.isNaN(score) || score < 0 || score > 100) { toast.error('0~100 점수를 입력해주세요'); return; }
     const cut = cutlineFor(stu);
     const passed = score >= cut;
+    // 시험 내용을 적었으면 그것이 기록·큐·일지의 라벨, 비우면 목표명
+    const quizLabel = quizContent.trim() || quizTarget.title;
     try {
-      const { data: check, error } = await db.from('plan_checks').insert({
+      const baseCheck = {
         design_id: designId, session_id: sessionId, student_id: stu.id,
         goal_id: quizTarget.id, method: 'quiz', score, cutline: cut, passed,
         error_type: passed ? null : (errorPick[stu.id] || null),
-      }).select().single();
+      };
+      // content_note는 마이그레이션 전이면 빼고 재시도
+      let { data: check, error } = await db.from('plan_checks')
+        .insert({ ...baseCheck, content_note: quizContent.trim() || null }).select().single();
+      if (error && /column|schema|content_note/i.test(String(error.message))) {
+        ({ data: check, error } = await db.from('plan_checks').insert(baseCheck).select().single());
+      }
       if (error) throw error;
-      setQuizSaved(p => ({ ...p, [stu.id]: { score, passed } }));
+      setQuizSaved(p => ({ ...p, [stu.id]: { score, passed, label: quizLabel } }));
       setRecentChecks(p => [{ student_id: stu.id, goal_id: quizTarget.id, score, passed, method: 'quiz', created_at: new Date().toISOString() }, ...p]);
 
       // PLAN-VERIFY-LOOP-V1: 쪽지 결과가 곧 확인 도장 — 나간(advanced) 상태인 목표에 한해.
@@ -442,9 +452,9 @@ export function TodaySession() {
         // 룰셋의 1차 처리 → 큐 자동 등록
         const kindMap: Record<string, string> = { retest: 'retest', clinic: 'relearn', homework: 'relearn' };
         const titleMap: Record<string, string> = {
-          retest: `재시험 — ${quizTarget.title} (${score}/${cut})`,
-          clinic: `클리닉 재학습 — ${quizTarget.title}`,
-          homework: `보완 과제 — ${quizTarget.title}`,
+          retest: `재시험 — ${quizLabel} (${score}/${cut})`,
+          clinic: `클리닉 재학습 — ${quizLabel}`,
+          homework: `보완 과제 — ${quizLabel}`,
         };
         const { data: q } = await db.from('plan_queue').insert({
           design_id: designId, student_id: stu.id, goal_id: quizTarget.id,
@@ -463,7 +473,7 @@ export function TodaySession() {
         if (consecutive) {
           await db.from('plan_flags').insert({
             design_id: designId, student_id: stu.id, kind: 'level', level: 'principal',
-            message: `${stu.name} — 쪽지시험 ${design.escalate_after}회 연속 미달 (최근: ${quizTarget.title} ${score}/${cut}점)`,
+            message: `${stu.name} — 쪽지시험 ${design.escalate_after}회 연속 미달 (최근: ${quizLabel} ${score}/${cut}점)`,
           });
           toast.warning(`⚠ ${stu.name} ${design.escalate_after}회 연속 미달 — 추가관리 알림이 원장에게 갑니다`);
         } else {
@@ -857,7 +867,7 @@ export function TodaySession() {
             ...(note.trim() ? { notes: note.trim() } : {}),
             ...(understanding != null ? { understanding_score: understanding } : {}),
             ...(quiz && quizTarget ? {
-              test_title: `쪽지시험 — ${quizTarget.title}`,
+              test_title: `${isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — ${quiz.label || quizTarget.title}`,
               test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
                 : `미달${errorPick[s.id] ? ` (원인: ${ERROR_TYPES.find(e => e.key === errorPick[s.id])?.label})` : ''}`}`,
             } : {}),
@@ -1185,9 +1195,14 @@ export function TodaySession() {
           {(hasQuiz || isTestDay) && quizTarget && (
             <Card className={isTestDay ? 'border-amber-300/60' : undefined}><CardContent className="p-4 space-y-3">
               <p className="text-xs font-bold text-muted-foreground">
-                {isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — <span className="text-foreground">{quizTarget.title}</span> {quizTarget.pages}
+                {isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — <span className="text-foreground">{quizContent.trim() || quizTarget.title}</span> {!quizContent.trim() && quizTarget.pages}
                 <Badge variant="secondary" className="ml-2 text-[10px]">{isTestDay ? '테스트·복습 데이' : '룰셋 자동'}</Badge>
               </p>
+              {/* PLAN-QUIZ-CONTENT-V1: 실제 시험 내용이 목표명과 다르면 여기에 — 기록·재시험·수업일지에 이 내용으로 남는다 */}
+              <Input className="h-8 text-xs"
+                placeholder={`시험 내용이 다르면 적어주세요 (예: Unit 3~5 단어 40개) — 비우면 "${quizTarget.title}"로 기록`}
+                value={quizContent}
+                onChange={e => setQuizContent(e.target.value)} />
 
               <div className="grid gap-2 sm:grid-cols-3">
                 {effectiveStudents.filter(s => !absent.has(s.id)).map(s => {
