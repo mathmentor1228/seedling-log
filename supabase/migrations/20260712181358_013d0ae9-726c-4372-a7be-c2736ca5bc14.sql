@@ -1,0 +1,1 @@
+ALTER TABLE public.plan_checks ADD COLUMN IF NOT EXISTS content_note text;
