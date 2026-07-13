@@ -30,6 +30,7 @@ interface VocabFolder {
   name: string;
   parent_id: string | null;
   sort_order: number;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -218,7 +219,51 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       .from('vocab_folders')
       .select('*')
       .order('sort_order');
-    if (data) setFolders(data);
+    if (data) {
+      const normalized = (data as any[]).map(f => ({ ...f, is_active: f.is_active ?? true })) as VocabFolder[];
+      // active first, then by sort_order within each group
+      normalized.sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
+      setFolders(normalized);
+    }
+  };
+
+  // Move a folder up/down among its siblings (same parent_id and same is_active group)
+  const moveFolder = async (folder: VocabFolder, direction: -1 | 1) => {
+    const siblings = folders
+      .filter(f => f.parent_id === folder.parent_id && f.is_active === folder.is_active)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const idx = siblings.findIndex(f => f.id === folder.id);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= siblings.length) return;
+    const a = siblings[idx];
+    const b = siblings[swapIdx];
+    // swap sort_order values
+    await Promise.all([
+      supabase.from('vocab_folders').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('vocab_folders').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ]);
+    loadFolders();
+  };
+
+  // Toggle a folder's active state; disabled folders sink to the bottom of the list
+  const toggleFolderActive = async (folder: VocabFolder) => {
+    const nextActive = !folder.is_active;
+    // put it at the bottom of the destination group
+    const destSiblings = folders.filter(
+      f => f.parent_id === folder.parent_id && f.is_active === nextActive && f.id !== folder.id,
+    );
+    const nextSortOrder = destSiblings.length
+      ? Math.max(...destSiblings.map(f => f.sort_order ?? 0)) + 1
+      : 0;
+    await supabase
+      .from('vocab_folders')
+      .update({ is_active: nextActive, sort_order: nextSortOrder } as any)
+      .eq('id', folder.id);
+    loadFolders();
+    toast({ title: nextActive ? '폴더를 활성화했습니다' : '폴더를 사용 안 함으로 이동했습니다' });
   };
 
   const loadSets = async () => {
