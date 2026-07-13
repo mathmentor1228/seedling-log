@@ -466,28 +466,28 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
       // Try to auto-detect Day range from filename (e.g. "1-10", "1~10", "Day1_10")
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const rangeMatch = baseName.match(/(\d+)\s*[-~_]\s*(\d+)/);
-      let suggestedChunk = 0;
-      if (rangeMatch) {
-        const a = parseInt(rangeMatch[1], 10);
-        const b = parseInt(rangeMatch[2], 10);
-        const dayCount = Math.abs(b - a) + 1;
-        if (dayCount > 1 && dayCount <= 50 && total >= dayCount) {
-          suggestedChunk = Math.ceil(total / dayCount);
-        }
-      }
+      const cleanedTitleBase = cleanVocabTitleBase(file.name);
+      const range = extractDayRangeFromName(baseName);
+      const dayLabelsAreGeneric = days.length === 1 && ['전체', 'all', '전체 단어'].includes(days[0].label.trim().toLowerCase());
+      const shouldForceFilenameSplit = !!range && total >= range.count && (dayLabelsAreGeneric || days.length !== range.count);
+      const normalizedDays = shouldForceFilenameSplit
+        ? splitWordsIntoDayRange(days.flatMap(d => d.words), range.start, range.end)
+        : days.map((d, idx) => {
+            const dayNo = extractDayNumber(d.label) ?? (range ? range.start + idx * (range.end >= range.start ? 1 : -1) : idx + 1);
+            return { ...d, label: `Day ${dayNo}` };
+          });
 
       // Always show the day picker so the user can split/select days.
-      setParsedDays(days);
-      setSplitChunkSize(suggestedChunk);
-      setDayTitlePrefix(baseName.slice(0, 40));
+      setParsedDays(normalizedDays);
+      setSplitChunkSize(0);
+      setDayTitlePrefix(cleanedTitleBase);
       // selection is auto-reset by the splitChunkSize/parsedDays effect
-      if (days.length === 1 && suggestedChunk === 0) {
-        toast({ title: `${total}개 단어 추출 (Day 구분자가 없어 자동 분할을 사용하세요)` });
-      } else if (suggestedChunk > 0) {
-        toast({ title: `${total}개 단어 추출 · 파일명 기준 ${Math.ceil(total / suggestedChunk)}개 Day로 자동 분할` });
+      if (shouldForceFilenameSplit && range) {
+        toast({ title: `${total}개 단어 추출 · 파일명 기준 Day ${range.start}~${range.end}로 자동 분리` });
+      } else if (normalizedDays.length === 1) {
+        toast({ title: `${total}개 단어 추출 (Day 구분자가 없으면 자동 분할 값을 입력하세요)` });
       } else {
-        toast({ title: `${days.length}개 Day에서 총 ${total}개 단어 추출` });
+        toast({ title: `${normalizedDays.length}개 Day에서 총 ${total}개 단어 추출` });
       }
     } catch (err: any) {
       toast({ title: '파일 파싱 실패', description: err.message, variant: 'destructive' });
@@ -503,9 +503,10 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     if (splitChunkSize && splitChunkSize > 0) {
       const flat = parsedDays.flatMap(d => d.words);
       const chunks: ParsedDay[] = [];
+      const firstDay = extractDayNumber(parsedDays[0]?.label) ?? 1;
       for (let i = 0; i < flat.length; i += splitChunkSize) {
         const slice = flat.slice(i, i + splitChunkSize).map((w, idx) => ({ ...w, sort_order: idx }));
-        chunks.push({ label: `Day ${chunks.length + 1}`, words: slice });
+        chunks.push({ label: `Day ${firstDay + chunks.length}`, words: slice });
       }
       return chunks;
     }
@@ -548,9 +549,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       let inserted = 0;
       for (let i = 0; i < targets.length; i++) {
         const day = targets[i];
-        const title = dayTitlePrefix
-          ? `${dayTitlePrefix} · ${day.label}`
-          : day.label;
+        const title = buildDaySetTitle(dayTitlePrefix, day.label, i, extractDayNumber(targets[0]?.label) ?? 1);
         const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
           title,
           round_number: baseRound + i + 1,
