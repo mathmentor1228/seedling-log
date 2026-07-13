@@ -48,6 +48,11 @@ interface GeneratedQuestion {
   answer: string;
 }
 
+interface ParsedDay {
+  label: string;
+  words: WordItem[];
+}
+
 interface SavedTest {
   id: string;
   title: string;
@@ -112,6 +117,13 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [pdfParsing, setPdfParsing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  // Parsed days (from file upload) + split UI
+  const [parsedDays, setParsedDays] = useState<ParsedDay[] | null>(null);
+  const [selectedDayIdxs, setSelectedDayIdxs] = useState<Set<number>>(new Set());
+  const [splitChunkSize, setSplitChunkSize] = useState<number>(0); // 0 = no manual split
+  const [dayTitlePrefix, setDayTitlePrefix] = useState<string>('');
+  const [importingDays, setImportingDays] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
@@ -366,12 +378,14 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast({ title: 'PDF 파일만 업로드 가능합니다', variant: 'destructive' });
+    const nameLower = file.name.toLowerCase();
+    const supported = ['.pdf', '.docx', '.doc', '.hwpx'];
+    if (!supported.some(ext => nameLower.endsWith(ext))) {
+      toast({ title: '지원 형식: PDF, DOCX, DOC, HWPX', variant: 'destructive' });
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: '파일 크기는 10MB 이하여야 합니다', variant: 'destructive' });
+    if (file.size > 15 * 1024 * 1024) {
+      toast({ title: '파일 크기는 15MB 이하여야 합니다', variant: 'destructive' });
       return;
     }
     setPdfParsing(true);
@@ -382,26 +396,141 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         body: formData,
       });
       if (error) throw error;
-      if (!data?.words?.length) {
+      const days: ParsedDay[] | undefined = data?.days?.map((d: any) => ({
+        label: d.label || '전체',
+        words: (d.words || []).map((w: any, i: number) => ({
+          english: w.english,
+          meaning: w.meaning,
+          english_definition: '',
+          sort_order: i,
+        })),
+      }));
+      if (!days || days.length === 0) {
         toast({ title: '단어를 추출할 수 없습니다', variant: 'destructive' });
         return;
       }
-      const newWords: WordItem[] = data.words.map((w: any, i: number) => ({
-        english: w.english,
-        meaning: w.meaning,
-        english_definition: '',
-        sort_order: i,
-      }));
-      setWords(newWords);
-      setShowBulkModal(false);
-      setBulkText('');
-      toast({ title: `PDF에서 ${newWords.length}개 단어 추출 완료` });
+      const total = days.reduce((s, d) => s + d.words.length, 0);
+
+      if (days.length === 1) {
+        // Single day / no day markers → load into current editor (existing behavior)
+        setParsedDays(null);
+        setSelectedDayIdxs(new Set());
+        setWords(days[0].words);
+        setShowBulkModal(false);
+        setBulkText('');
+        toast({ title: `${total}개 단어 추출 완료 (${days[0].label})` });
+      } else {
+        // Multiple days → show day picker
+        setParsedDays(days);
+        setSelectedDayIdxs(new Set(days.map((_, i) => i))); // select all by default
+        setSplitChunkSize(0);
+        setDayTitlePrefix(file.name.replace(/\.[^.]+$/, '').slice(0, 40));
+        toast({ title: `${days.length}개 Day에서 총 ${total}개 단어 추출` });
+      }
     } catch (err: any) {
-      toast({ title: 'PDF 파싱 실패', description: err.message, variant: 'destructive' });
+      toast({ title: '파일 파싱 실패', description: err.message, variant: 'destructive' });
     } finally {
       setPdfParsing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
+
+  // Compute effective days after applying manual chunk split
+  const effectiveDays: ParsedDay[] = (() => {
+    if (!parsedDays) return [];
+    if (splitChunkSize && splitChunkSize > 0) {
+      const flat = parsedDays.flatMap(d => d.words);
+      const chunks: ParsedDay[] = [];
+      for (let i = 0; i < flat.length; i += splitChunkSize) {
+        const slice = flat.slice(i, i + splitChunkSize).map((w, idx) => ({ ...w, sort_order: idx }));
+        chunks.push({ label: `Day ${chunks.length + 1}`, words: slice });
+      }
+      return chunks;
+    }
+    return parsedDays;
+  })();
+
+  const toggleDaySelection = (idx: number) => {
+    setSelectedDayIdxs(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
+
+  const toggleAllDays = () => {
+    if (selectedDayIdxs.size === effectiveDays.length) {
+      setSelectedDayIdxs(new Set());
+    } else {
+      setSelectedDayIdxs(new Set(effectiveDays.map((_, i) => i)));
+    }
+  };
+
+  // When splitChunkSize changes, reset selection to all
+  useEffect(() => {
+    if (parsedDays) {
+      setSelectedDayIdxs(new Set(effectiveDays.map((_, i) => i)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitChunkSize, parsedDays]);
+
+  const handleImportSelectedDays = async () => {
+    if (!parsedDays || selectedDayIdxs.size === 0) {
+      toast({ title: '가져올 Day를 선택하세요', variant: 'destructive' });
+      return;
+    }
+    const targets = effectiveDays.filter((_, i) => selectedDayIdxs.has(i));
+    setImportingDays(true);
+    try {
+      const baseRound = sets.length > 0 ? Math.max(...sets.map(s => s.round_number)) : 0;
+      let inserted = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const day = targets[i];
+        const title = dayTitlePrefix
+          ? `${dayTitlePrefix} · ${day.label}`
+          : day.label;
+        const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
+          title,
+          round_number: baseRound + i + 1,
+          folder_id: setFolderAssign ?? selectedFolderId ?? null,
+          created_by: user!.id,
+        }).select().single();
+        if (setErr) throw setErr;
+        const items = day.words
+          .filter(w => w.english && w.meaning)
+          .map((w, idx) => ({
+            set_id: newSet.id,
+            english: w.english.trim(),
+            meaning: w.meaning.trim(),
+            english_definition: null,
+            sort_order: idx,
+          }));
+        if (items.length > 0) {
+          const { error: itemsErr } = await supabase.from('vocab_word_items').insert(items);
+          if (itemsErr) throw itemsErr;
+        }
+        inserted++;
+      }
+      toast({ title: `${inserted}개 회차로 저장 완료` });
+      setParsedDays(null);
+      setSelectedDayIdxs(new Set());
+      setShowBulkModal(false);
+      loadSets();
+    } catch (e: any) {
+      toast({ title: '저장 실패', description: e.message, variant: 'destructive' });
+    } finally {
+      setImportingDays(false);
+    }
+  };
+
+  const handleImportAllToCurrentEditor = () => {
+    if (!parsedDays) return;
+    const flat = parsedDays.flatMap(d => d.words).map((w, i) => ({ ...w, sort_order: i }));
+    setWords(flat);
+    setParsedDays(null);
+    setSelectedDayIdxs(new Set());
+    setShowBulkModal(false);
+    toast({ title: `${flat.length}개 단어를 현재 편집기로 불러옴` });
   };
 
   const handleNewSet = () => {
@@ -1057,58 +1186,142 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       </Dialog>
 
       {/* Bulk paste modal */}
-      <Dialog open={showBulkModal} onOpenChange={setShowBulkModal}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={showBulkModal} onOpenChange={(o) => { setShowBulkModal(o); if (!o) { setParsedDays(null); setSelectedDayIdxs(new Set()); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>일괄 입력</DialogTitle></DialogHeader>
-          
-          {/* PDF Upload Section */}
-          <div className="border border-dashed border-primary/40 rounded-lg p-4 bg-primary/5 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <FileText className="w-4 h-4 text-primary" />
-              PDF 파일 업로드
+
+          {/* Step 1: file picker — hidden when day picker is showing */}
+          {!parsedDays && (
+            <>
+              <div className="border border-dashed border-primary/40 rounded-lg p-4 bg-primary/5 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <FileText className="w-4 h-4 text-primary" />
+                  파일 업로드 (PDF · DOCX · DOC · HWPX)
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  단어 시험지/답안지 파일을 업로드하면 AI가 자동으로 단어를 추출합니다.
+                  Day 구분이 있는 문서는 각 Day를 골라 별도 회차로 저장할 수 있습니다.
+                </p>
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.doc,.hwpx"
+                  onChange={handlePdfUpload}
+                  disabled={pdfParsing}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => pdfInputRef.current?.click()}
+                  disabled={pdfParsing}
+                  className="w-full"
+                >
+                  {pdfParsing ? (
+                    <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> 파일 분석 중...</>
+                  ) : (
+                    <><Upload className="w-3.5 h-3.5 mr-1" /> 파일 선택</>
+                  )}
+                </Button>
+                <p className="text-[10px] text-muted-foreground">
+                  ※ 레거시 바이너리 .doc / .hwp는 지원되지 않습니다. .docx / .hwpx / PDF로 변환해주세요.
+                </p>
+              </div>
+
+              <div className="relative flex items-center gap-2">
+                <div className="flex-1 border-t border-border" />
+                <span className="text-xs text-muted-foreground px-2">또는 직접 입력</span>
+                <div className="flex-1 border-t border-border" />
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                □ 형식, 탭, 쉼표, 공백 구분 모두 지원합니다.
+              </p>
+              <Textarea value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder={`□ ever adv. 지금까지\n□ find v. ~을 발견하다\n\n또는\napple\t사과`} rows={10} className="text-sm font-mono" />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowBulkModal(false)}>취소</Button>
+                <Button size="sm" onClick={handleBulkPaste} disabled={pdfParsing}><Upload className="w-3.5 h-3.5 mr-1" /> 텍스트 불러오기</Button>
+              </div>
+            </>
+          )}
+
+          {/* Step 2: day picker */}
+          {parsedDays && (
+            <div className="space-y-3">
+              <div className="text-sm font-medium">Day 선택 — 선택한 각 Day가 별도 회차로 저장됩니다</div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs mb-1 block">회차 제목 접두어</Label>
+                  <Input
+                    value={dayTitlePrefix}
+                    onChange={e => setDayTitlePrefix(e.target.value)}
+                    placeholder="예: 능률보카 실력 1-10"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">자동 분할 (단어 개수)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={splitChunkSize || ''}
+                    onChange={e => setSplitChunkSize(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="예: 20 (0=자동감지 유지)"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                문서에 Day 구분이 없거나 다시 나누고 싶을 때 "자동 분할" 값을 입력하세요. (전체 단어를 N개씩 잘라 Day로 분할)
+              </p>
+
+              <div className="flex items-center justify-between border-b pb-1">
+                <label className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    checked={selectedDayIdxs.size === effectiveDays.length && effectiveDays.length > 0}
+                    onCheckedChange={toggleAllDays}
+                  />
+                  전체 선택 ({selectedDayIdxs.size}/{effectiveDays.length})
+                </label>
+                <span className="text-[10px] text-muted-foreground">
+                  총 {effectiveDays.reduce((s, d) => s + d.words.length, 0)}개 단어
+                </span>
+              </div>
+
+              <div className="max-h-[280px] overflow-y-auto space-y-1 pr-1">
+                {effectiveDays.map((d, i) => (
+                  <label key={i} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer text-sm border">
+                    <Checkbox
+                      checked={selectedDayIdxs.has(i)}
+                      onCheckedChange={() => toggleDaySelection(i)}
+                    />
+                    <span className="font-medium">{d.label}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{d.words.length}개</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 pt-2 border-t">
+                <Button variant="ghost" size="sm" onClick={() => { setParsedDays(null); setSelectedDayIdxs(new Set()); }}>
+                  뒤로
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleImportAllToCurrentEditor}>
+                  전체를 현재 편집기로
+                </Button>
+                <Button size="sm" onClick={handleImportSelectedDays} disabled={importingDays || selectedDayIdxs.size === 0}>
+                  {importingDays ? (
+                    <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> 저장 중...</>
+                  ) : (
+                    <><Save className="w-3.5 h-3.5 mr-1" /> 선택 Day를 회차로 저장 ({selectedDayIdxs.size})</>
+                  )}
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              단어 시험지 PDF를 업로드하면 AI가 자동으로 단어를 추출합니다. (답안지 포함 시 더 정확)
-            </p>
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handlePdfUpload}
-              disabled={pdfParsing}
-              className="hidden"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => pdfInputRef.current?.click()}
-              disabled={pdfParsing}
-              className="w-full"
-            >
-              {pdfParsing ? (
-                <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> PDF 분석 중...</>
-              ) : (
-                <><Upload className="w-3.5 h-3.5 mr-1" /> PDF 선택</>
-              )}
-            </Button>
-          </div>
-
-          <div className="relative flex items-center gap-2">
-            <div className="flex-1 border-t border-border" />
-            <span className="text-xs text-muted-foreground px-2">또는 직접 입력</span>
-            <div className="flex-1 border-t border-border" />
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            □ 형식, 탭, 쉼표, 공백 구분 모두 지원합니다.
-          </p>
-          <Textarea value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder={`□ ever adv. 지금까지\n□ find v. ~을 발견하다\n\n또는\napple\t사과`} rows={10} className="text-sm font-mono" />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowBulkModal(false)}>취소</Button>
-            <Button size="sm" onClick={handleBulkPaste} disabled={pdfParsing}><Upload className="w-3.5 h-3.5 mr-1" /> 텍스트 불러오기</Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
+
 
       {/* Share modal */}
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
