@@ -411,20 +411,29 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       }
       const total = days.reduce((s, d) => s + d.words.length, 0);
 
-      if (days.length === 1) {
-        // Single day / no day markers → load into current editor (existing behavior)
-        setParsedDays(null);
-        setSelectedDayIdxs(new Set());
-        setWords(days[0].words);
-        setShowBulkModal(false);
-        setBulkText('');
-        toast({ title: `${total}개 단어 추출 완료 (${days[0].label})` });
+      // Try to auto-detect Day range from filename (e.g. "1-10", "1~10", "Day1_10")
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const rangeMatch = baseName.match(/(\d+)\s*[-~_]\s*(\d+)/);
+      let suggestedChunk = 0;
+      if (rangeMatch) {
+        const a = parseInt(rangeMatch[1], 10);
+        const b = parseInt(rangeMatch[2], 10);
+        const dayCount = Math.abs(b - a) + 1;
+        if (dayCount > 1 && dayCount <= 50 && total >= dayCount) {
+          suggestedChunk = Math.ceil(total / dayCount);
+        }
+      }
+
+      // Always show the day picker so the user can split/select days.
+      setParsedDays(days);
+      setSplitChunkSize(suggestedChunk);
+      setDayTitlePrefix(baseName.slice(0, 40));
+      // selection is auto-reset by the splitChunkSize/parsedDays effect
+      if (days.length === 1 && suggestedChunk === 0) {
+        toast({ title: `${total}개 단어 추출 (Day 구분자가 없어 자동 분할을 사용하세요)` });
+      } else if (suggestedChunk > 0) {
+        toast({ title: `${total}개 단어 추출 · 파일명 기준 ${Math.ceil(total / suggestedChunk)}개 Day로 자동 분할` });
       } else {
-        // Multiple days → show day picker
-        setParsedDays(days);
-        setSelectedDayIdxs(new Set(days.map((_, i) => i))); // select all by default
-        setSplitChunkSize(0);
-        setDayTitlePrefix(file.name.replace(/\.[^.]+$/, '').slice(0, 40));
         toast({ title: `${days.length}개 Day에서 총 ${total}개 단어 추출` });
       }
     } catch (err: any) {
