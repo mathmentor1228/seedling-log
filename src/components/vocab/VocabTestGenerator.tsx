@@ -569,7 +569,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
           title,
           round_number: baseRound + i + 1,
-          folder_id: setFolderAssign ?? selectedFolderId ?? null,
+          folder_id: targetFolderId,
           created_by: user!.id,
         }).select().single();
         if (setErr) throw setErr;
