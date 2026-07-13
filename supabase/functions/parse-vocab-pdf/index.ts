@@ -58,6 +58,44 @@ function extractTextFromHwpxXml(xml: string): string {
   return lines.join("\n");
 }
 
+function detectDayLabelsFromText(text: string): string[] {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(?:[\[\(【\{]?\s*)?(?:day|chapter|unit|week|데이)\s*0*(\d{1,2})(?:\s*[\]\)】\}]?)?(?:\b|\s|[:.\-])/i)
+      || line.match(/^(?:[\[\(【\{]?\s*)?0*(\d{1,2})\s*(?:일차|회차|회)(?:\s*[\]\)】\}]?)?(?:\b|\s|[:.\-])/i);
+    if (!match) continue;
+    const label = `Day ${Number(match[1])}`;
+    if (!seen.has(label)) {
+      seen.add(label);
+      labels.push(label);
+    }
+  }
+
+  return labels;
+}
+
+function splitWordsByLabels(
+  words: Array<{ english: string; meaning: string; sort_order: number }>,
+  labels: string[],
+): Array<Array<{ english: string; meaning: string; sort_order: number }>> {
+  const count = labels.length;
+  const baseSize = Math.floor(words.length / count);
+  const remainder = words.length % count;
+  const chunks: T[][] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < count; i++) {
+    const size = baseSize + (i < remainder ? 1 : 0);
+    chunks.push(words.slice(cursor, cursor + size).map((word, idx) => ({ ...word, sort_order: idx })));
+    cursor += size;
+  }
+
+  return chunks;
+}
+
 async function extractText(
   file: File,
 ): Promise<{ kind: "text"; text: string } | { kind: "pdf"; base64: string }> {
@@ -132,7 +170,7 @@ Return ONLY a JSON object with this exact shape (no markdown, no explanation):
 }
 
 Rules:
-1. Detect "Day N", "DAY N", "N일차", "N회", "Chapter N", "Unit N", "Week N" style headers and use them as day labels. If none exist, put everything in a single day with label "전체".
+1. Detect "Day N", "DAY N", "데이 N", "N일차", "N회", "Chapter N", "Unit N", "Week N" style headers and use them as day labels. If the document contains Day 1 through Day 10, return exactly 10 day objects. Do not merge multiple days into one "전체" entry. If none exist, put everything in a single day with label "전체".
 2. Prefer answer sheets (답안지) when present — they include the correct meanings.
 3. For English→Korean items (e.g. "1. goal - 목표"), english is "goal", meaning is "목표".
 4. For Korean→English items, swap so english is always the English word/phrase.
@@ -235,6 +273,7 @@ serve(async (req) => {
       days?: Array<{ label?: string; words?: Array<{ english: string; meaning: string }> }>;
       words?: Array<{ english: string; meaning: string }>;
     };
+    const detectedLabels = extracted.kind === "text" ? detectDayLabelsFromText(extracted.text) : [];
 
     // Normalize response
     let days: Array<{ label: string; words: Array<{ english: string; meaning: string; sort_order: number }> }> = [];
@@ -268,6 +307,12 @@ serve(async (req) => {
     days = days.filter((d) => d.words.length > 0);
     if (days.length === 0) {
       return jsonResponse({ error: "단어를 추출할 수 없습니다." }, 400);
+    }
+
+    const isSingleGenericDay = days.length === 1 && /^(전체|all|전체\s*단어)$/i.test(days[0].label.trim());
+    if (isSingleGenericDay && detectedLabels.length > 1 && days[0].words.length >= detectedLabels.length) {
+      const chunks = splitWordsByLabels(days[0].words, detectedLabels);
+      days = detectedLabels.map((label, idx) => ({ label, words: chunks[idx] ?? [] })).filter((d) => d.words.length > 0);
     }
 
     const totalCount = days.reduce((s, d) => s + d.words.length, 0);

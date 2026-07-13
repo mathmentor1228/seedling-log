@@ -53,6 +53,59 @@ interface ParsedDay {
   words: WordItem[];
 }
 
+const extractDayNumber = (label?: string): number | null => {
+  if (!label) return null;
+  const match = label.match(/(?:day|chapter|unit|week)\s*0*(\d+)\b/i)
+    || label.match(/\b0*(\d+)\s*(?:일차|회차|회)\b/i);
+  return match ? Number(match[1]) : null;
+};
+
+const extractDayRangeFromName = (name: string): { start: number; end: number; count: number } | null => {
+  const withoutExt = name.replace(/\.[^.]+$/, '');
+  const dayRange = withoutExt.match(/(?:day|chapter|unit|week|데이)?\s*0*(\d+)\s*(?:[-~_]|부터|to|through|까지)\s*(?:day|chapter|unit|week|데이)?\s*0*(\d+)/i);
+  if (!dayRange) return null;
+  const start = Number(dayRange[1]);
+  const end = Number(dayRange[2]);
+  const count = Math.abs(end - start) + 1;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || count < 2 || count > 60) return null;
+  return { start, end, count };
+};
+
+const cleanVocabTitleBase = (fileName: string): string => {
+  const raw = fileName.replace(/\.[^.]+$/, '');
+  const cleaned = raw
+    .replace(/(?:day|chapter|unit|week)?\s*0*\d+\s*[-~_]\s*(?:day|chapter|unit|week)?\s*0*\d+/gi, ' ')
+    .replace(/\b0*\d+\s*(?:일차|회차|회)\b/gi, ' ')
+    .replace(/(?:시험지|답안지|정답지|정답|해설|단어시험|테스트|word\s*test|vocab\s*test)/gi, ' ')
+    .replace(/[\[\]{}［］]/g, ' ')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (cleaned || raw).slice(0, 60);
+};
+
+const splitWordsIntoDayRange = (words: WordItem[], start: number, end: number): ParsedDay[] => {
+  const count = Math.abs(end - start) + 1;
+  const direction = end >= start ? 1 : -1;
+  const baseSize = Math.floor(words.length / count);
+  const remainder = words.length % count;
+  let cursor = 0;
+
+  return Array.from({ length: count }, (_, idx) => {
+    const size = baseSize + (idx < remainder ? 1 : 0);
+    const dayNo = start + idx * direction;
+    const slice = words.slice(cursor, cursor + size).map((w, sortIdx) => ({ ...w, sort_order: sortIdx }));
+    cursor += size;
+    return { label: `Day ${dayNo}`, words: slice };
+  }).filter(d => d.words.length > 0);
+};
+
+const buildDaySetTitle = (prefix: string, label: string, index: number, startDay: number): string => {
+  const dayNo = extractDayNumber(label) ?? startDay + index;
+  const base = prefix.trim();
+  return base ? `${base} Day ${dayNo}` : `Day ${dayNo}`;
+};
+
 interface SavedTest {
   id: string;
   title: string;
@@ -413,28 +466,28 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
       // Try to auto-detect Day range from filename (e.g. "1-10", "1~10", "Day1_10")
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const rangeMatch = baseName.match(/(\d+)\s*[-~_]\s*(\d+)/);
-      let suggestedChunk = 0;
-      if (rangeMatch) {
-        const a = parseInt(rangeMatch[1], 10);
-        const b = parseInt(rangeMatch[2], 10);
-        const dayCount = Math.abs(b - a) + 1;
-        if (dayCount > 1 && dayCount <= 50 && total >= dayCount) {
-          suggestedChunk = Math.ceil(total / dayCount);
-        }
-      }
+      const cleanedTitleBase = cleanVocabTitleBase(file.name);
+      const range = extractDayRangeFromName(baseName);
+      const dayLabelsAreGeneric = days.length === 1 && ['전체', 'all', '전체 단어'].includes(days[0].label.trim().toLowerCase());
+      const shouldForceFilenameSplit = !!range && total >= range.count && (dayLabelsAreGeneric || days.length !== range.count);
+      const normalizedDays = shouldForceFilenameSplit && range
+        ? splitWordsIntoDayRange(days.flatMap(d => d.words), range.start, range.end)
+        : days.map((d, idx) => {
+            const dayNo = extractDayNumber(d.label) ?? (range ? range.start + idx * (range.end >= range.start ? 1 : -1) : idx + 1);
+            return { ...d, label: `Day ${dayNo}` };
+          });
 
       // Always show the day picker so the user can split/select days.
-      setParsedDays(days);
-      setSplitChunkSize(suggestedChunk);
-      setDayTitlePrefix(baseName.slice(0, 40));
+      setParsedDays(normalizedDays);
+      setSplitChunkSize(0);
+      setDayTitlePrefix(cleanedTitleBase);
       // selection is auto-reset by the splitChunkSize/parsedDays effect
-      if (days.length === 1 && suggestedChunk === 0) {
-        toast({ title: `${total}개 단어 추출 (Day 구분자가 없어 자동 분할을 사용하세요)` });
-      } else if (suggestedChunk > 0) {
-        toast({ title: `${total}개 단어 추출 · 파일명 기준 ${Math.ceil(total / suggestedChunk)}개 Day로 자동 분할` });
+      if (shouldForceFilenameSplit && range) {
+        toast({ title: `${total}개 단어 추출 · 파일명 기준 Day ${range.start}~${range.end}로 자동 분리` });
+      } else if (normalizedDays.length === 1) {
+        toast({ title: `${total}개 단어 추출 (Day 구분자가 없으면 자동 분할 값을 입력하세요)` });
       } else {
-        toast({ title: `${days.length}개 Day에서 총 ${total}개 단어 추출` });
+        toast({ title: `${normalizedDays.length}개 Day에서 총 ${total}개 단어 추출` });
       }
     } catch (err: any) {
       toast({ title: '파일 파싱 실패', description: err.message, variant: 'destructive' });
@@ -450,9 +503,10 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     if (splitChunkSize && splitChunkSize > 0) {
       const flat = parsedDays.flatMap(d => d.words);
       const chunks: ParsedDay[] = [];
+      const firstDay = extractDayNumber(parsedDays[0]?.label) ?? 1;
       for (let i = 0; i < flat.length; i += splitChunkSize) {
         const slice = flat.slice(i, i + splitChunkSize).map((w, idx) => ({ ...w, sort_order: idx }));
-        chunks.push({ label: `Day ${chunks.length + 1}`, words: slice });
+        chunks.push({ label: `Day ${firstDay + chunks.length}`, words: slice });
       }
       return chunks;
     }
@@ -495,9 +549,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       let inserted = 0;
       for (let i = 0; i < targets.length; i++) {
         const day = targets[i];
-        const title = dayTitlePrefix
-          ? `${dayTitlePrefix} · ${day.label}`
-          : day.label;
+        const title = buildDaySetTitle(dayTitlePrefix, day.label, i, extractDayNumber(targets[0]?.label) ?? 1);
         const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
           title,
           round_number: baseRound + i + 1,
@@ -1208,8 +1260,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                   파일 업로드 (PDF · DOCX · DOC · HWPX)
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  단어 시험지/답안지 파일을 업로드하면 AI가 자동으로 단어를 추출합니다.
-                  Day 구분이 있는 문서는 각 Day를 골라 별도 회차로 저장할 수 있습니다.
+                  파일명에서 단어장 이름과 Day 범위를 읽어, 예: 단어장명 Day 1 형식으로 회차를 자동 분리 저장합니다.
                 </p>
                 <input
                   ref={pdfInputRef}
@@ -1257,7 +1308,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
           {/* Step 2: day picker */}
           {parsedDays && (
             <div className="space-y-3">
-              <div className="text-sm font-medium">Day 선택 — 선택한 각 Day가 별도 회차로 저장됩니다</div>
+              <div className="text-sm font-medium">Day 선택 — 선택한 각 Day가 문서명 + Day 번호로 별도 회차 저장됩니다</div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1306,6 +1357,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                       onCheckedChange={() => toggleDaySelection(i)}
                     />
                     <span className="font-medium">{d.label}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      → {buildDaySetTitle(dayTitlePrefix, d.label, i, extractDayNumber(effectiveDays[0]?.label) ?? 1)}
+                    </span>
                     <span className="text-xs text-muted-foreground ml-auto">{d.words.length}개</span>
                   </label>
                 ))}
@@ -1315,14 +1369,16 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                 <Button variant="ghost" size="sm" onClick={() => { setParsedDays(null); setSelectedDayIdxs(new Set()); }}>
                   뒤로
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleImportAllToCurrentEditor}>
-                  전체를 현재 편집기로
-                </Button>
+                {effectiveDays.length <= 1 && (
+                  <Button variant="outline" size="sm" onClick={handleImportAllToCurrentEditor}>
+                    현재 편집기로 불러오기
+                  </Button>
+                )}
                 <Button size="sm" onClick={handleImportSelectedDays} disabled={importingDays || selectedDayIdxs.size === 0}>
                   {importingDays ? (
                     <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> 저장 중...</>
                   ) : (
-                    <><Save className="w-3.5 h-3.5 mr-1" /> 선택 Day를 회차로 저장 ({selectedDayIdxs.size})</>
+                    <><Save className="w-3.5 h-3.5 mr-1" /> Day별 회차 자동 저장 ({selectedDayIdxs.size})</>
                   )}
                 </Button>
               </div>
