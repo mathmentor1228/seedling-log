@@ -1,51 +1,174 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import JSZip from "npm:jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) {
-      return new Response(JSON.stringify({ error: "file is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+// ---- text extractors ----
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+function extractTextFromWordXml(xml: string): string {
+  // preserve paragraph boundaries so day markers survive
+  const withBreaks = xml
+    .replace(/<w:tab[^\/]*\/>/g, "\t")
+    .replace(/<w:br[^\/]*\/>/g, "\n")
+    .replace(/<\/w:p>/g, "\n</w:p>");
+  const paragraphs = withBreaks.split(/\n/);
+  const lines: string[] = [];
+  for (const p of paragraphs) {
+    const parts = [...p.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) =>
+      m[1]
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'"),
+    );
+    const line = parts.join("").replace(/\s+/g, " ").trim();
+    if (line) lines.push(line);
+  }
+  return lines.join("\n");
+}
 
-    // Convert PDF to base64 (chunked to avoid call-stack overflow on large PDFs)
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
+function extractTextFromHwpxXml(xml: string): string {
+  const withBreaks = xml.replace(/<\/hp:p>/g, "\n</hp:p>");
+  const paragraphs = withBreaks.split(/\n/);
+  const lines: string[] = [];
+  for (const p of paragraphs) {
+    const parts = [...p.matchAll(/<hp:t[^>]*>([\s\S]*?)<\/hp:t>/g)].map((m) =>
+      m[1]
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'"),
+    );
+    const line = parts.join("").replace(/\s+/g, " ").trim();
+    if (line) lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+async function extractText(
+  file: File,
+): Promise<{ kind: "text"; text: string } | { kind: "pdf"; base64: string }> {
+  const name = file.name.toLowerCase();
+  const buf = new Uint8Array(await file.arrayBuffer());
+
+  if (name.endsWith(".pdf")) {
     let binary = "";
-    const CHUNK = 0x8000; // 32KB
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    const CHUNK = 0x8000;
+    for (let i = 0; i < buf.length; i += CHUNK) {
+      binary += String.fromCharCode(...buf.subarray(i, i + CHUNK));
     }
-    const base64 = btoa(binary);
+    return { kind: "pdf", base64: btoa(binary) };
+  }
 
-    const prompt = `You are a vocabulary extraction expert. Extract ALL word-meaning pairs from this PDF vocabulary test/answer sheet.
+  if (name.endsWith(".docx")) {
+    const zip = await JSZip.loadAsync(buf);
+    const doc = zip.file("word/document.xml");
+    if (!doc) throw new Error("Invalid .docx: word/document.xml not found");
+    const xml = await doc.async("string");
+    return { kind: "text", text: extractTextFromWordXml(xml) };
+  }
+
+  if (name.endsWith(".hwpx")) {
+    const zip = await JSZip.loadAsync(buf);
+    let text = "";
+    for (const [entryName, entry] of Object.entries(zip.files)) {
+      if (/^Contents\/section\d+\.xml$/i.test(entryName)) {
+        // deno-lint-ignore no-explicit-any
+        const xml = await (entry as any).async("string");
+        text += extractTextFromHwpxXml(xml) + "\n";
+      }
+    }
+    if (!text.trim()) throw new Error("Could not read .hwpx contents");
+    return { kind: "text", text };
+  }
+
+  if (name.endsWith(".doc")) {
+    // Only Word 2003 XML package format is supported for legacy .doc
+    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+    if (
+      decoded.includes("mso-application") ||
+      decoded.includes("<w:document") ||
+      decoded.includes("<pkg:package")
+    ) {
+      return { kind: "text", text: extractTextFromWordXml(decoded) };
+    }
+    throw new Error(
+      "레거시 바이너리 .doc 형식은 지원되지 않습니다. .docx 또는 PDF로 변환 후 업로드해주세요.",
+    );
+  }
+
+  if (name.endsWith(".hwp")) {
+    throw new Error(
+      "레거시 .hwp 형식은 지원되지 않습니다. .hwpx 또는 PDF로 변환 후 업로드해주세요.",
+    );
+  }
+
+  throw new Error("지원되지 않는 파일 형식입니다. (pdf, docx, doc, hwpx)");
+}
+
+// ---- AI parsing ----
+
+const SYSTEM_PROMPT = `You extract vocabulary word lists from Korean study materials (test sheets or answer sheets).
+
+Return ONLY a JSON object with this exact shape (no markdown, no explanation):
+{
+  "days": [
+    { "label": "Day 1", "words": [ { "english": "...", "meaning": "..." } ] },
+    { "label": "Day 2", "words": [ ... ] }
+  ]
+}
 
 Rules:
-1. Look for answer sheets (답안지) first - they contain both the word AND its meaning/answer filled in.
-2. If no answer sheet, extract from test pages - the numbered items with blanks.
-3. For English→Korean items (e.g. "1. goal - 목표"), output: english word | korean meaning
-4. For Korean→English items (e.g. "62. 준비가 된 - prepared"), output: english word | korean meaning (swap them so english is first)
-5. Remove numbering (1., 2., etc.)
-6. Remove blank lines and formatting artifacts
-7. Do NOT include section headers, instructions, or metadata
+1. Detect "Day N", "DAY N", "N일차", "N회", "Chapter N", "Unit N", "Week N" style headers and use them as day labels. If none exist, put everything in a single day with label "전체".
+2. Prefer answer sheets (답안지) when present — they include the correct meanings.
+3. For English→Korean items (e.g. "1. goal - 목표"), english is "goal", meaning is "목표".
+4. For Korean→English items, swap so english is always the English word/phrase.
+5. Strip numbering (1., 2., etc.), section headers, and formatting artifacts.
+6. Meaning may be multiple senses joined with comma or semicolon — keep as-is.
+7. Never invent words. If unsure, skip.`;
 
-Output ONLY a JSON array of objects with "english" and "meaning" fields. No markdown, no explanation.
-Example: [{"english":"goal","meaning":"목표, 목적(지); 골, 득점"},{"english":"prepared","meaning":"준비가 된"}]`;
+async function callAI(payload: {
+  kind: "text" | "pdf";
+  text?: string;
+  base64?: string;
+}) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const userContent: unknown[] =
+    payload.kind === "pdf"
+      ? [
+          { type: "text", text: "Extract the vocabulary list following the rules." },
+          {
+            type: "image_url",
+            image_url: { url: `data:application/pdf;base64,${payload.base64}` },
+          },
+        ]
+      : [
+          {
+            type: "text",
+            text:
+              "Extract the vocabulary list following the rules. Raw text extracted from the document:\n\n" +
+              (payload.text ?? "").slice(0, 60000),
+          },
+        ];
+
+  const response = await fetch(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -54,63 +177,114 @@ Example: [{"english":"goal","meaning":"목표, 목적(지); 골, 득점"},{"engl
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "user", content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: `data:application/pdf;base64,${base64}` } },
-          ]},
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent },
         ],
         temperature: 0.1,
-        max_tokens: 8000,
+        max_tokens: 12000,
       }),
-    });
+    },
+  );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`AI API error: ${response.status} - ${errText}`);
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`AI gateway error ${response.status}: ${err}`);
+  }
+  const result = await response.json();
+  const content: string = result.choices?.[0]?.message?.content ?? "";
+
+  // strip markdown fences
+  let jsonStr = content.trim();
+  const fence = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) jsonStr = fence[1].trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    const objMatch = jsonStr.match(/\{[\s\S]*\}/);
+    if (!objMatch) throw new Error("AI response is not valid JSON");
+    parsed = JSON.parse(objMatch[0]);
+  }
+  return parsed;
+}
+
+// ---- main ----
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    if (!file) return jsonResponse({ error: "file is required" }, 400);
+
+    const extracted = await extractText(file);
+
+    // If text extraction returned only a few chars, likely empty document
+    if (extracted.kind === "text" && extracted.text.trim().length < 10) {
+      return jsonResponse(
+        { error: "문서에서 텍스트를 찾을 수 없습니다." },
+        400,
+      );
     }
 
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content || "";
+    const parsed = await callAI(extracted) as {
+      days?: Array<{ label?: string; words?: Array<{ english: string; meaning: string }> }>;
+      words?: Array<{ english: string; meaning: string }>;
+    };
 
-    // Extract JSON from response (may be wrapped in markdown code block)
-    let jsonStr = content;
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    }
-
-    let words;
-    try {
-      words = JSON.parse(jsonStr);
-    } catch {
-      // Try to find array in content
-      const arrayMatch = content.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
-        words = JSON.parse(arrayMatch[0]);
-      } else {
-        throw new Error("Failed to parse AI response as JSON");
-      }
-    }
-
-    if (!Array.isArray(words)) throw new Error("Expected array of words");
-
-    // Validate and clean
-    const cleaned = words
-      .filter((w: any) => w.english && w.meaning)
-      .map((w: any, i: number) => ({
-        english: String(w.english).trim(),
-        meaning: String(w.meaning).trim(),
-        sort_order: i,
+    // Normalize response
+    let days: Array<{ label: string; words: Array<{ english: string; meaning: string; sort_order: number }> }> = [];
+    if (Array.isArray(parsed?.days) && parsed.days.length > 0) {
+      days = parsed.days.map((d, di) => ({
+        label: (d.label || `Day ${di + 1}`).toString().trim() || `Day ${di + 1}`,
+        words: (d.words || [])
+          .filter((w) => w?.english && w?.meaning)
+          .map((w, i) => ({
+            english: String(w.english).trim(),
+            meaning: String(w.meaning).trim(),
+            sort_order: i,
+          })),
       }));
+    } else if (Array.isArray(parsed?.words)) {
+      // Backwards-compat
+      days = [
+        {
+          label: "전체",
+          words: parsed.words
+            .filter((w) => w?.english && w?.meaning)
+            .map((w, i) => ({
+              english: String(w.english).trim(),
+              meaning: String(w.meaning).trim(),
+              sort_order: i,
+            })),
+        },
+      ];
+    }
 
-    return new Response(JSON.stringify({ words: cleaned, count: cleaned.length }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    days = days.filter((d) => d.words.length > 0);
+    if (days.length === 0) {
+      return jsonResponse({ error: "단어를 추출할 수 없습니다." }, 400);
+    }
+
+    const totalCount = days.reduce((s, d) => s + d.words.length, 0);
+
+    // Backwards-compat: also return flat words array (concatenated)
+    const flatWords = days.flatMap((d) =>
+      d.words.map((w) => ({ english: w.english, meaning: w.meaning })),
+    ).map((w, i) => ({ ...w, sort_order: i }));
+
+    return jsonResponse({
+      days,
+      words: flatWords,
+      count: totalCount,
     });
-  } catch (error: any) {
-    console.error("parse-vocab-pdf error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("parse-vocab-pdf error:", message);
+    return jsonResponse({ error: message }, 500);
   }
 });
