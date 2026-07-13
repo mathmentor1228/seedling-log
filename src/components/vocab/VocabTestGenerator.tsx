@@ -550,11 +550,19 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       const db = extractDayNumber(b.label) ?? 0;
       return da - db;
     });
+    const targetFolderId = setFolderAssign ?? selectedFolderId ?? null;
+    const startDay = extractDayNumber(targets[0]?.label) ?? 1;
+    const plannedTitles = targets.map((day, i) => buildDaySetTitle(dayTitlePrefix, day.label, i, startDay));
+    const existingInFolder = sets.filter(s => (s.folder_id ?? null) === targetFolderId).map(s => s.title);
+    const duplicates = plannedTitles.filter(t => existingInFolder.includes(t));
+    if (duplicates.length > 0) {
+      const msg = `이 폴더에 이미 동일한 회차가 있습니다:\n\n${duplicates.join('\n')}\n\n그래도 새로 저장하시겠습니까? (중복된 이름으로 추가됩니다)`;
+      if (!window.confirm(msg)) return;
+    }
     setImportingDays(true);
     try {
       const baseRound = sets.length > 0 ? Math.max(...sets.map(s => s.round_number)) : 0;
       let inserted = 0;
-      const startDay = extractDayNumber(targets[0]?.label) ?? 1;
       for (let i = 0; i < targets.length; i++) {
         const day = targets[i];
         const title = buildDaySetTitle(dayTitlePrefix, day.label, i, startDay);
