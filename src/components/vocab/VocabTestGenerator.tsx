@@ -62,7 +62,7 @@ const extractDayNumber = (label?: string): number | null => {
 
 const extractDayRangeFromName = (name: string): { start: number; end: number; count: number } | null => {
   const withoutExt = name.replace(/\.[^.]+$/, '');
-  const dayRange = withoutExt.match(/(?:day|chapter|unit|week)?\s*0*(\d+)\s*[-~_]\s*(?:day|chapter|unit|week)?\s*0*(\d+)/i);
+  const dayRange = withoutExt.match(/(?:day|chapter|unit|week|데이)?\s*0*(\d+)\s*(?:[-~_]|부터|to|through|까지)\s*(?:day|chapter|unit|week|데이)?\s*0*(\d+)/i);
   if (!dayRange) return null;
   const start = Number(dayRange[1]);
   const end = Number(dayRange[2]);
@@ -470,7 +470,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       const range = extractDayRangeFromName(baseName);
       const dayLabelsAreGeneric = days.length === 1 && ['전체', 'all', '전체 단어'].includes(days[0].label.trim().toLowerCase());
       const shouldForceFilenameSplit = !!range && total >= range.count && (dayLabelsAreGeneric || days.length !== range.count);
-      const normalizedDays = shouldForceFilenameSplit
+      const normalizedDays = shouldForceFilenameSplit && range
         ? splitWordsIntoDayRange(days.flatMap(d => d.words), range.start, range.end)
         : days.map((d, idx) => {
             const dayNo = extractDayNumber(d.label) ?? (range ? range.start + idx * (range.end >= range.start ? 1 : -1) : idx + 1);
