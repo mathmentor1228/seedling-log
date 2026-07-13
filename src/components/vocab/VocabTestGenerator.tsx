@@ -10,7 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2, ClipboardCheck } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2, ClipboardCheck, ArrowUp, ArrowDown, Power, PowerOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -30,6 +30,7 @@ interface VocabFolder {
   name: string;
   parent_id: string | null;
   sort_order: number;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -218,7 +219,51 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       .from('vocab_folders')
       .select('*')
       .order('sort_order');
-    if (data) setFolders(data);
+    if (data) {
+      const normalized = (data as any[]).map(f => ({ ...f, is_active: f.is_active ?? true })) as VocabFolder[];
+      // active first, then by sort_order within each group
+      normalized.sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
+      setFolders(normalized);
+    }
+  };
+
+  // Move a folder up/down among its siblings (same parent_id and same is_active group)
+  const moveFolder = async (folder: VocabFolder, direction: -1 | 1) => {
+    const siblings = folders
+      .filter(f => f.parent_id === folder.parent_id && f.is_active === folder.is_active)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const idx = siblings.findIndex(f => f.id === folder.id);
+    const swapIdx = idx + direction;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= siblings.length) return;
+    const a = siblings[idx];
+    const b = siblings[swapIdx];
+    // swap sort_order values
+    await Promise.all([
+      supabase.from('vocab_folders').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('vocab_folders').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ]);
+    loadFolders();
+  };
+
+  // Toggle a folder's active state; disabled folders sink to the bottom of the list
+  const toggleFolderActive = async (folder: VocabFolder) => {
+    const nextActive = !folder.is_active;
+    // put it at the bottom of the destination group
+    const destSiblings = folders.filter(
+      f => f.parent_id === folder.parent_id && f.is_active === nextActive && f.id !== folder.id,
+    );
+    const nextSortOrder = destSiblings.length
+      ? Math.max(...destSiblings.map(f => f.sort_order ?? 0)) + 1
+      : 0;
+    await supabase
+      .from('vocab_folders')
+      .update({ is_active: nextActive, sort_order: nextSortOrder } as any)
+      .eq('id', folder.id);
+    loadFolders();
+    toast({ title: nextActive ? '폴더를 활성화했습니다' : '폴더를 사용 안 함으로 이동했습니다' });
   };
 
   const loadSets = async () => {
@@ -792,23 +837,38 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
     return (
       <>
-        {childFolders.map(folder => {
+        {childFolders.map((folder, idx) => {
           const isExpanded = expandedFolders.has(folder.id);
           const hasChildren = folders.some(f => f.parent_id === folder.id) || sets.some(s => s.folder_id === folder.id);
+          const siblingsSameGroup = childFolders.filter(f => f.is_active === folder.is_active);
+          const groupIdx = siblingsSameGroup.findIndex(f => f.id === folder.id);
+          const canMoveUp = groupIdx > 0;
+          const canMoveDown = groupIdx >= 0 && groupIdx < siblingsSameGroup.length - 1;
+          const inactive = !folder.is_active;
           return (
             <div key={folder.id}>
               <div
-                className={`flex items-center gap-1 p-1.5 rounded-md cursor-pointer text-sm hover:bg-muted group ${selectedFolderId === folder.id ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                className={`flex items-center gap-1 p-1.5 rounded-md cursor-pointer text-sm hover:bg-muted group ${selectedFolderId === folder.id ? 'bg-primary/10 text-primary font-medium' : ''} ${inactive ? 'opacity-50' : ''}`}
                 style={{ paddingLeft: `${depth * 16 + 8}px` }}
                 onClick={() => { toggleFolder(folder.id); setSelectedFolderId(folder.id); }}
               >
                 {hasChildren ? (
                   isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                 ) : <span className="w-3.5" />}
-                <Folder className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                <span className="truncate flex-1">{folder.name}</span>
+                <Folder className={`w-3.5 h-3.5 shrink-0 ${inactive ? 'text-muted-foreground' : 'text-amber-500'}`} />
+                <span className={`truncate flex-1 ${inactive ? 'line-through' : ''}`}>{folder.name}</span>
+                {inactive && <span className="text-[9px] text-muted-foreground border rounded px-1">사용안함</span>}
                 <span className="text-[10px] text-muted-foreground">{getSetIdsInFolder(folder.id).length}</span>
                 <div className="hidden group-hover:flex items-center gap-0.5">
+                  <Button size="icon" variant="ghost" className="h-5 w-5" disabled={!canMoveUp} title="위로" onClick={e => { e.stopPropagation(); moveFolder(folder, -1); }}>
+                    <ArrowUp className="w-2.5 h-2.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" disabled={!canMoveDown} title="아래로" onClick={e => { e.stopPropagation(); moveFolder(folder, 1); }}>
+                    <ArrowDown className="w-2.5 h-2.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" title={inactive ? '사용함으로 전환' : '사용 안 함으로 전환'} onClick={e => { e.stopPropagation(); toggleFolderActive(folder); }}>
+                    {inactive ? <Power className="w-2.5 h-2.5 text-emerald-500" /> : <PowerOff className="w-2.5 h-2.5 text-muted-foreground" />}
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-5 w-5" onClick={e => { e.stopPropagation(); openEditFolderModal(folder); }}>
                     <Edit2 className="w-2.5 h-2.5" />
                   </Button>
