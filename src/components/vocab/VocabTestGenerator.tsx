@@ -378,12 +378,14 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast({ title: 'PDF 파일만 업로드 가능합니다', variant: 'destructive' });
+    const nameLower = file.name.toLowerCase();
+    const supported = ['.pdf', '.docx', '.doc', '.hwpx'];
+    if (!supported.some(ext => nameLower.endsWith(ext))) {
+      toast({ title: '지원 형식: PDF, DOCX, DOC, HWPX', variant: 'destructive' });
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: '파일 크기는 10MB 이하여야 합니다', variant: 'destructive' });
+    if (file.size > 15 * 1024 * 1024) {
+      toast({ title: '파일 크기는 15MB 이하여야 합니다', variant: 'destructive' });
       return;
     }
     setPdfParsing(true);
@@ -394,26 +396,141 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         body: formData,
       });
       if (error) throw error;
-      if (!data?.words?.length) {
+      const days: ParsedDay[] | undefined = data?.days?.map((d: any) => ({
+        label: d.label || '전체',
+        words: (d.words || []).map((w: any, i: number) => ({
+          english: w.english,
+          meaning: w.meaning,
+          english_definition: '',
+          sort_order: i,
+        })),
+      }));
+      if (!days || days.length === 0) {
         toast({ title: '단어를 추출할 수 없습니다', variant: 'destructive' });
         return;
       }
-      const newWords: WordItem[] = data.words.map((w: any, i: number) => ({
-        english: w.english,
-        meaning: w.meaning,
-        english_definition: '',
-        sort_order: i,
-      }));
-      setWords(newWords);
-      setShowBulkModal(false);
-      setBulkText('');
-      toast({ title: `PDF에서 ${newWords.length}개 단어 추출 완료` });
+      const total = days.reduce((s, d) => s + d.words.length, 0);
+
+      if (days.length === 1) {
+        // Single day / no day markers → load into current editor (existing behavior)
+        setParsedDays(null);
+        setSelectedDayIdxs(new Set());
+        setWords(days[0].words);
+        setShowBulkModal(false);
+        setBulkText('');
+        toast({ title: `${total}개 단어 추출 완료 (${days[0].label})` });
+      } else {
+        // Multiple days → show day picker
+        setParsedDays(days);
+        setSelectedDayIdxs(new Set(days.map((_, i) => i))); // select all by default
+        setSplitChunkSize(0);
+        setDayTitlePrefix(file.name.replace(/\.[^.]+$/, '').slice(0, 40));
+        toast({ title: `${days.length}개 Day에서 총 ${total}개 단어 추출` });
+      }
     } catch (err: any) {
-      toast({ title: 'PDF 파싱 실패', description: err.message, variant: 'destructive' });
+      toast({ title: '파일 파싱 실패', description: err.message, variant: 'destructive' });
     } finally {
       setPdfParsing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
+
+  // Compute effective days after applying manual chunk split
+  const effectiveDays: ParsedDay[] = (() => {
+    if (!parsedDays) return [];
+    if (splitChunkSize && splitChunkSize > 0) {
+      const flat = parsedDays.flatMap(d => d.words);
+      const chunks: ParsedDay[] = [];
+      for (let i = 0; i < flat.length; i += splitChunkSize) {
+        const slice = flat.slice(i, i + splitChunkSize).map((w, idx) => ({ ...w, sort_order: idx }));
+        chunks.push({ label: `Day ${chunks.length + 1}`, words: slice });
+      }
+      return chunks;
+    }
+    return parsedDays;
+  })();
+
+  const toggleDaySelection = (idx: number) => {
+    setSelectedDayIdxs(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
+
+  const toggleAllDays = () => {
+    if (selectedDayIdxs.size === effectiveDays.length) {
+      setSelectedDayIdxs(new Set());
+    } else {
+      setSelectedDayIdxs(new Set(effectiveDays.map((_, i) => i)));
+    }
+  };
+
+  // When splitChunkSize changes, reset selection to all
+  useEffect(() => {
+    if (parsedDays) {
+      setSelectedDayIdxs(new Set(effectiveDays.map((_, i) => i)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitChunkSize, parsedDays]);
+
+  const handleImportSelectedDays = async () => {
+    if (!parsedDays || selectedDayIdxs.size === 0) {
+      toast({ title: '가져올 Day를 선택하세요', variant: 'destructive' });
+      return;
+    }
+    const targets = effectiveDays.filter((_, i) => selectedDayIdxs.has(i));
+    setImportingDays(true);
+    try {
+      const baseRound = sets.length > 0 ? Math.max(...sets.map(s => s.round_number)) : 0;
+      let inserted = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const day = targets[i];
+        const title = dayTitlePrefix
+          ? `${dayTitlePrefix} · ${day.label}`
+          : day.label;
+        const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
+          title,
+          round_number: baseRound + i + 1,
+          folder_id: setFolderAssign ?? selectedFolderId ?? null,
+          created_by: user!.id,
+        }).select().single();
+        if (setErr) throw setErr;
+        const items = day.words
+          .filter(w => w.english && w.meaning)
+          .map((w, idx) => ({
+            set_id: newSet.id,
+            english: w.english.trim(),
+            meaning: w.meaning.trim(),
+            english_definition: null,
+            sort_order: idx,
+          }));
+        if (items.length > 0) {
+          const { error: itemsErr } = await supabase.from('vocab_word_items').insert(items);
+          if (itemsErr) throw itemsErr;
+        }
+        inserted++;
+      }
+      toast({ title: `${inserted}개 회차로 저장 완료` });
+      setParsedDays(null);
+      setSelectedDayIdxs(new Set());
+      setShowBulkModal(false);
+      loadSets();
+    } catch (e: any) {
+      toast({ title: '저장 실패', description: e.message, variant: 'destructive' });
+    } finally {
+      setImportingDays(false);
+    }
+  };
+
+  const handleImportAllToCurrentEditor = () => {
+    if (!parsedDays) return;
+    const flat = parsedDays.flatMap(d => d.words).map((w, i) => ({ ...w, sort_order: i }));
+    setWords(flat);
+    setParsedDays(null);
+    setSelectedDayIdxs(new Set());
+    setShowBulkModal(false);
+    toast({ title: `${flat.length}개 단어를 현재 편집기로 불러옴` });
   };
 
   const handleNewSet = () => {
