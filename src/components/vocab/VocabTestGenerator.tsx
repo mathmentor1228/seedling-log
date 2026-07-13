@@ -55,8 +55,8 @@ interface ParsedDay {
 
 const extractDayNumber = (label?: string): number | null => {
   if (!label) return null;
-  const match = label.match(/(?:day|chapter|unit|week)\s*0*(\d+)\b/i)
-    || label.match(/\b0*(\d+)\s*(?:일차|회차|회)\b/i);
+  const match = label.match(/(?:day|chapter|unit|week|데이)\s*0*(\d+)\b/i)
+    || label.match(/\b0*(\d+)\s*(?:일차|회차|회|데이)\b/i);
   return match ? Number(match[1]) : null;
 };
 
