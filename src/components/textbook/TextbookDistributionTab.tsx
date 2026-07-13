@@ -106,8 +106,19 @@ export function TextbookDistributionTab() {
       d.parent_name = info?.parent_name || null;
     });
 
+    // Derive distributed_qty per order from actual distributions to prevent drift
+    const distMap = new Map<string, number>();
+    dists.forEach((d: any) => {
+      if (!d.order_id) return;
+      distMap.set(d.order_id, (distMap.get(d.order_id) || 0) + (d.quantity || 0));
+    });
+    const mergedOrders = ((orderRes.data as any[]) || []).map((o: any) => ({
+      ...o,
+      distributed_qty: distMap.get(o.id) ?? 0,
+    }));
+
     setDistributions(dists);
-    setOrders((orderRes.data as any[]) || []);
+    setOrders(mergedOrders);
     setStudents((studentRes.data as any[]) || []);
     setLoading(false);
   }, []);
