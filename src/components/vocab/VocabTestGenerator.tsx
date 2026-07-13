@@ -542,14 +542,22 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       toast({ title: '가져올 Day를 선택하세요', variant: 'destructive' });
       return;
     }
-    const targets = effectiveDays.filter((_, i) => selectedDayIdxs.has(i));
+    const rawTargets = effectiveDays.filter((_, i) => selectedDayIdxs.has(i));
+    // Sort ascending by Day number so higher day gets higher round_number,
+    // which then displays first (descending) in the folder list.
+    const targets = [...rawTargets].sort((a, b) => {
+      const da = extractDayNumber(a.label) ?? 0;
+      const db = extractDayNumber(b.label) ?? 0;
+      return da - db;
+    });
     setImportingDays(true);
     try {
       const baseRound = sets.length > 0 ? Math.max(...sets.map(s => s.round_number)) : 0;
       let inserted = 0;
+      const startDay = extractDayNumber(targets[0]?.label) ?? 1;
       for (let i = 0; i < targets.length; i++) {
         const day = targets[i];
-        const title = buildDaySetTitle(dayTitlePrefix, day.label, i, extractDayNumber(targets[0]?.label) ?? 1);
+        const title = buildDaySetTitle(dayTitlePrefix, day.label, i, startDay);
         const { data: newSet, error: setErr } = await supabase.from('vocab_word_sets').insert({
           title,
           round_number: baseRound + i + 1,
