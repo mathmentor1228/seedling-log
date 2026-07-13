@@ -447,18 +447,25 @@ function PrincipalContent() {
         studentsByClass.get(cs.class_id)!.push({ id: cs.student_id, name: cs.students?.name || '-' });
       });
 
+      // 현재 KST 시각 (HH:MM) — 수업 시작 전에는 미리 저장된 출결(정상등원 등)을 표시하지 않음
+      const nowKst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const nowHHMM = `${String(nowKst.getUTCHours()).padStart(2, '0')}:${String(nowKst.getUTCMinutes()).padStart(2, '0')}`;
+
       const slots: ClassroomSlot[] = schedules.map((s: any) => {
+        const startHHMM = s.start_time?.slice(0, 5) || '';
+        const classStarted = startHHMM && nowHHMM >= startHHMM;
         const students = (studentsByClass.get(s.class_id) || []).map(st => ({
           id: st.id,
           name: st.name,
-          status: statusMap.get(`${st.id}:${s.class_id}`) || null,
+          // 수업 시작 전이면 lesson_records에 임시 저장된 출결 상태를 무시 (수업 후 실제 체킹 반영)
+          status: classStarted ? (statusMap.get(`${st.id}:${s.class_id}`) || null) : null,
         }));
         return {
           scheduleId: s.id,
           classId: s.class_id,
           className: s.classes?.name || '-',
           subject: s.classes?.subject || '-',
-          startTime: s.start_time?.slice(0, 5) || '',
+          startTime: startHHMM,
           endTime: s.end_time?.slice(0, 5) || '',
           teacherName: teacherMap[s.teacher_id] || '-',
           students,
