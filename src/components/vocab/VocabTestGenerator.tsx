@@ -53,6 +53,59 @@ interface ParsedDay {
   words: WordItem[];
 }
 
+const extractDayNumber = (label?: string): number | null => {
+  if (!label) return null;
+  const match = label.match(/(?:day|chapter|unit|week)\s*0*(\d+)\b/i)
+    || label.match(/\b0*(\d+)\s*(?:일차|회차|회)\b/i);
+  return match ? Number(match[1]) : null;
+};
+
+const extractDayRangeFromName = (name: string): { start: number; end: number; count: number } | null => {
+  const withoutExt = name.replace(/\.[^.]+$/, '');
+  const dayRange = withoutExt.match(/(?:day|chapter|unit|week)?\s*0*(\d+)\s*[-~_]\s*(?:day|chapter|unit|week)?\s*0*(\d+)/i);
+  if (!dayRange) return null;
+  const start = Number(dayRange[1]);
+  const end = Number(dayRange[2]);
+  const count = Math.abs(end - start) + 1;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || count < 2 || count > 60) return null;
+  return { start, end, count };
+};
+
+const cleanVocabTitleBase = (fileName: string): string => {
+  const raw = fileName.replace(/\.[^.]+$/, '');
+  const cleaned = raw
+    .replace(/(?:day|chapter|unit|week)?\s*0*\d+\s*[-~_]\s*(?:day|chapter|unit|week)?\s*0*\d+/gi, ' ')
+    .replace(/\b0*\d+\s*(?:일차|회차|회)\b/gi, ' ')
+    .replace(/(?:시험지|답안지|정답지|정답|해설|단어시험|테스트|word\s*test|vocab\s*test)/gi, ' ')
+    .replace(/[\[\]{}［］]/g, ' ')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (cleaned || raw).slice(0, 60);
+};
+
+const splitWordsIntoDayRange = (words: WordItem[], start: number, end: number): ParsedDay[] => {
+  const count = Math.abs(end - start) + 1;
+  const direction = end >= start ? 1 : -1;
+  const baseSize = Math.floor(words.length / count);
+  const remainder = words.length % count;
+  let cursor = 0;
+
+  return Array.from({ length: count }, (_, idx) => {
+    const size = baseSize + (idx < remainder ? 1 : 0);
+    const dayNo = start + idx * direction;
+    const slice = words.slice(cursor, cursor + size).map((w, sortIdx) => ({ ...w, sort_order: sortIdx }));
+    cursor += size;
+    return { label: `Day ${dayNo}`, words: slice };
+  }).filter(d => d.words.length > 0);
+};
+
+const buildDaySetTitle = (prefix: string, label: string, index: number, startDay: number): string => {
+  const dayNo = extractDayNumber(label) ?? startDay + index;
+  const base = prefix.trim();
+  return base ? `${base} Day ${dayNo}` : `Day ${dayNo}`;
+};
+
 interface SavedTest {
   id: string;
   title: string;
