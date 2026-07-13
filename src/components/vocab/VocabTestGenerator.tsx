@@ -118,6 +118,13 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [pdfParsing, setPdfParsing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
+  // Parsed days (from file upload) + split UI
+  const [parsedDays, setParsedDays] = useState<ParsedDay[] | null>(null);
+  const [selectedDayIdxs, setSelectedDayIdxs] = useState<Set<number>>(new Set());
+  const [splitChunkSize, setSplitChunkSize] = useState<number>(0); // 0 = no manual split
+  const [dayTitlePrefix, setDayTitlePrefix] = useState<string>('');
+  const [importingDays, setImportingDays] = useState(false);
+
   const printRef = useRef<HTMLDivElement>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
