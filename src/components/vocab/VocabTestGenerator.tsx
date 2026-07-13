@@ -837,23 +837,38 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
     return (
       <>
-        {childFolders.map(folder => {
+        {childFolders.map((folder, idx) => {
           const isExpanded = expandedFolders.has(folder.id);
           const hasChildren = folders.some(f => f.parent_id === folder.id) || sets.some(s => s.folder_id === folder.id);
+          const siblingsSameGroup = childFolders.filter(f => f.is_active === folder.is_active);
+          const groupIdx = siblingsSameGroup.findIndex(f => f.id === folder.id);
+          const canMoveUp = groupIdx > 0;
+          const canMoveDown = groupIdx >= 0 && groupIdx < siblingsSameGroup.length - 1;
+          const inactive = !folder.is_active;
           return (
             <div key={folder.id}>
               <div
-                className={`flex items-center gap-1 p-1.5 rounded-md cursor-pointer text-sm hover:bg-muted group ${selectedFolderId === folder.id ? 'bg-primary/10 text-primary font-medium' : ''}`}
+                className={`flex items-center gap-1 p-1.5 rounded-md cursor-pointer text-sm hover:bg-muted group ${selectedFolderId === folder.id ? 'bg-primary/10 text-primary font-medium' : ''} ${inactive ? 'opacity-50' : ''}`}
                 style={{ paddingLeft: `${depth * 16 + 8}px` }}
                 onClick={() => { toggleFolder(folder.id); setSelectedFolderId(folder.id); }}
               >
                 {hasChildren ? (
                   isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                 ) : <span className="w-3.5" />}
-                <Folder className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                <span className="truncate flex-1">{folder.name}</span>
+                <Folder className={`w-3.5 h-3.5 shrink-0 ${inactive ? 'text-muted-foreground' : 'text-amber-500'}`} />
+                <span className={`truncate flex-1 ${inactive ? 'line-through' : ''}`}>{folder.name}</span>
+                {inactive && <span className="text-[9px] text-muted-foreground border rounded px-1">사용안함</span>}
                 <span className="text-[10px] text-muted-foreground">{getSetIdsInFolder(folder.id).length}</span>
                 <div className="hidden group-hover:flex items-center gap-0.5">
+                  <Button size="icon" variant="ghost" className="h-5 w-5" disabled={!canMoveUp} title="위로" onClick={e => { e.stopPropagation(); moveFolder(folder, -1); }}>
+                    <ArrowUp className="w-2.5 h-2.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" disabled={!canMoveDown} title="아래로" onClick={e => { e.stopPropagation(); moveFolder(folder, 1); }}>
+                    <ArrowDown className="w-2.5 h-2.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" title={inactive ? '사용함으로 전환' : '사용 안 함으로 전환'} onClick={e => { e.stopPropagation(); toggleFolderActive(folder); }}>
+                    {inactive ? <Power className="w-2.5 h-2.5 text-emerald-500" /> : <PowerOff className="w-2.5 h-2.5 text-muted-foreground" />}
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-5 w-5" onClick={e => { e.stopPropagation(); openEditFolderModal(folder); }}>
                     <Edit2 className="w-2.5 h-2.5" />
                   </Button>
