@@ -1260,8 +1260,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                   파일 업로드 (PDF · DOCX · DOC · HWPX)
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  단어 시험지/답안지 파일을 업로드하면 AI가 자동으로 단어를 추출합니다.
-                  Day 구분이 있는 문서는 각 Day를 골라 별도 회차로 저장할 수 있습니다.
+                  파일명에서 단어장 이름과 Day 범위를 읽어, 예: 단어장명 Day 1 형식으로 회차를 자동 분리 저장합니다.
                 </p>
                 <input
                   ref={pdfInputRef}
@@ -1309,7 +1308,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
           {/* Step 2: day picker */}
           {parsedDays && (
             <div className="space-y-3">
-              <div className="text-sm font-medium">Day 선택 — 선택한 각 Day가 별도 회차로 저장됩니다</div>
+              <div className="text-sm font-medium">Day 선택 — 선택한 각 Day가 문서명 + Day 번호로 별도 회차 저장됩니다</div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1358,6 +1357,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                       onCheckedChange={() => toggleDaySelection(i)}
                     />
                     <span className="font-medium">{d.label}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      → {buildDaySetTitle(dayTitlePrefix, d.label, i, extractDayNumber(effectiveDays[0]?.label) ?? 1)}
+                    </span>
                     <span className="text-xs text-muted-foreground ml-auto">{d.words.length}개</span>
                   </label>
                 ))}
@@ -1367,14 +1369,16 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                 <Button variant="ghost" size="sm" onClick={() => { setParsedDays(null); setSelectedDayIdxs(new Set()); }}>
                   뒤로
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleImportAllToCurrentEditor}>
-                  전체를 현재 편집기로
-                </Button>
+                {effectiveDays.length <= 1 && (
+                  <Button variant="outline" size="sm" onClick={handleImportAllToCurrentEditor}>
+                    현재 편집기로 불러오기
+                  </Button>
+                )}
                 <Button size="sm" onClick={handleImportSelectedDays} disabled={importingDays || selectedDayIdxs.size === 0}>
                   {importingDays ? (
                     <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> 저장 중...</>
                   ) : (
-                    <><Save className="w-3.5 h-3.5 mr-1" /> 선택 Day를 회차로 저장 ({selectedDayIdxs.size})</>
+                    <><Save className="w-3.5 h-3.5 mr-1" /> Day별 회차 자동 저장 ({selectedDayIdxs.size})</>
                   )}
                 </Button>
               </div>
