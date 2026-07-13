@@ -111,12 +111,24 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   }, [user]);
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('textbook_orders')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) toast.error('교재 신청 목록을 불러올 수 없습니다');
-    else setOrders((data as any[]) || []);
+    const [ordersRes, distRes] = await Promise.all([
+      supabase.from('textbook_orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('textbook_distributions').select('order_id, quantity'),
+    ]);
+    if (ordersRes.error) toast.error('교재 신청 목록을 불러올 수 없습니다');
+    else {
+      // Derive distributed_qty from actual distributions to prevent drift
+      const distMap = new Map<string, number>();
+      ((distRes.data as any[]) || []).forEach((d: any) => {
+        if (!d.order_id) return;
+        distMap.set(d.order_id, (distMap.get(d.order_id) || 0) + (d.quantity || 0));
+      });
+      const merged = ((ordersRes.data as any[]) || []).map((o: any) => ({
+        ...o,
+        distributed_qty: distMap.get(o.id) ?? 0,
+      }));
+      setOrders(merged);
+    }
     setLoading(false);
   }, []);
 
