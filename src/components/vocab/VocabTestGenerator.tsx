@@ -610,10 +610,51 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     const startDay = extractDayNumber(targets[0]?.label) ?? 1;
     const plannedTitles = targets.map((day, i) => buildDaySetTitle(dayTitlePrefix, day.label, i, startDay));
     const existingInFolder = sets.filter(s => (s.folder_id ?? null) === targetFolderId).map(s => s.title);
-    const duplicates = plannedTitles.filter(t => existingInFolder.includes(t));
-    if (duplicates.length > 0) {
-      const msg = `이 폴더에 이미 동일한 회차가 있습니다:\n\n${duplicates.join('\n')}\n\n그래도 새로 저장하시겠습니까? (중복된 이름으로 추가됩니다)`;
+    const duplicateTitles = plannedTitles.filter(t => existingInFolder.includes(t));
+    if (duplicateTitles.length > 0) {
+      const msg = `이 폴더에 이미 동일한 회차명이 있습니다:\n\n${duplicateTitles.join('\n')}\n\n그래도 새로 저장하시겠습니까? (중복된 이름으로 추가됩니다)`;
       if (!window.confirm(msg)) return;
+    }
+
+    // 내용 기반 중복 감지: 같은 폴더 내 기존 셋들의 단어와 비교
+    const makeSig = (words: Array<{ english: string; meaning: string }>) =>
+      words
+        .map(w => `${(w.english || '').trim().toLowerCase()}|${(w.meaning || '').trim()}`)
+        .filter(s => s !== '|')
+        .sort()
+        .join('\n');
+    const folderSetIds = sets.filter(s => (s.folder_id ?? null) === targetFolderId).map(s => s.id);
+    if (folderSetIds.length > 0) {
+      const { data: existingItems } = await supabase
+        .from('vocab_word_items')
+        .select('set_id, english, meaning')
+        .in('set_id', folderSetIds);
+      const wordsBySet = new Map<string, Array<{ english: string; meaning: string }>>();
+      (existingItems ?? []).forEach((it: any) => {
+        const arr = wordsBySet.get(it.set_id) ?? [];
+        arr.push({ english: it.english, meaning: it.meaning });
+        wordsBySet.set(it.set_id, arr);
+      });
+      const titleById = new Map(sets.map(s => [s.id, s.title]));
+      const existingSigs = new Map<string, string[]>();
+      wordsBySet.forEach((words, setId) => {
+        const sig = makeSig(words);
+        if (!sig) return;
+        const list = existingSigs.get(sig) ?? [];
+        list.push(titleById.get(setId) || '');
+        existingSigs.set(sig, list);
+      });
+      const contentDupMsgs: string[] = [];
+      targets.forEach((day, i) => {
+        const sig = makeSig(day.words);
+        if (sig && existingSigs.has(sig)) {
+          contentDupMsgs.push(`• ${plannedTitles[i]} → 기존 [${existingSigs.get(sig)!.join(', ')}] 와 내용 동일`);
+        }
+      });
+      if (contentDupMsgs.length > 0) {
+        const msg = `이 폴더에 내용이 완전히 동일한 단어 셋이 이미 존재합니다:\n\n${contentDupMsgs.join('\n')}\n\n그래도 중복 등록을 진행하시겠습니까?\n\n[확인] 진행 / [취소] 등록 취소`;
+        if (!window.confirm(msg)) return;
+      }
     }
     setImportingDays(true);
     try {
