@@ -55,8 +55,8 @@ interface ParsedDay {
 
 const extractDayNumber = (label?: string): number | null => {
   if (!label) return null;
-  const match = label.match(/(?:day|chapter|unit|week)\s*0*(\d+)\b/i)
-    || label.match(/\b0*(\d+)\s*(?:일차|회차|회)\b/i);
+  const match = label.match(/(?:day|chapter|unit|week|데이)\s*0*(\d+)\b/i)
+    || label.match(/\b0*(\d+)\s*(?:일차|회차|회|데이)\b/i);
   return match ? Number(match[1]) : null;
 };
 
@@ -104,6 +104,17 @@ const buildDaySetTitle = (prefix: string, label: string, index: number, startDay
   const dayNo = extractDayNumber(label) ?? startDay + index;
   const base = prefix.trim();
   return base ? `${base} Day ${dayNo}` : `Day ${dayNo}`;
+};
+
+const sortWordSetsByDayDesc = (wordSets: WordSet[]): WordSet[] => {
+  return [...wordSets].sort((a, b) => {
+    const dayA = extractDayNumber(a.title);
+    const dayB = extractDayNumber(b.title);
+    if (dayA !== null && dayB !== null && dayA !== dayB) return dayB - dayA;
+    if (dayA !== null && dayB === null) return -1;
+    if (dayA === null && dayB !== null) return 1;
+    return b.round_number - a.round_number;
+  });
 };
 
 interface SavedTest {
@@ -774,11 +785,10 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
   // --- Folder tree rendering ---
   const rootFolders = folders.filter(f => !f.parent_id);
-  const unfiledSets = sets.filter(s => !s.folder_id);
+  const unfiledSets = sortWordSetsByDayDesc(sets.filter(s => !s.folder_id));
 
   const renderFolderTree = (parentId: string | null, depth: number = 0): React.ReactNode => {
     const childFolders = folders.filter(f => f.parent_id === parentId);
-    const folderSets = sets.filter(s => s.folder_id === parentId);
 
     return (
       <>
@@ -813,7 +823,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               {isExpanded && (
                 <div>
                   {renderFolderTree(folder.id, depth + 1)}
-                  {sets.filter(s => s.folder_id === folder.id).map(s => renderSetItem(s, depth + 1))}
+                  {sortWordSetsByDayDesc(sets.filter(s => s.folder_id === folder.id)).map(s => renderSetItem(s, depth + 1))}
                 </div>
               )}
             </div>
@@ -879,7 +889,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               {isExpanded && (
                 <div>
                   {renderFolderCheckTree(folder.id, depth + 1)}
-                  {sets.filter(s => s.folder_id === folder.id).map(s => (
+                  {sortWordSetsByDayDesc(sets.filter(s => s.folder_id === folder.id)).map(s => (
                     <label key={s.id} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted cursor-pointer text-sm" style={{ paddingLeft: `${(depth + 1) * 16 + 20}px` }}>
                       <Checkbox checked={selectedSetIds.includes(s.id)} onCheckedChange={() => toggleSetSelection(s.id)} />
                       <span className="text-xs text-muted-foreground">#{s.round_number}</span>
