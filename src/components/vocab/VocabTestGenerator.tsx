@@ -48,6 +48,11 @@ interface GeneratedQuestion {
   answer: string;
 }
 
+interface ParsedDay {
+  label: string;
+  words: WordItem[];
+}
+
 interface SavedTest {
   id: string;
   title: string;
