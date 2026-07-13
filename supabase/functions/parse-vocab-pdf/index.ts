@@ -77,7 +77,10 @@ function detectDayLabelsFromText(text: string): string[] {
   return labels;
 }
 
-function splitWordsByLabels<T extends { sort_order: number }>(words: T[], labels: string[]): T[][] {
+function splitWordsByLabels(
+  words: Array<{ english: string; meaning: string; sort_order: number }>,
+  labels: string[],
+): Array<Array<{ english: string; meaning: string; sort_order: number }>> {
   const count = labels.length;
   const baseSize = Math.floor(words.length / count);
   const remainder = words.length % count;
