@@ -37,6 +37,6 @@ export const TEACHERS = [
   { name: '조준희', room: '4층 4강의실' },
   { name: '황은지(원장)', room: '4층 5강의실' },
   { name: '이나연', room: '3층 6강의실' },
-  { name: '정선호', room: '3층 7강의실' },
+  { name: '함유빈', room: '3층 7강의실' },
   { name: '김민희', room: '3층 10강의실' },
 ] as const;

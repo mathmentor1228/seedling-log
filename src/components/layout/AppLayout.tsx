@@ -84,7 +84,7 @@ const TEACHER_MULTI_SUBJECT_MAP: Record<string, string[]> = {
   '미정': ['영어'],
   '준희': ['국어'],
   '이나연': ['수학'],
-  '정선호': ['수학'],
+  '함유빈': ['수학'],
 };
 
 const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null, fullName: string | null): NavEntry[] => {
