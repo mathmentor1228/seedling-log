@@ -1801,11 +1801,45 @@ export function TodaySession() {
                 — ✓이해 {Object.values(verifiedLocal).filter(v => v === 'ok').length} / ✗미흡 {Object.values(verifiedLocal).filter(v => v === 'weak').length}
                 {Object.values(verifiedLocal).some(v => v === 'weak') && ' (미흡은 재학습 큐 등록됨)'}</p>
             )}
-            <p>· 진도: {Object.entries(goalStates).length === 0 ? '기록 없음'
-              : Object.entries(goalStates).map(([gid, st]) => {
+            <p>· 진도: {(() => {
+              // TODAY-SUMMARY-FIX-V1: 요약은 이번 세션에 저장된 진도(DB) + 이번 화면 기록(로컬)을 합산해서 표시.
+              // goalStates만 읽으면 페이지 입력(학생별 기록) 방식이 항상 "기록 없음"으로 나오는 버그가 있었음.
+              const byGoal: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
+              const put = (gid: string, sid: string, state: 'done' | 'partial' | 'defer', upto: string) => {
+                (byGoal[gid] ||= {})[sid] = { state, upto };
+              };
+              for (const p of progress) {
+                if ((p as any).session_id !== sessionId) continue;
+                if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) put(p.goal_id, p.student_id, 'done', '');
+                else if (p.status === 'partial') put(p.goal_id, p.student_id, 'partial', p.partial_upto || '');
+                else if (p.status === 'deferred') put(p.goal_id, p.student_id, 'defer', '');
+              }
+              for (const [gid, st] of Object.entries(goalStates)) {
+                if (st.state) students.filter(s => !absent.has(s.id)).forEach(s => put(gid, s.id, st.state!, st.upto));
+              }
+              for (const [gid, stuMap] of Object.entries(perStudent)) {
+                for (const [sid, st] of Object.entries(stuMap)) {
+                  if (st.state) put(gid, sid, st.state, st.upto);
+                }
+              }
+              const entries = Object.entries(byGoal).map(([gid, stuMap]) => {
                 const g = goals.find(x => x.id === gid);
-                return `${g?.order_index}. ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부(~${st.upto})` : '미룸'}`;
-              }).join(' · ')}</p>
+                const states = Object.values(stuMap);
+                const done = states.filter(s => s.state === 'done').length;
+                const partials = states.filter(s => s.state === 'partial');
+                const defer = states.filter(s => s.state === 'defer').length;
+                const upto = partials.find(p => p.upto)?.upto || '';
+                const total = states.length;
+                const parts = [
+                  done > 0 ? (done === total ? '완료' : `완료 ${done}명`) : '',
+                  partials.length > 0 ? `일부${upto ? `(~${upto})` : ''}${partials.length === total ? '' : ` ${partials.length}명`}` : '',
+                  defer > 0 ? (defer === total ? '미룸' : `미룸 ${defer}명`) : '',
+                ].filter(Boolean).join(', ');
+                return { idx: g?.order_index ?? 0, label: parts };
+              }).sort((a, b) => a.idx - b.idx);
+              return entries.length === 0 ? '기록 없음'
+                : entries.map(e => `${e.idx}. ${e.label}`).join(' · ');
+            })()}</p>
           </CardContent></Card>
 
           {/* LESSON-HW-BRIDGE-V1: 다음 수업 숙제 부여 */}
