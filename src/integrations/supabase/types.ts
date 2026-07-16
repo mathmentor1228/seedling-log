@@ -5172,6 +5172,66 @@ export type Database = {
           },
         ]
       }
+      student_book_progress: {
+        Row: {
+          book_role: string
+          book_title: string
+          created_at: string
+          current_page: number
+          id: string
+          last_source: string | null
+          status: string
+          student_id: string
+          subject: string
+          textbook_id: string | null
+          total_pages: number | null
+          updated_at: string
+        }
+        Insert: {
+          book_role?: string
+          book_title: string
+          created_at?: string
+          current_page?: number
+          id?: string
+          last_source?: string | null
+          status?: string
+          student_id: string
+          subject?: string
+          textbook_id?: string | null
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Update: {
+          book_role?: string
+          book_title?: string
+          created_at?: string
+          current_page?: number
+          id?: string
+          last_source?: string | null
+          status?: string
+          student_id?: string
+          subject?: string
+          textbook_id?: string | null
+          total_pages?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_book_progress_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_book_progress_textbook_id_fkey"
+            columns: ["textbook_id"]
+            isOneToOne: false
+            referencedRelation: "textbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_courses: {
         Row: {
           course_policy_id: string
@@ -6869,6 +6929,8 @@ export type Database = {
           publisher: string | null
           subject: string
           title: string
+          toc: Json | null
+          total_pages: number | null
           updated_at: string
         }
         Insert: {
@@ -6882,6 +6944,8 @@ export type Database = {
           publisher?: string | null
           subject?: string
           title: string
+          toc?: Json | null
+          total_pages?: number | null
           updated_at?: string
         }
         Update: {
@@ -6895,6 +6959,8 @@ export type Database = {
           publisher?: string | null
           subject?: string
           title?: string
+          toc?: Json | null
+          total_pages?: number | null
           updated_at?: string
         }
         Relationships: []
