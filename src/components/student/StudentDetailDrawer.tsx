@@ -14,6 +14,7 @@ import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentPinManager from '@/components/StudentPinManager';
 import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
+import { StudentBookProgress } from '@/components/student/StudentBookProgress';
 import { isAdmin, isTeacher, type AppRole } from '@/lib/auth';
 
 interface StudentLite {
@@ -158,8 +159,9 @@ export function StudentDetailDrawer({
         {/* Tabs */}
         <Tabs key={student.id} defaultValue={defaultTab === 'pin-manager' ? 'app' : 'overview'} className="flex-1 flex flex-col min-h-0">
           <div className="px-5 pt-3 shrink-0">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="overview">개요</TabsTrigger>
+              <TabsTrigger value="books"><BookOpen className="w-3.5 h-3.5 mr-1" />교재</TabsTrigger>
               <TabsTrigger value="app"><Key className="w-3.5 h-3.5 mr-1" />앱 접근</TabsTrigger>
             </TabsList>
           </div>
@@ -235,6 +237,12 @@ export function StudentDetailDrawer({
                 <StudentSubjectTeacherMapping studentId={student.id} studentName={student.name} />
               </Section>
             )}
+          </TabsContent>
+
+          <TabsContent value="books" className="flex-1 overflow-y-auto px-5 pb-24 mt-0 data-[state=inactive]:hidden">
+            <div className="mt-4">
+              <StudentBookProgress studentId={student.id} />
+            </div>
           </TabsContent>
 
           <TabsContent value="app" className="flex-1 overflow-y-auto px-5 pb-24 mt-0 data-[state=inactive]:hidden">
