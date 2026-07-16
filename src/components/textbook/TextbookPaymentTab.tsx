@@ -46,6 +46,13 @@ export function TextbookPaymentTab() {
   const [depositorName, setDepositorName] = useState('');
   const [parentNameInput, setParentNameInput] = useState('');
 
+  // AlimTalk send state
+  const [alimtalkConfirm, setAlimtalkConfirm] = useState<{
+    mode: 'before' | 'after';
+    groups: { studentId: string; studentName: string; parentPhone: string | null; dists: Distribution[] }[];
+  } | null>(null);
+  const [sendingAlimtalk, setSendingAlimtalk] = useState(false);
+
   useEffect(() => {
     if (user) {
       supabase.from('profiles').select('full_name').eq('id', user.id).single()
@@ -245,15 +252,58 @@ export function TextbookPaymentTab() {
   // Group unpaid by student
   const unpaidByStudent = useMemo(() => {
     const unpaid = filteredDistributions.filter(d => d.payment_status === '미납');
-    const grouped = new Map<string, { studentName: string; parentName: string | null; dists: Distribution[] }>();
+    const grouped = new Map<string, { studentId: string; studentName: string; parentName: string | null; parentPhone: string | null; dists: Distribution[] }>();
     for (const d of unpaid) {
       if (!grouped.has(d.student_id)) {
-        grouped.set(d.student_id, { studentName: d.student_name, parentName: d.parent_name || null, dists: [] });
+        grouped.set(d.student_id, { studentId: d.student_id, studentName: d.student_name, parentName: d.parent_name || null, parentPhone: d.parent_phone || null, dists: [] });
       }
       grouped.get(d.student_id)!.dists.push(d);
     }
     return Array.from(grouped.values());
   }, [filteredDistributions]);
+
+  // Batch target: students with at least one un-billed unpaid item (최초 청구 대상)
+  const batchTargets = useMemo(
+    () => unpaidByStudent.filter(g => g.dists.some(d => !d.billed_at)),
+    [unpaidByStudent],
+  );
+
+  const openBatchAlimtalk = (mode: 'before' | 'after') => {
+    if (batchTargets.length === 0) { toast.info('청구할 미납 건이 없습니다 (전부 청구 완료 상태)'); return; }
+    setAlimtalkConfirm({ mode, groups: batchTargets });
+  };
+
+  const handleSendAlimtalk = async () => {
+    if (!alimtalkConfirm || sendingAlimtalk) return;
+    const sendable = alimtalkConfirm.groups.filter(g => g.parentPhone);
+    if (sendable.length === 0) { toast.error('발송 가능한 학부모 연락처가 없습니다'); return; }
+    setSendingAlimtalk(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-textbook-bill', {
+        body: {
+          mode: alimtalkConfirm.mode,
+          targets: sendable.map(g => ({ student_id: g.studentId, dist_ids: g.dists.map(d => d.id) })),
+        },
+      });
+      if (error) throw error;
+      if (data?.error === 'not_configured') {
+        toast.error(`알림톡 연동 설정이 아직 완료되지 않았습니다. Supabase에 다음 키를 등록해주세요: ${data.missing.join(', ')}`, { duration: 8000 });
+        return;
+      }
+      if (data?.error) { toast.error(`발송 실패: ${data.error}`); return; }
+      const failures = (data?.results || []).filter((r: any) => !r.ok);
+      if (data?.sent > 0) toast.success(`알림톡 ${data.sent}명 발송 완료`);
+      if (failures.length > 0) {
+        toast.error(`${failures.length}명 발송 안 됨: ${failures.map((f: any) => `${f.student_name}(${f.reason})`).join(', ')}`, { duration: 8000 });
+      }
+      setAlimtalkConfirm(null);
+      fetchData();
+    } catch (e: any) {
+      toast.error(`알림톡 발송 중 오류: ${e.message || e}`);
+    } finally {
+      setSendingAlimtalk(false);
+    }
+  };
 
   const totalUnpaidCount = unpaidByStudent.reduce((s, g) => s + g.dists.length, 0);
 
@@ -297,7 +347,26 @@ export function TextbookPaymentTab() {
       {/* Unpaid list - grouped by student */}
       {unpaidByStudent.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2">미납 목록 ({totalUnpaidCount}건 · {unpaidByStudent.length}명)</h3>
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <h3 className="text-sm font-semibold text-foreground">미납 목록 ({totalUnpaidCount}건 · {unpaidByStudent.length}명)</h3>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" className="gap-1 text-xs bg-yellow-500 hover:bg-yellow-600 text-white">
+                  <MessageCircle className="w-3.5 h-3.5" />알림톡 일괄 발송
+                  {batchTargets.length > 0 && <Badge variant="secondary" className="text-[10px] ml-1 bg-white/20 text-white">{batchTargets.length}명</Badge>}
+                  <ChevronDown className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => openBatchAlimtalk('before')} className="text-xs gap-2">
+                  <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openBatchAlimtalk('after')} className="text-xs gap-2">
+                  <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <div className="space-y-3">
             {unpaidByStudent.map(group => {
               const allBilled = group.dists.every(d => !!d.billed_at);
@@ -378,6 +447,21 @@ export function TextbookPaymentTab() {
                     </div>
 
                     <div className="flex flex-col gap-1.5 shrink-0">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" className="gap-1 text-xs px-2 bg-yellow-500 hover:bg-yellow-600 text-white" disabled={!group.parentPhone} title={group.parentPhone ? '' : '학부모 연락처가 없습니다'}>
+                            <Send className="w-3 h-3" />알림톡<ChevronDown className="w-3 h-3 ml-0.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => setAlimtalkConfirm({ mode: 'before', groups: [group] })} className="text-xs gap-2">
+                            <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setAlimtalkConfirm({ mode: 'after', groups: [group] })} className="text-xs gap-2">
+                            <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button size="sm" variant="outline" className="gap-1 text-xs px-2">
@@ -502,6 +586,39 @@ export function TextbookPaymentTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaymentTarget(null)}>취소</Button>
             <Button onClick={handleConfirmPayment}>수납 확인</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlimTalk send confirmation dialog */}
+      <Dialog open={!!alimtalkConfirm} onOpenChange={(open) => !open && !sendingAlimtalk && setAlimtalkConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>교재비 알림톡 발송</DialogTitle>
+            <DialogDescription>
+              {alimtalkConfirm?.mode === 'after' ? '배포 후(배부 완료)' : '배포 전(배부 예정)'} 안내를 학부모 카카오톡으로 발송합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2 max-h-64 overflow-y-auto">
+            {alimtalkConfirm?.groups.map(g => {
+              const total = g.dists.reduce((s, d) => s + d.total_amount, 0);
+              return (
+                <div key={g.studentId} className={`flex items-center justify-between text-sm p-2 rounded-md ${g.parentPhone ? 'bg-muted/50' : 'bg-destructive/10'}`}>
+                  <span className="font-medium">{g.studentName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {g.dists.length}건 · {total.toLocaleString()}원
+                    {!g.parentPhone && <span className="text-destructive font-medium ml-2">연락처 없음 — 제외됨</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlimtalkConfirm(null)} disabled={sendingAlimtalk}>취소</Button>
+            <Button onClick={handleSendAlimtalk} disabled={sendingAlimtalk} className="gap-1.5">
+              {sendingAlimtalk ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {alimtalkConfirm ? `${alimtalkConfirm.groups.filter(g => g.parentPhone).length}명에게 발송` : '발송'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
