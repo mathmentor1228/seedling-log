@@ -63,8 +63,8 @@ export default function ParentNotifications() {
   // Update document title with unread count
   useEffect(() => {
     document.title = unreadCount > 0
-      ? `(${unreadCount}) 알림 — SeedlingLog`
-      : '알림 — SeedlingLog';
+      ? `(${unreadCount}) 알림 — 더멘토학원`
+      : '알림 — 더멘토학원';
   }, [unreadCount]);
 
   const fetchData = useCallback(async () => {
@@ -189,7 +189,7 @@ export default function ParentNotifications() {
             <h1 className="text-base font-bold text-foreground">
               {student.parent_name || student.name} 학부모님
             </h1>
-            <p className="text-xs text-muted-foreground">SeedlingLog 알림</p>
+            <p className="text-xs text-muted-foreground">더멘토학원 알림</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge className={currentStatus.bgClass}>

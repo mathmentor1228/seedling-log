@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { ClipboardList, RefreshCw, Copy, Trash2 } from 'lucide-react';
+import { ClipboardList, RefreshCw, Copy, MessageSquareText, Trash2 } from 'lucide-react';
 
 const db = supabase as any;
 
@@ -35,10 +35,30 @@ function IntensiveApplications() {
   }
   useEffect(() => { load(); }, []);
 
+  function getLink() {
+    return `${window.location.origin}/summer-intensive`;
+  }
+
   function copyLink() {
-    const url = `${window.location.origin}/summer-intensive`;
-    navigator.clipboard.writeText(url);
-    toast.success('신청서 링크를 복사했어요 — 문자에 붙여넣으세요');
+    navigator.clipboard.writeText(getLink());
+    toast.success('신청서 링크를 복사했어요');
+  }
+
+  function copyMessage() {
+    const msg = `[더멘토학원] 2026 여름특강 안내
+현 고1·고2 대상 원장님 직강 여름특강입니다. 2학기 진도를 방학 중에 미리 끝내고 갑니다.
+
+• 대상: 고1·고2
+• 횟수: 총 8회 (회당 120분)
+• 특강료: 25만원 (8월 수강료에 합산 결제, 별도 결제 없음)
+• 일정: 학생별 개별 안내 예정
+
+자세한 안내 확인과 신청서 제출은 아래 링크에서 해주세요.
+${getLink()}
+
+- 더멘토학원 -`;
+    navigator.clipboard.writeText(msg);
+    toast.success('학부모 문자 양식을 복사했어요 — 문자메시지에 붙여넣으세요');
   }
 
   async function remove(a: Application) {
@@ -65,14 +85,15 @@ function IntensiveApplications() {
         </h1>
         <Badge className="text-[11px]">{apps.length}건</Badge>
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={copyLink}><Copy className="w-3.5 h-3.5 mr-1" />신청서 링크 복사</Button>
+          <Button size="sm" onClick={copyMessage}><MessageSquareText className="w-3.5 h-3.5 mr-1" />학부모 문자 양식 복사</Button>
+          <Button variant="outline" size="sm" onClick={copyLink}><Copy className="w-3.5 h-3.5 mr-1" />링크만 복사</Button>
           <Button variant="outline" size="sm" onClick={load}><RefreshCw className="w-3.5 h-3.5 mr-1" />새로고침</Button>
         </div>
       </div>
 
       {apps.length === 0 ? (
         <p className="text-sm text-muted-foreground border rounded-lg px-4 py-8 text-center">
-          아직 접수된 신청이 없습니다. 위 "신청서 링크 복사"로 문자에 보낼 링크를 가져가세요.
+          아직 접수된 신청이 없습니다. 위 "학부모 문자 양식 복사"로 안내문 전체를 문자에 그대로 붙여넣으세요.
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">

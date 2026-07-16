@@ -11,7 +11,7 @@ export default function ParentDashboardPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card px-4 py-3 flex items-center justify-between">
         <div>
-          <h1 className="text-sm font-bold text-foreground">SeedlingLog</h1>
+          <h1 className="text-sm font-bold text-foreground">더멘토학원</h1>
           <p className="text-xs text-muted-foreground">학부모 포털</p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => signOut()}>
