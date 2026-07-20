@@ -179,17 +179,38 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       assignee_name: assigneeText !== '-' ? assigneeText : null,
     } as any);
 
+    // Normalize assignee names (strip "(원장)" and similar suffixes)
+    const normalizedAssignees = selectedAssignees.map(n => n.replace(/\(.*?\)/g, '').trim());
+
+    // Look up teacher profiles by normalized name (used for tasks + subject-teacher mapping)
+    const { data: teacherProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('full_name', normalizedAssignees);
+
+    // Auto-create student_subject_teachers mapping for each (subject × teacher)
+    if (studentData?.id && selectedSubjects.length > 0 && (teacherProfiles?.length ?? 0) > 0) {
+      const mappings = selectedSubjects.flatMap(subject =>
+        (teacherProfiles || []).map(tp => ({
+          student_id: (studentData as any).id,
+          subject,
+          teacher_id: tp.id,
+        }))
+      );
+      if (mappings.length > 0) {
+        await supabase.from('student_subject_teachers').upsert(mappings as any, {
+          onConflict: 'student_id,subject,teacher_id',
+          ignoreDuplicates: true,
+        });
+      }
+    }
+
     // Create teacher notification requests for the day before start date
     if (selectedAssignees.length > 0) {
       const dayBefore = new Date(startDate);
       dayBefore.setDate(dayBefore.getDate() - 1);
       const taskDate = format(dayBefore, 'yyyy-MM-dd');
 
-      // Look up teacher profiles by name
-      const { data: teacherProfiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('full_name', selectedAssignees);
 
       const classroomLines = getClassroomInfo();
       const taskNotes = [

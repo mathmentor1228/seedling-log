@@ -86,6 +86,7 @@ export default function Students() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [sortByDueDay, setSortByDueDay] = useState(true);
+  const [sortMode, setSortMode] = useState<'name' | 'recent' | 'oldest'>('name');
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
   const [quickFilter, setQuickFilter] = useState<null | 'no-slot' | 'no-teacher' | 'no-course' | 'new'>(null);
   const [stats, setStats] = useState({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
@@ -515,6 +516,12 @@ export default function Students() {
     }
     return true;
   }).sort((a, b) => {
+    if (sortMode === 'recent') {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    if (sortMode === 'oldest') {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }
     if (sortByDueDay) {
       const da = a.payment_due_day ?? 99;
       const db = b.payment_due_day ?? 99;
@@ -861,6 +868,16 @@ export default function Students() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={sortMode} onValueChange={(v: any) => setSortMode(v)}>
+                <SelectTrigger className="h-9 w-[110px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">이름순</SelectItem>
+                  <SelectItem value="recent">최근 등록순</SelectItem>
+                  <SelectItem value="oldest">오래된 등록순</SelectItem>
+                </SelectContent>
+              </Select>
               {isAdmin(role) && selectedIds.size > 0 && (
                 <Button size="sm" className="h-9 text-xs" onClick={() => setBulkEditOpen(true)}>
                   일괄 편집 ({selectedIds.size}명)
@@ -1002,21 +1019,19 @@ export default function Students() {
                           {student.student_phone || student.phone || '-'}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            {issues.length > 0 && (
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {issues.map((iss) => (
                               <button
+                                key={iss.key}
                                 type="button"
-                                title={issues.map(i => i.label).join(' · ')}
-                                onClick={() => openIssueDetail(student, issues[0].key)}
-                                className="relative flex items-center gap-1 px-2 h-7 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors"
+                                title="클릭하여 미비 항목 보기"
+                                onClick={() => openIssueDetail(student, iss.key)}
+                                className="flex items-center gap-1 px-1.5 h-6 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors text-[10px] font-medium"
                               >
-                                <span className="relative flex h-2 w-2">
-                                  <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-60 animate-ping" />
-                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
-                                </span>
-                                <span className="text-[11px] font-semibold">{issues.length}</span>
+                                <AlertCircle className="w-3 h-3" />
+                                {iss.label}
                               </button>
-                            )}
+                            ))}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                               {isAdmin(role) && (
                                 <>
