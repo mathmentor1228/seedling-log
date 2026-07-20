@@ -263,6 +263,11 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
                     <Input type="date" value={r.joined_at ?? ''} className="w-36 h-8"
                       onChange={e => handlePatch(r.student_id, { joined_at: e.target.value || null })}
                       title="합류일" />
+                    <Button size="sm" variant="ghost" className="text-blue-600"
+                      title="다른 반으로 옮기기"
+                      onClick={() => openTransfer(r)}>
+                      <ArrowRightLeft className="w-4 h-4" />
+                    </Button>
                     <Button size="sm" variant="ghost" className="text-red-600"
                       onClick={() => handleRemove(r.student_id, r.name)}>
                       <Trash2 className="w-4 h-4" />
