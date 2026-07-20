@@ -310,8 +310,8 @@ function QuickStat({ icon, label, value, tone }: { icon: React.ReactNode; label:
 
 const Section = forwardRef<
   HTMLDivElement,
-  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string> }
->(({ title, children, flash, subjects, subjectColor }, ref) => (
+  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string>; headerAction?: React.ReactNode }
+>(({ title, children, flash, subjects, subjectColor, headerAction }, ref) => (
   <div
     ref={ref}
     className={cn(
@@ -321,7 +321,7 @@ const Section = forwardRef<
   >
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      {subjects && subjects.length > 0 && (
+      {headerAction ? headerAction : (subjects && subjects.length > 0 && (
         <div className="flex gap-1">
           {subjects.map((s) => (
             <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border', subjectColor?.[s] || 'bg-muted text-muted-foreground border-border')}>
@@ -329,7 +329,7 @@ const Section = forwardRef<
             </span>
           ))}
         </div>
-      )}
+      ))}
     </div>
     {children}
   </div>
