@@ -179,6 +179,94 @@ export async function updateDesignStudent(
   if (error) throw error;
 }
 
+// PLAN-ROSTER-TRANSFER-V1: 학생을 다른 설계(반)로 옮기기. 트랙이 같으면 기록도 이관.
+export type TransferOptions = {
+  student_type?: StudentType | null;
+  start_goal_id?: string | null;
+  joined_at?: string | null;
+};
+export type TransferResult = {
+  migratedHistory: boolean;   // 트랙 일치 → 진도/큐/플래그/재시험 등 이관됨
+  sameTrack: boolean;
+};
+// design_id + student_id 로 라우팅되는 이력 테이블 목록
+const PLAN_HISTORY_TABLES = [
+  'plan_goal_progress',
+  'plan_queue',
+  'plan_flags',
+  'plan_student_retros',
+  'plan_checks',
+] as const;
+
+export async function transferStudentToDesign(
+  sourceDesignId: string,
+  targetDesignId: string,
+  studentId: string,
+  opts: TransferOptions,
+): Promise<TransferResult> {
+  if (sourceDesignId === targetDesignId) throw new Error('같은 반입니다');
+
+  // 두 설계의 track_id 확인
+  const { data: designs, error: dErr } = await db.from('plan_designs')
+    .select('id, track_id').in('id', [sourceDesignId, targetDesignId]);
+  if (dErr) throw dErr;
+  const src = (designs || []).find((d: any) => d.id === sourceDesignId);
+  const tgt = (designs || []).find((d: any) => d.id === targetDesignId);
+  if (!src || !tgt) throw new Error('설계를 찾을 수 없습니다');
+  const sameTrack = src.track_id === tgt.track_id;
+
+  // 대상 반에 명단 추가 (upsert)
+  const insertRow: any = {
+    design_id: targetDesignId,
+    student_id: studentId,
+    student_type: opts.student_type ?? null,
+    start_goal_id: opts.start_goal_id ?? null,
+    joined_at: opts.joined_at ?? null,
+  };
+  const { error: pErr } = await db.from('plan_students')
+    .upsert(insertRow, { onConflict: 'design_id,student_id' });
+  if (pErr) throw pErr;
+
+  // 트랙이 같으면 기록도 새 반으로 이관
+  let migratedHistory = false;
+  if (sameTrack) {
+    for (const table of PLAN_HISTORY_TABLES) {
+      const { error } = await db.from(table)
+        .update({ design_id: targetDesignId })
+        .eq('design_id', sourceDesignId).eq('student_id', studentId);
+      // 테이블이 없거나 컬럼이 없어도 계속 진행 (프로젝트별 편차 흡수)
+      if (!error) migratedHistory = true;
+    }
+  }
+
+  // 원 반에서 명단 제거 (기록만 유지)
+  const { error: rErr } = await db.from('plan_students')
+    .delete().eq('design_id', sourceDesignId).eq('student_id', studentId);
+  if (rErr) throw rErr;
+
+  return { migratedHistory, sameTrack };
+}
+
+// 옮길 수 있는 대상 설계(반) 목록 — 관리자는 전체, 교사는 본인 담당
+export async function fetchTransferTargets(
+  excludeDesignId: string,
+  teacherId: string | null,
+  isAdmin: boolean,
+): Promise<{ id: string; title: string; subject: string; track_id: string; trackTitle: string | null }[]> {
+  let q = db.from('plan_designs')
+    .select('id, title, teacher_id, track_id, status, plan_tracks(title, subject)')
+    .eq('status', 'active').neq('id', excludeDesignId);
+  if (!isAdmin && teacherId) q = q.eq('teacher_id', teacherId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data || []) as any[]).map(d => ({
+    id: d.id, title: d.title,
+    subject: d.plan_tracks?.subject || '',
+    track_id: d.track_id,
+    trackTitle: d.plan_tracks?.title || null,
+  }));
+}
+
 export type RosterStudent = { id: string; name: string; grade: string | null; type: 'A' | 'B' | 'C' | null };
 
 // 여러 설계의 명단(이름 포함)을 한 번에 — design_id → 학생 배열

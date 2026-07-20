@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus, Trash2, Users, Sprout, Search } from 'lucide-react';
+import { UserPlus, Trash2, Users, Sprout, Search, ArrowRightLeft } from 'lucide-react';
 import {
   fetchDesignStudents, fetchGoals, addStudentsToDesign,
   removeStudentFromDesign, updateDesignStudent,
+  transferStudentToDesign, fetchTransferTargets,
   PlanGoal, StudentType, AddStudentInput,
 } from './planApi';
 
@@ -42,6 +43,59 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
   const [pickedStartGoal, setPickedStartGoal] = useState<string>('');
   const [joinedAt, setJoinedAt] = useState<string>(new Date().toISOString().slice(0, 10));
   const isABC = teachingMode === 'abc';
+
+  // Transfer state
+  const [transferFor, setTransferFor] = useState<Row | null>(null);
+  const [transferTargets, setTransferTargets] = useState<Awaited<ReturnType<typeof fetchTransferTargets>>>([]);
+  const [transferTargetId, setTransferTargetId] = useState<string>('');
+  const [transferGoals, setTransferGoals] = useState<PlanGoal[]>([]);
+  const [transferFromBeginning, setTransferFromBeginning] = useState(true);
+  const [transferStartGoal, setTransferStartGoal] = useState<string>('');
+  const [transferJoinedAt, setTransferJoinedAt] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [transferBusy, setTransferBusy] = useState(false);
+
+  async function openTransfer(r: Row) {
+    setTransferFor(r);
+    setTransferTargetId('');
+    setTransferGoals([]);
+    setTransferFromBeginning(true);
+    setTransferStartGoal('');
+    setTransferJoinedAt(new Date().toISOString().slice(0, 10));
+    try {
+      const targets = await fetchTransferTargets(designId, user?.id || null, (role as any) === 'admin' || (role as any) === 'principal');
+      setTransferTargets(targets);
+    } catch (e: any) { toast.error(`대상 반 불러오기 실패: ${e.message || e}`); }
+  }
+  async function onPickTarget(targetId: string) {
+    setTransferTargetId(targetId);
+    setTransferStartGoal('');
+    const tgt = transferTargets.find(t => t.id === targetId);
+    if (!tgt) { setTransferGoals([]); return; }
+    try {
+      const gs = await fetchGoals(tgt.track_id);
+      setTransferGoals(gs);
+    } catch { setTransferGoals([]); }
+  }
+  async function handleTransfer() {
+    if (!transferFor || !transferTargetId) { toast.error('옮길 반을 선택해주세요'); return; }
+    if (!transferFromBeginning && !transferStartGoal) { toast.error('시작할 목차를 선택해주세요'); return; }
+    setTransferBusy(true);
+    try {
+      const res = await transferStudentToDesign(designId, transferTargetId, transferFor.student_id, {
+        student_type: transferFor.student_type,
+        start_goal_id: transferFromBeginning ? null : transferStartGoal,
+        joined_at: transferJoinedAt || null,
+      });
+      toast.success(res.sameTrack
+        ? `${transferFor.name} 이동 완료 (기록 이관됨)`
+        : `${transferFor.name} 이동 완료 (트랙이 달라 기록은 이전 반에 남습니다)`);
+      setTransferFor(null);
+      await load();
+      onDone?.();
+    } catch (e: any) { toast.error(`이동 실패: ${e.message || e}`); }
+    finally { setTransferBusy(false); }
+  }
+
 
   async function load() {
     setLoading(true);
@@ -209,6 +263,11 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
                     <Input type="date" value={r.joined_at ?? ''} className="w-36 h-8"
                       onChange={e => handlePatch(r.student_id, { joined_at: e.target.value || null })}
                       title="합류일" />
+                    <Button size="sm" variant="ghost" className="text-blue-600"
+                      title="다른 반으로 옮기기"
+                      onClick={() => openTransfer(r)}>
+                      <ArrowRightLeft className="w-4 h-4" />
+                    </Button>
                     <Button size="sm" variant="ghost" className="text-red-600"
                       onClick={() => handleRemove(r.student_id, r.name)}>
                       <Trash2 className="w-4 h-4" />
@@ -305,6 +364,95 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
             <div className="flex gap-2 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setAddOpen(false)}>취소</Button>
               <Button className="flex-1" onClick={handleAdd}>추가</Button>
+            </div>
+          </div>
+        )}
+
+        {/* 반 옮기기 패널 (Dialog 중첩 금지 — 인라인 확장) */}
+        {transferFor && (
+          <div className="mt-3 border rounded-lg p-3 bg-blue-500/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-sm flex items-center gap-1">
+                <ArrowRightLeft className="w-4 h-4" />{transferFor.name} — 반 옮기기
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => setTransferFor(null)} disabled={transferBusy}>닫기</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              기존 진도·확인·재시험 기록은 <b>같은 커리큘럼(트랙)</b>일 때 새 반으로 함께 이동합니다.
+              트랙이 다르면 기록은 이전 반에 남고 명단만 이동합니다.
+            </p>
+
+            <div>
+              <label className="text-xs font-semibold">옮길 반</label>
+              <Select value={transferTargetId} onValueChange={onPickTarget}>
+                <SelectTrigger className="mt-1 h-8"><SelectValue placeholder="반을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {transferTargets.length === 0
+                    ? <div className="px-3 py-2 text-xs text-muted-foreground">옮길 수 있는 반이 없습니다</div>
+                    : transferTargets.map(t => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.title} <span className="text-muted-foreground">· {t.trackTitle || t.subject}</span>
+                        </SelectItem>
+                      ))}
+                </SelectContent>
+              </Select>
+              {transferTargetId && (() => {
+                const tgt = transferTargets.find(t => t.id === transferTargetId);
+                const sameTrack = !!tgt && transferGoals.length > 0; // goals fetched by track
+                // Better check: compare via existing rows requires source track — surfaced by feedback text below
+                return (
+                  <p className="text-[11px] mt-1">
+                    {tgt?.trackTitle
+                      ? <span className="text-muted-foreground">커리큘럼: {tgt.trackTitle}</span>
+                      : null}
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold flex items-center gap-1">
+                <Sprout className="w-3.5 h-3.5 text-emerald-600" />새 반에서 어디부터 시작할까요?
+              </label>
+              <div className="mt-1 space-y-1.5">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" checked={transferFromBeginning}
+                    onChange={() => setTransferFromBeginning(true)} />
+                  커리큘럼 처음부터
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" checked={!transferFromBeginning}
+                    onChange={() => setTransferFromBeginning(false)} />
+                  특정 목차부터
+                </label>
+                {!transferFromBeginning && (
+                  <Select value={transferStartGoal} onValueChange={setTransferStartGoal}>
+                    <SelectTrigger className="h-8"><SelectValue placeholder="시작할 목차 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {transferGoals.length === 0
+                        ? <div className="px-3 py-2 text-xs text-muted-foreground">먼저 옮길 반을 선택하세요</div>
+                        : transferGoals.map(g => (
+                            <SelectItem key={g.id} value={g.id}>{g.order_index}. {g.title}{g.pages ? ` (${g.pages})` : ''}</SelectItem>
+                          ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold">이동일</label>
+              <Input type="date" value={transferJoinedAt}
+                onChange={e => setTransferJoinedAt(e.target.value)} className="mt-1 h-8" />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setTransferFor(null)} disabled={transferBusy}>
+                취소
+              </Button>
+              <Button className="flex-1" onClick={handleTransfer} disabled={transferBusy || !transferTargetId}>
+                {transferBusy ? '이동 중…' : '이 반으로 이동'}
+              </Button>
             </div>
           </div>
         )}
