@@ -837,7 +837,9 @@ export function TodaySession() {
             : (summary.range || (design.title ? `${design.title} 진행` : '수업 진행'));
 
           const quiz = quizSaved[s.id];
-          const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+          const quizUnderstanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+          // 수동 입력이 우선, 없으면 쪽지시험 점수로 환산
+          const understanding = understandingPerStudent[s.id] ?? quizUnderstanding;
 
           // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
           // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
