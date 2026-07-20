@@ -730,13 +730,25 @@ export default function Students() {
                       placeholder="선택 입력"
                     />
                   </div>
+                  {editingStudent && (
+                    <div className="space-y-2">
+                      <Label htmlFor="created_at">등록일</Label>
+                      <Input
+                        id="created_at"
+                        type="date"
+                        value={formData.created_at}
+                        onChange={(e) => setFormData({ ...formData, created_at: e.target.value })}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="notes">메모</Label>
-                    <Input
+                    <Textarea
                       id="notes"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Additional notes"
+                      placeholder="수강과목, 수업시간, 수강료 등 자유롭게 기록"
+                      rows={4}
                     />
                   </div>
                 </div>
