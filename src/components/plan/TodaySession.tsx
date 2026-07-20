@@ -118,6 +118,8 @@ export function TodaySession() {
   const [nextHwBulk, setNextHwBulk] = useState<string>('');
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
+  // PLAN-UNDERSTANDING-V1: 학생별 이해도(1-5) 수동 입력 — 쪽지시험이 없어도 저장되도록
+  const [understandingPerStudent, setUnderstandingPerStudent] = useState<Record<string, number>>({});
 
   // PLAN-VERIFY-LOOP-V1: 확인 루프 — 지난 진행분에 ✓이해/✗미흡 도장 (이번 세션에서 찍은 것)
   const [verifiedLocal, setVerifiedLocal] = useState<Record<string, 'ok' | 'weak'>>({}); // `${goalId}::${studentId}`
@@ -835,7 +837,9 @@ export function TodaySession() {
             : (summary.range || (design.title ? `${design.title} 진행` : '수업 진행'));
 
           const quiz = quizSaved[s.id];
-          const understanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+          const quizUnderstanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+          // 수동 입력이 우선, 없으면 쪽지시험 점수로 환산
+          const understanding = understandingPerStudent[s.id] ?? quizUnderstanding;
 
           // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
           // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
@@ -907,7 +911,8 @@ export function TodaySession() {
 
           // 3) 다음 수업 숙제 부여 (결석자 제외)
           if (!isAbsent) {
-            const hwContent = (nextHwPerStudent[s.id] ?? nextHwBulk ?? '').trim();
+            const perStu = (nextHwPerStudent[s.id] ?? '').trim();
+            const hwContent = perStu || (nextHwBulk ?? '').trim();
             if (hwContent) {
               const { error: nhErr } = await db.from('homework_assignments').insert({
                 student_id: s.id,
@@ -1842,8 +1847,54 @@ export function TodaySession() {
             })()}</p>
           </CardContent></Card>
 
+          {/* PLAN-UNDERSTANDING-V1: 학생별 이해도(1-5) 수동 입력 */}
+          <Card><CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs font-bold text-muted-foreground">🧠 오늘 이해도 — 1(낮음) ~ 5(높음)</p>
+              <span className="text-[10px] text-muted-foreground">쪽지시험이 있으면 자동 반영되지만, 여기서 지정한 값이 우선합니다.</span>
+            </div>
+            <div className="space-y-1.5">
+              {students.filter(s => !absent.has(s.id)).map(s => {
+                const quiz = quizSaved[s.id];
+                const auto = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
+                const cur = understandingPerStudent[s.id] ?? null;
+                return (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <span className="font-bold text-xs min-w-[60px]">{s.name}</span>
+                    <div className="flex gap-1 flex-1">
+                      {[1,2,3,4,5].map(n => {
+                        const active = cur === n;
+                        return (
+                          <button key={n} type="button"
+                            onClick={() => setUnderstandingPerStudent(p => {
+                              const next = { ...p };
+                              if (next[s.id] === n) delete next[s.id];
+                              else next[s.id] = n;
+                              return next;
+                            })}
+                            className={`h-7 flex-1 rounded-md border text-xs font-bold transition ${active
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground hover:bg-muted border-border'}`}>
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {cur == null && auto != null && (
+                      <span className="text-[10px] text-muted-foreground shrink-0">쪽지 자동 {auto}</span>
+                    )}
+                  </div>
+                );
+              })}
+              {students.filter(s => !absent.has(s.id)).length === 0 && (
+                <p className="text-[11px] text-muted-foreground">출결 대상 학생이 없습니다.</p>
+              )}
+            </div>
+          </CardContent></Card>
+
           {/* LESSON-HW-BRIDGE-V1: 다음 수업 숙제 부여 */}
           <Card><CardContent className="p-4 space-y-3">
+
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-xs font-bold text-muted-foreground">📚 다음 수업 숙제 — 저장 시 학생별로 자동 부여</p>
               <div className="ml-auto flex items-center gap-1.5">
