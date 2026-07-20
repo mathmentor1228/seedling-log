@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -114,6 +115,7 @@ export default function Students() {
     parent_name: '',
     student_phone: '',
     deposit_name: '',
+    created_at: '',
   });
   const { toast } = useToast();
 
@@ -350,6 +352,10 @@ export default function Students() {
         student_code: studentCode,
       };
 
+      if (editingStudent && formData.created_at) {
+        payload.created_at = new Date(formData.created_at + 'T00:00:00').toISOString();
+      }
+
       if (editingStudent) {
         const { error } = await supabase
           .from('students')
@@ -408,6 +414,7 @@ export default function Students() {
       parent_name: '',
       student_phone: '',
       deposit_name: '',
+      created_at: '',
     });
   };
 
@@ -427,6 +434,7 @@ export default function Students() {
       parent_name: (student as any).parent_name || '',
       student_phone: student.student_phone || '',
       deposit_name: (student as any).deposit_name || '',
+      created_at: student.created_at ? student.created_at.slice(0, 10) : '',
     });
     setIsAddDialogOpen(true);
   };
@@ -722,13 +730,25 @@ export default function Students() {
                       placeholder="선택 입력"
                     />
                   </div>
+                  {editingStudent && (
+                    <div className="space-y-2">
+                      <Label htmlFor="created_at">등록일</Label>
+                      <Input
+                        id="created_at"
+                        type="date"
+                        value={formData.created_at}
+                        onChange={(e) => setFormData({ ...formData, created_at: e.target.value })}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="notes">메모</Label>
-                    <Input
+                    <Textarea
                       id="notes"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Additional notes"
+                      placeholder="수강과목, 수업시간, 수강료 등 자유롭게 기록"
+                      rows={4}
                     />
                   </div>
                 </div>
