@@ -15,6 +15,7 @@ import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapp
 import StudentPinManager from '@/components/StudentPinManager';
 import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
 import { StudentBookProgress } from '@/components/student/StudentBookProgress';
+import { StudentMessagePanel } from '@/components/student/StudentMessagePanel';
 import { isAdmin, isTeacher, type AppRole } from '@/lib/auth';
 
 interface StudentLite {
@@ -226,6 +227,15 @@ export function StudentDetailDrawer({
                 </Button>
               )}
             </Section>
+
+            {/* Intro messages */}
+            {isAdmin(role) && (
+              <Section title="📩 안내 문자">
+                <StudentMessagePanel student={student as any} onCopyParentLink={onCopyParentLink} />
+              </Section>
+            )}
+
+
 
             {/* Courses */}
             {isAdmin(role) && (
