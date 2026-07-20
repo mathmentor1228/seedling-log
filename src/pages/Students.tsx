@@ -516,6 +516,12 @@ export default function Students() {
     }
     return true;
   }).sort((a, b) => {
+    if (sortMode === 'recent') {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    if (sortMode === 'oldest') {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }
     if (sortByDueDay) {
       const da = a.payment_due_day ?? 99;
       const db = b.payment_due_day ?? 99;
