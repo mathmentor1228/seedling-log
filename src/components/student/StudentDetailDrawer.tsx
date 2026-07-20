@@ -228,6 +228,15 @@ export function StudentDetailDrawer({
               )}
             </Section>
 
+            {/* Intro messages */}
+            {isAdmin(role) && (
+              <Section title="📩 안내 문자">
+                <StudentMessagePanel student={student as any} onCopyParentLink={onCopyParentLink} />
+              </Section>
+            )}
+
+
+
             {/* Courses */}
             {isAdmin(role) && (
               <Section ref={coursesRef} title="수강 과정" flash={flashSection === 'courses'} subjects={subjects} subjectColor={subjectColor}>
