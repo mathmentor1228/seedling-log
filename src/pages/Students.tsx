@@ -1019,21 +1019,19 @@ export default function Students() {
                           {student.student_phone || student.phone || '-'}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            {issues.length > 0 && (
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {issues.map((iss) => (
                               <button
+                                key={iss.key}
                                 type="button"
-                                title={issues.map(i => i.label).join(' · ')}
-                                onClick={() => openIssueDetail(student, issues[0].key)}
-                                className="relative flex items-center gap-1 px-2 h-7 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors"
+                                title="클릭하여 미비 항목 보기"
+                                onClick={() => openIssueDetail(student, iss.key)}
+                                className="flex items-center gap-1 px-1.5 h-6 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors text-[10px] font-medium"
                               >
-                                <span className="relative flex h-2 w-2">
-                                  <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-60 animate-ping" />
-                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
-                                </span>
-                                <span className="text-[11px] font-semibold">{issues.length}</span>
+                                <AlertCircle className="w-3 h-3" />
+                                {iss.label}
                               </button>
-                            )}
+                            ))}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                               {isAdmin(role) && (
                                 <>
