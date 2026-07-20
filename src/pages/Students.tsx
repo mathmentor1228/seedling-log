@@ -868,6 +868,16 @@ export default function Students() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={sortMode} onValueChange={(v: any) => setSortMode(v)}>
+                <SelectTrigger className="h-9 w-[110px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">이름순</SelectItem>
+                  <SelectItem value="recent">최근 등록순</SelectItem>
+                  <SelectItem value="oldest">오래된 등록순</SelectItem>
+                </SelectContent>
+              </Select>
               {isAdmin(role) && selectedIds.size > 0 && (
                 <Button size="sm" className="h-9 text-xs" onClick={() => setBulkEditOpen(true)}>
                   일괄 편집 ({selectedIds.size}명)
