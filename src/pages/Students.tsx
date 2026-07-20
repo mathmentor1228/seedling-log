@@ -430,6 +430,7 @@ export default function Students() {
       parent_name: (student as any).parent_name || '',
       student_phone: student.student_phone || '',
       deposit_name: (student as any).deposit_name || '',
+      created_at: student.created_at ? student.created_at.slice(0, 10) : '',
     });
     setIsAddDialogOpen(true);
   };
