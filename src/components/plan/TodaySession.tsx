@@ -118,6 +118,8 @@ export function TodaySession() {
   const [nextHwBulk, setNextHwBulk] = useState<string>('');
   const [nextHwPerStudent, setNextHwPerStudent] = useState<Record<string, string>>({});
   const [nextHwDue, setNextHwDue] = useState<string>('');
+  // PLAN-UNDERSTANDING-V1: 학생별 이해도(1-5) 수동 입력 — 쪽지시험이 없어도 저장되도록
+  const [understandingPerStudent, setUnderstandingPerStudent] = useState<Record<string, number>>({});
 
   // PLAN-VERIFY-LOOP-V1: 확인 루프 — 지난 진행분에 ✓이해/✗미흡 도장 (이번 세션에서 찍은 것)
   const [verifiedLocal, setVerifiedLocal] = useState<Record<string, 'ok' | 'weak'>>({}); // `${goalId}::${studentId}`
