@@ -352,6 +352,10 @@ export default function Students() {
         student_code: studentCode,
       };
 
+      if (editingStudent && formData.created_at) {
+        payload.created_at = new Date(formData.created_at + 'T00:00:00').toISOString();
+      }
+
       if (editingStudent) {
         const { error } = await supabase
           .from('students')
