@@ -62,7 +62,7 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
     setTransferStartGoal('');
     setTransferJoinedAt(new Date().toISOString().slice(0, 10));
     try {
-      const targets = await fetchTransferTargets(designId, user?.id || null, role === 'admin' || role === 'principal');
+      const targets = await fetchTransferTargets(designId, user?.id || null, (role as any) === 'admin' || (role as any) === 'principal');
       setTransferTargets(targets);
     } catch (e: any) { toast.error(`대상 반 불러오기 실패: ${e.message || e}`); }
   }
