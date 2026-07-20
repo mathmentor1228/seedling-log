@@ -15,6 +15,7 @@ import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapp
 import StudentPinManager from '@/components/StudentPinManager';
 import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
 import { StudentBookProgress } from '@/components/student/StudentBookProgress';
+import { StudentMessagePanel } from '@/components/student/StudentMessagePanel';
 import { isAdmin, isTeacher, type AppRole } from '@/lib/auth';
 
 interface StudentLite {
