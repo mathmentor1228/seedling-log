@@ -189,7 +189,17 @@ export function StudentDetailDrawer({
             )}
 
             {/* Basic info */}
-            <Section ref={infoRef} title="기본 정보" flash={flashSection === 'info'}>
+            <Section
+              ref={infoRef}
+              title="기본 정보"
+              flash={flashSection === 'info'}
+              headerAction={isAdmin(role) ? (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onEdit}>
+                  <Edit2 className="w-3 h-3 mr-1" />
+                  정보 수정
+                </Button>
+              ) : undefined}
+            >
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Field label="학생 연락처" value={student.student_phone || '-'} />
                 <Field label="학부모 연락처" value={student.parent_phone || '-'} />
@@ -201,7 +211,7 @@ export function StudentDetailDrawer({
                 <Field label="학생번호" value={student.student_code || '-'} />
                 <div className="col-span-2">
                   <Label className="text-[11px] text-muted-foreground">메모</Label>
-                  <p className="text-sm mt-1">{student.notes || '-'}</p>
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{student.notes || '-'}</p>
                 </div>
               </div>
               {isAdmin(role) && (
