@@ -115,6 +115,7 @@ export default function Students() {
     parent_name: '',
     student_phone: '',
     deposit_name: '',
+    created_at: '',
   });
   const { toast } = useToast();
 
