@@ -44,6 +44,59 @@ export function RosterManagerModal({ open, onClose, onDone, designId, trackId, t
   const [joinedAt, setJoinedAt] = useState<string>(new Date().toISOString().slice(0, 10));
   const isABC = teachingMode === 'abc';
 
+  // Transfer state
+  const [transferFor, setTransferFor] = useState<Row | null>(null);
+  const [transferTargets, setTransferTargets] = useState<Awaited<ReturnType<typeof fetchTransferTargets>>>([]);
+  const [transferTargetId, setTransferTargetId] = useState<string>('');
+  const [transferGoals, setTransferGoals] = useState<PlanGoal[]>([]);
+  const [transferFromBeginning, setTransferFromBeginning] = useState(true);
+  const [transferStartGoal, setTransferStartGoal] = useState<string>('');
+  const [transferJoinedAt, setTransferJoinedAt] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [transferBusy, setTransferBusy] = useState(false);
+
+  async function openTransfer(r: Row) {
+    setTransferFor(r);
+    setTransferTargetId('');
+    setTransferGoals([]);
+    setTransferFromBeginning(true);
+    setTransferStartGoal('');
+    setTransferJoinedAt(new Date().toISOString().slice(0, 10));
+    try {
+      const targets = await fetchTransferTargets(designId, user?.id || null, role === 'admin' || role === 'principal');
+      setTransferTargets(targets);
+    } catch (e: any) { toast.error(`대상 반 불러오기 실패: ${e.message || e}`); }
+  }
+  async function onPickTarget(targetId: string) {
+    setTransferTargetId(targetId);
+    setTransferStartGoal('');
+    const tgt = transferTargets.find(t => t.id === targetId);
+    if (!tgt) { setTransferGoals([]); return; }
+    try {
+      const gs = await fetchGoals(tgt.track_id);
+      setTransferGoals(gs);
+    } catch { setTransferGoals([]); }
+  }
+  async function handleTransfer() {
+    if (!transferFor || !transferTargetId) { toast.error('옮길 반을 선택해주세요'); return; }
+    if (!transferFromBeginning && !transferStartGoal) { toast.error('시작할 목차를 선택해주세요'); return; }
+    setTransferBusy(true);
+    try {
+      const res = await transferStudentToDesign(designId, transferTargetId, transferFor.student_id, {
+        student_type: transferFor.student_type,
+        start_goal_id: transferFromBeginning ? null : transferStartGoal,
+        joined_at: transferJoinedAt || null,
+      });
+      toast.success(res.sameTrack
+        ? `${transferFor.name} 이동 완료 (기록 이관됨)`
+        : `${transferFor.name} 이동 완료 (트랙이 달라 기록은 이전 반에 남습니다)`);
+      setTransferFor(null);
+      await load();
+      onDone?.();
+    } catch (e: any) { toast.error(`이동 실패: ${e.message || e}`); }
+    finally { setTransferBusy(false); }
+  }
+
+
   async function load() {
     setLoading(true);
     try {
