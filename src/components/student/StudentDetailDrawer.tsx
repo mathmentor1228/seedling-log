@@ -189,7 +189,17 @@ export function StudentDetailDrawer({
             )}
 
             {/* Basic info */}
-            <Section ref={infoRef} title="기본 정보" flash={flashSection === 'info'}>
+            <Section
+              ref={infoRef}
+              title="기본 정보"
+              flash={flashSection === 'info'}
+              headerAction={isAdmin(role) ? (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onEdit}>
+                  <Edit2 className="w-3 h-3 mr-1" />
+                  정보 수정
+                </Button>
+              ) : undefined}
+            >
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Field label="학생 연락처" value={student.student_phone || '-'} />
                 <Field label="학부모 연락처" value={student.parent_phone || '-'} />
@@ -201,7 +211,7 @@ export function StudentDetailDrawer({
                 <Field label="학생번호" value={student.student_code || '-'} />
                 <div className="col-span-2">
                   <Label className="text-[11px] text-muted-foreground">메모</Label>
-                  <p className="text-sm mt-1">{student.notes || '-'}</p>
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{student.notes || '-'}</p>
                 </div>
               </div>
               {isAdmin(role) && (
@@ -300,8 +310,8 @@ function QuickStat({ icon, label, value, tone }: { icon: React.ReactNode; label:
 
 const Section = forwardRef<
   HTMLDivElement,
-  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string> }
->(({ title, children, flash, subjects, subjectColor }, ref) => (
+  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string>; headerAction?: React.ReactNode }
+>(({ title, children, flash, subjects, subjectColor, headerAction }, ref) => (
   <div
     ref={ref}
     className={cn(
@@ -311,7 +321,7 @@ const Section = forwardRef<
   >
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      {subjects && subjects.length > 0 && (
+      {headerAction ? headerAction : (subjects && subjects.length > 0 && (
         <div className="flex gap-1">
           {subjects.map((s) => (
             <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border', subjectColor?.[s] || 'bg-muted text-muted-foreground border-border')}>
@@ -319,7 +329,7 @@ const Section = forwardRef<
             </span>
           ))}
         </div>
-      )}
+      ))}
     </div>
     {children}
   </div>
