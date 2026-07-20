@@ -911,7 +911,8 @@ export function TodaySession() {
 
           // 3) 다음 수업 숙제 부여 (결석자 제외)
           if (!isAbsent) {
-            const hwContent = (nextHwPerStudent[s.id] ?? nextHwBulk ?? '').trim();
+            const perStu = (nextHwPerStudent[s.id] ?? '').trim();
+            const hwContent = perStu || (nextHwBulk ?? '').trim();
             if (hwContent) {
               const { error: nhErr } = await db.from('homework_assignments').insert({
                 student_id: s.id,
