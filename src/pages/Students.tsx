@@ -86,6 +86,7 @@ export default function Students() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [sortByDueDay, setSortByDueDay] = useState(true);
+  const [sortMode, setSortMode] = useState<'name' | 'recent' | 'oldest'>('name');
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
   const [quickFilter, setQuickFilter] = useState<null | 'no-slot' | 'no-teacher' | 'no-course' | 'new'>(null);
   const [stats, setStats] = useState({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
