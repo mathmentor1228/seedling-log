@@ -249,6 +249,20 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setEditTextbookType(order.textbook_type || 'student');
   };
 
+  const openReorder = (group: TextbookGroup) => {
+    setName(group.textbook_name);
+    setSubject(group.subject);
+    setQty('1');
+    setPrice(String(group.unit_price || ''));
+    setNotes('');
+    setGrade(group.grade || '');
+    setCategory(group.category || '기타');
+    setTextbookType(group.textbook_type || 'student');
+    setDuplicateWarningShown(true); // skip duplicate popup since user intentionally reorders
+    setDuplicateMatches([]);
+    setShowDialog(true);
+  };
+
   const handleEdit = async () => {
     if (!editOrder) return;
     if (!editName.trim()) { toast.error('교재명을 입력해주세요'); return; }
@@ -649,6 +663,15 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-primary border-primary/30 hover:bg-primary/5 text-xs h-7"
+                      onClick={() => openReorder(group)}
+                      title="이 교재로 추가 주문 신청"
+                    >
+                      <Plus className="w-3 h-3" />추가주문
+                    </Button>
                     {role === 'admin' && group.status !== '입고완료' && (
                       <>
                         {group.status === '교재신청' && (
