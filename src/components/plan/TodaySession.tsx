@@ -344,6 +344,43 @@ export function TodaySession() {
     return list;
   }, [partialCarry, groupPosIdx, trackGoals, todayCount, currentSessionGoalIds]);
 
+  // 재진입 시 오늘 세션에 이미 저장된 진도를 UI 상태(goalStates/perStudent)에 되살린다.
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || loading) return;
+    if (hydratedFor === sessionId) return;
+    const statusToState = (st: string): 'done' | 'partial' | 'defer' | null => {
+      if (st === 'advanced' || st === 'verified_ok' || st === 'verified_weak') return 'done';
+      if (st === 'partial') return 'partial';
+      if (st === 'deferred') return 'defer';
+      return null;
+    };
+    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
+    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer', { count: number; upto: string }>> = {};
+    for (const p of progress) {
+      if ((p as any).session_id !== sessionId) continue;
+      const st = statusToState(p.status);
+      if (!st) continue;
+      const upto = p.partial_upto || '';
+      perStu[p.goal_id] = perStu[p.goal_id] || {};
+      perStu[p.goal_id][p.student_id] = { state: st, upto };
+      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' } };
+      goalCounts[p.goal_id][st].count += 1;
+      if (st === 'partial' && upto) goalCounts[p.goal_id].partial.upto = upto;
+    }
+    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }> = {};
+    for (const [gid, c] of Object.entries(goalCounts)) {
+      const top = (['done', 'partial', 'defer'] as const)
+        .reduce((a, b) => (c[a].count >= c[b].count ? a : b));
+      if (c[top].count > 0) goalSt[gid] = { state: top, upto: c[top].upto };
+    }
+    if (Object.keys(perStu).length > 0) setPerStudent(prev => ({ ...perStu, ...prev }));
+    if (Object.keys(goalSt).length > 0) setGoalStates(prev => ({ ...goalSt, ...prev }));
+    setHydratedFor(sessionId);
+  }, [sessionId, loading, progress, hydratedFor]);
+
+
+
   const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
 
