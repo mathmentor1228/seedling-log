@@ -146,7 +146,13 @@ ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyF
 세심하게 신경쓰겠습니다.
 편안한 하루 되세요^^`;
 
-  const studentPageUrl = `${window.location.origin}/student`;
+  const studentPageUrl = `${window.location.origin}/student/login`;
+  const credLines = [
+    `• 접속 주소: ${studentPageUrl}`,
+    studentCode ? `• 학생 코드(아이디): ${studentCode}` : `• 학생 코드(아이디): 선생님께 문의`,
+    studentPin ? `• PIN(비밀번호): ${studentPin}` : `• PIN(비밀번호): 선생님께 문의`,
+  ].join('\n');
+
   const studentMessage = `안녕 ${student.name}!
 
 📋 수업 안내
@@ -155,10 +161,12 @@ ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyF
 • 수업 시작일: ${format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
 • 수업 시간: ${effectiveClassTime || '-'}
 ${classroomLines.length ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n` : ''}
-📱 학생 로그인 페이지
-${studentPageUrl}
+📱 학생 앱 로그인 안내
+${credLines}
 
+숙제 제출·단어시험·학습 현황을 앱에서 확인할 수 있어.
 멘토쌤이야. 앞으로 잘해보자!`;
+
 
   const handleCopy = async (type: 'parent' | 'student') => {
     try {
