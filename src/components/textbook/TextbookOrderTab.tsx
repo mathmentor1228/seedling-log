@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { StatCard } from '@/components/ui/stat-card';
 import { toast } from 'sonner';
-import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, Users, BookOpen, GraduationCap } from 'lucide-react';
+import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, Users, BookOpen, GraduationCap, Copy, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -634,6 +634,137 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           </Card>
         ))}
       </div>
+
+      {/* 신규 신청교재 — 서점 발주용 (아직 입고 안 된 교재신청/주문중 items only) */}
+      {(() => {
+        const pendingOrders = orders.filter(o => {
+          const s = normalizeStatus(o.status);
+          return s === '교재신청' || s === '주문중';
+        });
+        if (pendingOrders.length === 0) return null;
+        // Aggregate by textbook_name + subject + grade + unit_price + type
+        type PendingAgg = { key: string; textbook_name: string; subject: string; grade: string | null; unit_price: number; textbook_type: string; qty: number; requesters: Set<string>; ids: string[]; status: string; };
+        const aggMap = new Map<string, PendingAgg>();
+        pendingOrders.forEach(o => {
+          const key = `${o.textbook_name}||${o.subject}||${o.grade || ''}||${o.unit_price}||${o.textbook_type || 'student'}`;
+          if (!aggMap.has(key)) {
+            aggMap.set(key, {
+              key, textbook_name: o.textbook_name, subject: o.subject, grade: o.grade || null,
+              unit_price: o.unit_price, textbook_type: o.textbook_type || 'student',
+              qty: 0, requesters: new Set(), ids: [], status: normalizeStatus(o.status),
+            });
+          }
+          const a = aggMap.get(key)!;
+          a.qty += o.quantity;
+          if (o.requested_by_name) a.requesters.add(o.requested_by_name);
+          a.ids.push(o.id);
+          // 상태 우선순위: 교재신청 > 주문중
+          if (normalizeStatus(o.status) === '교재신청') a.status = '교재신청';
+        });
+        const aggList = Array.from(aggMap.values()).sort((a, b) => {
+          if (a.status !== b.status) return a.status === '교재신청' ? -1 : 1;
+          return a.textbook_name.localeCompare(b.textbook_name);
+        });
+        const totalQty = aggList.reduce((s, a) => s + a.qty, 0);
+        const totalAmount = aggList.reduce((s, a) => s + a.qty * a.unit_price, 0);
+
+        const buildCopyText = () => {
+          const lines = ['📚 교재 발주 요청'];
+          aggList.forEach((a, i) => {
+            const parts = [`${i + 1}. ${a.textbook_name}`, `${a.qty}권`];
+            if (a.grade) parts.push(a.grade);
+            if (a.textbook_type === 'teacher') parts.push('교사용');
+            lines.push(parts.join(' · '));
+          });
+          lines.push('', `합계: ${totalQty}권 / ${totalAmount.toLocaleString()}원`);
+          return lines.join('\n');
+        };
+
+        const handleCopy = async () => {
+          try {
+            await navigator.clipboard.writeText(buildCopyText());
+            toast.success('발주 목록이 복사되었습니다');
+          } catch {
+            toast.error('복사 실패');
+          }
+        };
+
+        const handleAllToOrdering = () => {
+          const targetIds = aggList.filter(a => a.status === '교재신청').flatMap(a => a.ids);
+          if (targetIds.length === 0) { toast.info('교재신청 상태인 항목이 없습니다'); return; }
+          handleBulkStatusChange(targetIds, '주문중');
+        };
+
+        return (
+          <Card className="border-2 border-orange-300 dark:border-orange-500/40 bg-orange-50/40 dark:bg-orange-950/10 p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-orange-600" />
+                <h3 className="text-sm font-bold text-foreground">서점 발주용 — 신규 신청교재</h3>
+                <Badge className="bg-orange-100 text-orange-700 border-orange-300 text-[10px]">
+                  {aggList.length}종 · 총 {totalQty}권
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={handleCopy}>
+                  <Copy className="w-3 h-3" />목록 복사
+                </Button>
+                {role === 'admin' && aggList.some(a => a.status === '교재신청') && (
+                  <Button size="sm" variant="default" className="h-7 gap-1 text-xs" onClick={handleAllToOrdering}>
+                    <ShoppingCart className="w-3 h-3" />전체 주문중 처리
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="rounded-lg border bg-background overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr className="text-muted-foreground">
+                    <th className="text-left px-3 py-2 font-medium w-8">#</th>
+                    <th className="text-left px-3 py-2 font-medium">교재명</th>
+                    <th className="text-left px-3 py-2 font-medium w-16">과목</th>
+                    <th className="text-left px-3 py-2 font-medium w-14">학년</th>
+                    <th className="text-right px-3 py-2 font-medium w-16">권수</th>
+                    <th className="text-right px-3 py-2 font-medium w-24">단가</th>
+                    <th className="text-left px-3 py-2 font-medium w-20">상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aggList.map((a, i) => (
+                    <tr key={a.key} className="border-t hover:bg-muted/30">
+                      <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                      <td className="px-3 py-2 font-medium text-foreground">
+                        {a.textbook_name}
+                        {a.textbook_type === 'teacher' && <Badge className="ml-1.5 text-[9px] bg-amber-100 text-amber-700 border-amber-300">교사용</Badge>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", subjectColor(a.subject))}>{a.subject}</span>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{a.grade || '-'}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-foreground">{a.qty}권</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground">{a.unit_price.toLocaleString()}원</td>
+                      <td className="px-3 py-2">
+                        <Badge className={cn("text-[10px]", statusColor(a.status))}>{a.status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-muted/30 border-t">
+                  <tr className="font-semibold">
+                    <td colSpan={4} className="px-3 py-2 text-right text-muted-foreground">합계</td>
+                    <td className="px-3 py-2 text-right text-foreground">{totalQty}권</td>
+                    <td className="px-3 py-2 text-right text-foreground">{totalAmount.toLocaleString()}원</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              ※ 이 목록은 <b>아직 입고되지 않은</b> 신청 건만 정리한 발주용 뷰입니다. 캡쳐 후 서점에 전달해주세요. 입고 완료된 재고는 아래 목록에서 관리합니다.
+            </p>
+          </Card>
+        );
+      })()}
 
       {/* Accordion list */}
       {filteredGroups.length === 0 && (
