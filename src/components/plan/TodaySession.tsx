@@ -273,13 +273,32 @@ export function TodaySession() {
   }, [goals, design]);
   const trackGoals = useMemo(() => goals.slice(0, endIdx + 1), [goals, endIdx]);
 
+  // PLAN-TODAY-REHYDRATE-V1: 오늘 세션에 이미 기록된 진도는 "지난 진도"로 간주하지 않는다.
+  // 재진입 시 오늘 기록이 groupPosIdx를 밀어올려 verifyBlocks(지난 진도)로 흘러가지 않도록,
+  // 위치 계산은 이전 세션 기록으로만 하고 오늘 세션 기록은 todayGoals에 편집 가능하게 되살린다.
+  const pastProgress = useMemo(
+    () => progress.filter(p => (p as any).session_id !== sessionId),
+    [progress, sessionId]
+  );
+  const currentSessionGoalIds = useMemo(() => {
+    const s = new Set<string>();
+    if (!sessionId) return s;
+    for (const p of progress) {
+      if ((p as any).session_id === sessionId
+        && ['advanced', 'partial', 'deferred', 'verified_ok', 'verified_weak'].includes(p.status)) {
+        s.add(p.goal_id);
+      }
+    }
+    return s;
+  }, [progress, sessionId]);
+
   const advancedSet = useMemo(() => {
     const s = new Set<string>();
-    for (const p of progress) {
+    for (const p of pastProgress) {
       if (['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status)) s.add(p.goal_id);
     }
     return s;
-  }, [progress]);
+  }, [pastProgress]);
 
   const groupPosIdx = useMemo(() => {
     let idx = -1;
@@ -287,13 +306,13 @@ export function TodaySession() {
     return idx;
   }, [trackGoals, advancedSet]);
 
-  // 직전 목표가 '일부'였으면 이어서
+  // 직전 목표가 '일부'였으면 이어서 (지난 세션 기준)
   const partialCarry = useMemo(() => {
     if (groupPosIdx < 0) return null;
     const g = trackGoals[groupPosIdx];
-    const rows = progress.filter(p => p.goal_id === g.id && p.status === 'partial' && p.partial_upto);
+    const rows = pastProgress.filter(p => p.goal_id === g.id && p.status === 'partial' && p.partial_upto);
     return rows.length > 0 ? { goal: g, upto: rows[0].partial_upto! } : null;
-  }, [groupPosIdx, trackGoals, progress]);
+  }, [groupPosIdx, trackGoals, pastProgress]);
 
   const remainCount = trackGoals.length - 1 - groupPosIdx + (partialCarry ? 0.5 : 0);
   const remainSessions = useMemo(
@@ -309,14 +328,58 @@ export function TodaySession() {
 
   const todayGoals = useMemo(() => {
     const list: { goal: PlanGoal; continueFrom?: string }[] = [];
-    if (partialCarry) list.push({ goal: partialCarry.goal, continueFrom: partialCarry.upto });
+    const seen = new Set<string>();
+    if (partialCarry) { list.push({ goal: partialCarry.goal, continueFrom: partialCarry.upto }); seen.add(partialCarry.goal.id); }
     let i = groupPosIdx + 1;
     while (list.length < todayCount + (partialCarry ? 1 : 0) && i < trackGoals.length) {
-      list.push({ goal: trackGoals[i] });
+      list.push({ goal: trackGoals[i] }); seen.add(trackGoals[i].id);
       i++;
     }
+    // 오늘 이미 저장된 목표가 위 범위 밖에 있으면 뒤에 이어붙여 편집 가능하게 노출
+    for (const g of trackGoals) {
+      if (currentSessionGoalIds.has(g.id) && !seen.has(g.id)) {
+        list.push({ goal: g }); seen.add(g.id);
+      }
+    }
     return list;
-  }, [partialCarry, groupPosIdx, trackGoals, todayCount]);
+  }, [partialCarry, groupPosIdx, trackGoals, todayCount, currentSessionGoalIds]);
+
+  // 재진입 시 오늘 세션에 이미 저장된 진도를 UI 상태(goalStates/perStudent)에 되살린다.
+  const [hydratedFor, setHydratedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || loading) return;
+    if (hydratedFor === sessionId) return;
+    const statusToState = (st: string): 'done' | 'partial' | 'defer' | null => {
+      if (st === 'advanced' || st === 'verified_ok' || st === 'verified_weak') return 'done';
+      if (st === 'partial') return 'partial';
+      if (st === 'deferred') return 'defer';
+      return null;
+    };
+    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
+    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer', { count: number; upto: string }>> = {};
+    for (const p of progress) {
+      if ((p as any).session_id !== sessionId) continue;
+      const st = statusToState(p.status);
+      if (!st) continue;
+      const upto = p.partial_upto || '';
+      perStu[p.goal_id] = perStu[p.goal_id] || {};
+      perStu[p.goal_id][p.student_id] = { state: st, upto };
+      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' } };
+      goalCounts[p.goal_id][st].count += 1;
+      if (st === 'partial' && upto) goalCounts[p.goal_id].partial.upto = upto;
+    }
+    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }> = {};
+    for (const [gid, c] of Object.entries(goalCounts)) {
+      const top = (['done', 'partial', 'defer'] as const)
+        .reduce((a, b) => (c[a].count >= c[b].count ? a : b));
+      if (c[top].count > 0) goalSt[gid] = { state: top, upto: c[top].upto };
+    }
+    if (Object.keys(perStu).length > 0) setPerStudent(prev => ({ ...perStu, ...prev }));
+    if (Object.keys(goalSt).length > 0) setGoalStates(prev => ({ ...goalSt, ...prev }));
+    setHydratedFor(sessionId);
+  }, [sessionId, loading, progress, hydratedFor]);
+
+
 
   const isTestDay = design && ((design.rhythm || {})[String(sessionDay)] === 'test_day');
   const hasQuiz = (design?.check_methods || []).includes('quiz');
