@@ -249,6 +249,20 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setEditTextbookType(order.textbook_type || 'student');
   };
 
+  const openReorder = (group: TextbookGroup) => {
+    setName(group.textbook_name);
+    setSubject(group.subject);
+    setQty('1');
+    setPrice(String(group.unit_price || ''));
+    setNotes('');
+    setGrade(group.grade || '');
+    setCategory(group.category || '기타');
+    setTextbookType(group.textbook_type || 'student');
+    setDuplicateWarningShown(true); // skip duplicate popup since user intentionally reorders
+    setDuplicateMatches([]);
+    setShowDialog(true);
+  };
+
   const handleEdit = async () => {
     if (!editOrder) return;
     if (!editName.trim()) { toast.error('교재명을 입력해주세요'); return; }
