@@ -87,13 +87,27 @@ export function StudentMessagePanel({ student, onCopyParentLink }: Props) {
     return () => { mounted = false; };
   }, [student.id]);
 
+  // Parse fallback data from student.notes (populated at registration time)
+  const parseFromNotes = (label: RegExp): string => {
+    const notes = student.notes || '';
+    for (const line of notes.split(/\r?\n/)) {
+      if (label.test(line)) return line.replace(label, '').trim().replace(/^[:：]\s*/, '');
+    }
+    return '';
+  };
+  const notesSubjects = parseFromNotes(/^수강\s*과목\s*[:：]?/);
+  const notesTeachers = parseFromNotes(/^(담당(자|\s*선생님)?)\s*[:：]?/);
+  const notesClassTime = parseFromNotes(/^수업\s*시간\s*[:：]?/);
+
   const level = student.school_level || (student.grade || '').replace(/\d+/g, '') || '';
   const gradeLabel = student.school_level && student.grade_year
     ? `${student.school_level}${student.grade_year}`
     : (student.grade || '');
-  const subjectsText = subjects.join(', ') || '-';
-  const teachersText = teachers.join(', ') || '-';
-  const classroomLines = teachers
+  const subjectsText = (subjects.length ? subjects.join(', ') : notesSubjects) || '-';
+  const teachersText = (teachers.length ? teachers.join(', ') : notesTeachers) || '-';
+  const effectiveClassTime = classTime || notesClassTime;
+  const teacherNames = teachers.length ? teachers : notesTeachers.split(/[,\s/·]+/).filter(Boolean);
+  const classroomLines = teacherNames
     .map((name) => {
       const t = TEACHERS.find((tt) => tt.name === name || tt.name.replace(/\(.*\)/, '') === name);
       return t ? `• ${t.name} 선생님: ${t.room}` : null;
