@@ -659,8 +659,16 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
                       {hasMultipleOrders && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{group.orders.length}명</span>}
                       {group.status === '입고완료' && !isTeacher && (
                         <span>배부 {group.totalDistributed} · <span className={cn("font-medium", remaining <= 0 ? 'text-destructive' : 'text-foreground')}>남은 {remaining}권</span></span>
-                      )}
-                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-primary border-primary/30 hover:bg-primary/5 text-xs h-7"
+                      onClick={() => openReorder(group)}
+                      title="이 교재로 추가 주문 신청"
+                    >
+                      <Plus className="w-3 h-3" />추가주문
+                    </Button>
+                  </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     {role === 'admin' && group.status !== '입고완료' && (
