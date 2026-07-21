@@ -79,14 +79,24 @@ export function StudentMessagePanel({ student, onCopyParentLink }: Props) {
             return `${day}요일 ${start}~${end}`;
           });
 
+        // Student login credentials
+        const { data: cred } = await supabase
+          .from('students')
+          .select('student_code, pin')
+          .eq('id', student.id)
+          .maybeSingle();
+
         if (!mounted) return;
         setSubjects(subjs);
         setTeachers(tchrs);
         setMonthlyFee(fee);
         setClassTime(times.join(', '));
+        setStudentCode((cred as any)?.student_code || student.student_code || '');
+        setStudentPin((cred as any)?.pin || '');
       } finally {
         if (mounted) setLoading(false);
       }
+
     })();
     return () => { mounted = false; };
   }, [student.id]);
