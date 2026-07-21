@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { StatCard } from '@/components/ui/stat-card';
 import { toast } from 'sonner';
-import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, Users, BookOpen, GraduationCap } from 'lucide-react';
+import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, Users, BookOpen, GraduationCap, Copy, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
