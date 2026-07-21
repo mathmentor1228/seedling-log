@@ -16,6 +16,7 @@ interface StudentLite {
   grade: string | null;
   created_at: string;
   notes: string | null;
+  student_code?: string | null;
 }
 
 interface Props {
@@ -30,10 +31,13 @@ export function StudentMessagePanel({ student, onCopyParentLink }: Props) {
   const [teachers, setTeachers] = useState<string[]>([]);
   const [monthlyFee, setMonthlyFee] = useState<number>(0);
   const [classTime, setClassTime] = useState<string>('');
+  const [studentCode, setStudentCode] = useState<string>('');
+  const [studentPin, setStudentPin] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [copiedType, setCopiedType] = useState<'parent' | 'student' | null>(null);
   const [editParent, setEditParent] = useState<string | null>(null);
   const [editStudent, setEditStudent] = useState<string | null>(null);
+
 
   useEffect(() => {
     let mounted = true;
