@@ -87,13 +87,27 @@ export function StudentMessagePanel({ student, onCopyParentLink }: Props) {
     return () => { mounted = false; };
   }, [student.id]);
 
+  // Parse fallback data from student.notes (populated at registration time)
+  const parseFromNotes = (label: RegExp): string => {
+    const notes = student.notes || '';
+    for (const line of notes.split(/\r?\n/)) {
+      if (label.test(line)) return line.replace(label, '').trim().replace(/^[:：]\s*/, '');
+    }
+    return '';
+  };
+  const notesSubjects = parseFromNotes(/^수강\s*과목\s*[:：]?/);
+  const notesTeachers = parseFromNotes(/^(담당(자|\s*선생님)?)\s*[:：]?/);
+  const notesClassTime = parseFromNotes(/^수업\s*시간\s*[:：]?/);
+
   const level = student.school_level || (student.grade || '').replace(/\d+/g, '') || '';
   const gradeLabel = student.school_level && student.grade_year
     ? `${student.school_level}${student.grade_year}`
     : (student.grade || '');
-  const subjectsText = subjects.join(', ') || '-';
-  const teachersText = teachers.join(', ') || '-';
-  const classroomLines = teachers
+  const subjectsText = (subjects.length ? subjects.join(', ') : notesSubjects) || '-';
+  const teachersText = (teachers.length ? teachers.join(', ') : notesTeachers) || '-';
+  const effectiveClassTime = classTime || notesClassTime;
+  const teacherNames = teachers.length ? teachers : notesTeachers.split(/[,\s/·]+/).filter(Boolean);
+  const classroomLines = teacherNames
     .map((name) => {
       const t = TEACHERS.find((tt) => tt.name === name || tt.name.replace(/\(.*\)/, '') === name);
       return t ? `• ${t.name} 선생님: ${t.room}` : null;
@@ -109,7 +123,7 @@ ${student.name} 학생의 등록이 완료되었습니다.
 • 수강 과목: ${subjectsText}
 • 담당 선생님: ${teachersText}
 • 수업 시작일: ${format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
-• 수업 시간: ${classTime || '-'}
+• 수업 시간: ${effectiveClassTime || '-'}
 ${classroomLines.length ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n` : ''}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
 ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyFee.toLocaleString()}원\n\n신한 110-265-698329(황은지)\n\n카드결제 가능합니다.\n\n앱결제도 가능합니다.` : ''}
@@ -125,7 +139,7 @@ ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyF
 • 수강 과목: ${subjectsText}
 • 담당 선생님: ${teachersText}
 • 수업 시작일: ${format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
-• 수업 시간: ${classTime || '-'}
+• 수업 시간: ${effectiveClassTime || '-'}
 ${classroomLines.length ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n` : ''}
 📱 학생 로그인 페이지
 ${studentPageUrl}
