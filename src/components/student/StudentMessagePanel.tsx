@@ -139,7 +139,7 @@ ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyF
 • 수강 과목: ${subjectsText}
 • 담당 선생님: ${teachersText}
 • 수업 시작일: ${format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
-• 수업 시간: ${classTime || '-'}
+• 수업 시간: ${effectiveClassTime || '-'}
 ${classroomLines.length ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n` : ''}
 📱 학생 로그인 페이지
 ${studentPageUrl}
