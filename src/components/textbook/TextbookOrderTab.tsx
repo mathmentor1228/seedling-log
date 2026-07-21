@@ -175,15 +175,20 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       const oSig = sigOf(o.textbook_name);
       const oCompact = compactOf(o.textbook_name);
       const oTokens = tokenize(o.textbook_name);
-      // 1) 시그니처 완전 일치(순서·공백 무시) 2) 압축문자열 포함 3) 토큰 다수 겹침
+      // 1) 시그니처 완전 일치(순서·공백 무시) 2) 압축문자열 포함(양쪽 모두 3자 이상) 3) 토큰 거의 전부 겹침
+      // 일반 토큰(zip, 미적분, 숫자 등)이 우연히 겹치는 경우를 배제하기 위해 임계값을 엄격하게.
       const tokenOverlap = inputTokens.filter(t => oTokens.includes(t)).length;
       const minTokens = Math.min(inputTokens.length, oTokens.length);
-      const overlapRatio = minTokens > 0 ? tokenOverlap / minTokens : 0;
+      const maxTokens = Math.max(inputTokens.length, oTokens.length);
+      const overlapRatio = maxTokens > 0 ? tokenOverlap / maxTokens : 0;
+      const compactIncludes =
+        inputCompact.length >= 3 && oCompact.length >= 3 &&
+        (oCompact.includes(inputCompact) || inputCompact.includes(oCompact));
       const matched =
         (inputSig && oSig && inputSig === oSig) ||
-        oCompact.includes(inputCompact) || inputCompact.includes(oCompact) ||
-        (minTokens >= 2 && overlapRatio >= 0.6) ||
-        (minTokens === 1 && tokenOverlap === 1 && Math.max(inputTokens.length, oTokens.length) <= 2);
+        compactIncludes ||
+        (minTokens >= 3 && overlapRatio >= 0.85) ||
+        (minTokens === 2 && tokenOverlap === 2 && maxTokens === 2);
       if (matched) matchingNames.add(o.textbook_name);
     });
     const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
