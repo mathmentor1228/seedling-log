@@ -123,7 +123,7 @@ ${student.name} 학생의 등록이 완료되었습니다.
 • 수강 과목: ${subjectsText}
 • 담당 선생님: ${teachersText}
 • 수업 시작일: ${format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
-• 수업 시간: ${classTime || '-'}
+• 수업 시간: ${effectiveClassTime || '-'}
 ${classroomLines.length ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n` : ''}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
 ${monthlyFee > 0 ? `\n📍원비안내\n\n${level}등 ${subjectsText} ${monthlyFee.toLocaleString()}원\n\n신한 110-265-698329(황은지)\n\n카드결제 가능합니다.\n\n앱결제도 가능합니다.` : ''}
