@@ -146,6 +146,8 @@ export function BillingGenerator() {
   const openEdit = (item: any) => {
     setEditItem(item);
     setEditDiscount(String(item.discount_amount));
+    setEditExtra(String(item.extra_amount || 0));
+    setEditExtraMemo(item.extra_memo || '');
     setEditMemo(item.memo || '');
     setEditLateFee(String(item.late_fee));
     setEditStatus(item.status);
@@ -154,13 +156,16 @@ export function BillingGenerator() {
   const saveEdit = async () => {
     if (!editItem) return;
     const discount = Number(editDiscount) || 0;
+    const extra = Number(editExtra) || 0;
     const lateFee = Number(editLateFee) || 0;
-    const finalAmount = Number(editItem.base_amount) - discount;
+    const finalAmount = Number(editItem.base_amount) - discount + extra;
 
     const { error } = await supabase
       .from('billing_schedules')
       .update({
         discount_amount: discount,
+        extra_amount: extra,
+        extra_memo: editExtraMemo || null,
         final_amount: finalAmount,
         late_fee: lateFee,
         memo: editMemo || null,
