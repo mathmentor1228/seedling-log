@@ -211,6 +211,7 @@ export function BillingGenerator() {
                     <TableHead>학생</TableHead>
                     <TableHead className="text-right">기본금액</TableHead>
                     <TableHead className="text-right">할인</TableHead>
+                    <TableHead className="text-right">특강/추가</TableHead>
                     <TableHead className="text-right">최종금액</TableHead>
                     <TableHead className="text-right">연체료</TableHead>
                     <TableHead>납부기한</TableHead>
@@ -221,11 +222,20 @@ export function BillingGenerator() {
                 <TableBody>
                   {billings.map(b => {
                     const badge = STATUS_BADGE[b.status] || STATUS_BADGE.pending;
+                    const extra = Number((b as any).extra_amount || 0);
                     return (
                       <TableRow key={b.id}>
                         <TableCell className="font-medium">{(b as any).students?.name || '-'}</TableCell>
                         <TableCell className="text-right">{Number(b.base_amount).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{Number(b.discount_amount) > 0 ? `-${Number(b.discount_amount).toLocaleString()}` : '-'}</TableCell>
+                        <TableCell className="text-right">
+                          {extra > 0 ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-amber-600 font-medium">+{extra.toLocaleString()}</span>
+                              {(b as any).extra_memo && <span className="text-[10px] text-muted-foreground">{(b as any).extra_memo}</span>}
+                            </div>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell className="text-right font-semibold">{Number(b.final_amount).toLocaleString()}</TableCell>
                         <TableCell className="text-right text-red-600">{Number(b.late_fee) > 0 ? Number(b.late_fee).toLocaleString() : '-'}</TableCell>
                         <TableCell>{b.due_date}</TableCell>
