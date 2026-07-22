@@ -28,6 +28,8 @@ export function BillingGenerator() {
   const [generating, setGenerating] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editDiscount, setEditDiscount] = useState('0');
+  const [editExtra, setEditExtra] = useState('0');
+  const [editExtraMemo, setEditExtraMemo] = useState('');
   const [editMemo, setEditMemo] = useState('');
   const [editLateFee, setEditLateFee] = useState('0');
   const [editStatus, setEditStatus] = useState('pending');
