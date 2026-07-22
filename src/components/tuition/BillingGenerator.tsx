@@ -268,6 +268,11 @@ export function BillingGenerator() {
               <Input type="number" value={editDiscount} onChange={e => setEditDiscount(e.target.value)} className="h-8" />
             </div>
             <div>
+              <Label className="text-sm">특강/추가 금액</Label>
+              <Input type="number" value={editExtra} onChange={e => setEditExtra(e.target.value)} className="h-8" />
+              <Input value={editExtraMemo} onChange={e => setEditExtraMemo(e.target.value)} placeholder="예: 여름특강료" className="h-8 mt-1 text-xs" />
+            </div>
+            <div>
               <Label className="text-sm">연체료</Label>
               <Input type="number" value={editLateFee} onChange={e => setEditLateFee(e.target.value)} className="h-8" />
             </div>
