@@ -80,6 +80,20 @@ export function BillingGenerator() {
         .eq('billing_month', selectedMonth);
       const existingSet = new Set((existing || []).map(e => `${e.student_id}-${e.student_course_id}`));
 
+      // 해당 월에 학생별로 연결된 특강 신청료 합산
+      const { data: intensiveApps } = await (supabase as any)
+        .from('intensive_applications')
+        .select('student_id, fee, child_name')
+        .eq('billed_month', selectedMonth)
+        .not('student_id', 'is', null);
+      const intensiveByStudent = new Map<string, { fee: number; names: string[] }>();
+      (intensiveApps || []).forEach((a: any) => {
+        const prev = intensiveByStudent.get(a.student_id) || { fee: 0, names: [] };
+        prev.fee += Number(a.fee || 0);
+        prev.names.push(a.child_name);
+        intensiveByStudent.set(a.student_id, prev);
+      });
+
       const [year, month] = selectedMonth.split('-').map(Number);
       const inserts = courses
         .filter(c => !existingSet.has(`${c.student_id}-${c.id}`))
@@ -92,13 +106,19 @@ export function BillingGenerator() {
           const adjustedDay = Math.min(dueDay, lastDay);
           const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
 
+          const intensive = intensiveByStudent.get(c.student_id);
+          const extra = intensive?.fee || 0;
+          const extraMemo = intensive ? `여름특강료 ${intensive.fee.toLocaleString()}원` : null;
+
           return {
             student_id: c.student_id,
             student_course_id: c.id,
             billing_month: selectedMonth,
             base_amount: fee,
             discount_amount: 0,
-            final_amount: fee,
+            extra_amount: extra,
+            extra_memo: extraMemo,
+            final_amount: fee + extra,
             due_date: dueDate,
             status: 'pending',
           };
