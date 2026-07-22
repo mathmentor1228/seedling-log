@@ -28,6 +28,8 @@ export function BillingGenerator() {
   const [generating, setGenerating] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editDiscount, setEditDiscount] = useState('0');
+  const [editExtra, setEditExtra] = useState('0');
+  const [editExtraMemo, setEditExtraMemo] = useState('');
   const [editMemo, setEditMemo] = useState('');
   const [editLateFee, setEditLateFee] = useState('0');
   const [editStatus, setEditStatus] = useState('pending');
@@ -80,6 +82,20 @@ export function BillingGenerator() {
         .eq('billing_month', selectedMonth);
       const existingSet = new Set((existing || []).map(e => `${e.student_id}-${e.student_course_id}`));
 
+      // 해당 월에 학생별로 연결된 특강 신청료 합산
+      const { data: intensiveApps } = await (supabase as any)
+        .from('intensive_applications')
+        .select('student_id, fee, child_name')
+        .eq('billed_month', selectedMonth)
+        .not('student_id', 'is', null);
+      const intensiveByStudent = new Map<string, { fee: number; names: string[] }>();
+      (intensiveApps || []).forEach((a: any) => {
+        const prev = intensiveByStudent.get(a.student_id) || { fee: 0, names: [] };
+        prev.fee += Number(a.fee || 0);
+        prev.names.push(a.child_name);
+        intensiveByStudent.set(a.student_id, prev);
+      });
+
       const [year, month] = selectedMonth.split('-').map(Number);
       const inserts = courses
         .filter(c => !existingSet.has(`${c.student_id}-${c.id}`))
@@ -92,13 +108,19 @@ export function BillingGenerator() {
           const adjustedDay = Math.min(dueDay, lastDay);
           const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
 
+          const intensive = intensiveByStudent.get(c.student_id);
+          const extra = intensive?.fee || 0;
+          const extraMemo = intensive ? `여름특강료 ${intensive.fee.toLocaleString()}원` : null;
+
           return {
             student_id: c.student_id,
             student_course_id: c.id,
             billing_month: selectedMonth,
             base_amount: fee,
             discount_amount: 0,
-            final_amount: fee,
+            extra_amount: extra,
+            extra_memo: extraMemo,
+            final_amount: fee + extra,
             due_date: dueDate,
             status: 'pending',
           };
@@ -124,6 +146,8 @@ export function BillingGenerator() {
   const openEdit = (item: any) => {
     setEditItem(item);
     setEditDiscount(String(item.discount_amount));
+    setEditExtra(String(item.extra_amount || 0));
+    setEditExtraMemo(item.extra_memo || '');
     setEditMemo(item.memo || '');
     setEditLateFee(String(item.late_fee));
     setEditStatus(item.status);
@@ -132,13 +156,16 @@ export function BillingGenerator() {
   const saveEdit = async () => {
     if (!editItem) return;
     const discount = Number(editDiscount) || 0;
+    const extra = Number(editExtra) || 0;
     const lateFee = Number(editLateFee) || 0;
-    const finalAmount = Number(editItem.base_amount) - discount;
+    const finalAmount = Number(editItem.base_amount) - discount + extra;
 
     const { error } = await supabase
       .from('billing_schedules')
       .update({
         discount_amount: discount,
+        extra_amount: extra,
+        extra_memo: editExtraMemo || null,
         final_amount: finalAmount,
         late_fee: lateFee,
         memo: editMemo || null,
@@ -184,6 +211,7 @@ export function BillingGenerator() {
                     <TableHead>학생</TableHead>
                     <TableHead className="text-right">기본금액</TableHead>
                     <TableHead className="text-right">할인</TableHead>
+                    <TableHead className="text-right">특강/추가</TableHead>
                     <TableHead className="text-right">최종금액</TableHead>
                     <TableHead className="text-right">연체료</TableHead>
                     <TableHead>납부기한</TableHead>
@@ -194,11 +222,20 @@ export function BillingGenerator() {
                 <TableBody>
                   {billings.map(b => {
                     const badge = STATUS_BADGE[b.status] || STATUS_BADGE.pending;
+                    const extra = Number((b as any).extra_amount || 0);
                     return (
                       <TableRow key={b.id}>
                         <TableCell className="font-medium">{(b as any).students?.name || '-'}</TableCell>
                         <TableCell className="text-right">{Number(b.base_amount).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{Number(b.discount_amount) > 0 ? `-${Number(b.discount_amount).toLocaleString()}` : '-'}</TableCell>
+                        <TableCell className="text-right">
+                          {extra > 0 ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-amber-600 font-medium">+{extra.toLocaleString()}</span>
+                              {(b as any).extra_memo && <span className="text-[10px] text-muted-foreground">{(b as any).extra_memo}</span>}
+                            </div>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell className="text-right font-semibold">{Number(b.final_amount).toLocaleString()}</TableCell>
                         <TableCell className="text-right text-red-600">{Number(b.late_fee) > 0 ? Number(b.late_fee).toLocaleString() : '-'}</TableCell>
                         <TableCell>{b.due_date}</TableCell>
@@ -229,6 +266,11 @@ export function BillingGenerator() {
             <div>
               <Label className="text-sm">할인 금액</Label>
               <Input type="number" value={editDiscount} onChange={e => setEditDiscount(e.target.value)} className="h-8" />
+            </div>
+            <div>
+              <Label className="text-sm">특강/추가 금액</Label>
+              <Input type="number" value={editExtra} onChange={e => setEditExtra(e.target.value)} className="h-8" />
+              <Input value={editExtraMemo} onChange={e => setEditExtraMemo(e.target.value)} placeholder="예: 여름특강료" className="h-8 mt-1 text-xs" />
             </div>
             <div>
               <Label className="text-sm">연체료</Label>

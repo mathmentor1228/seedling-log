@@ -368,6 +368,8 @@ export type Database = {
           created_at: string
           discount_amount: number
           due_date: string
+          extra_amount: number
+          extra_memo: string | null
           final_amount: number
           id: string
           late_fee: number
@@ -383,6 +385,8 @@ export type Database = {
           created_at?: string
           discount_amount?: number
           due_date: string
+          extra_amount?: number
+          extra_memo?: string | null
           final_amount?: number
           id?: string
           late_fee?: number
@@ -398,6 +402,8 @@ export type Database = {
           created_at?: string
           discount_amount?: number
           due_date?: string
+          extra_amount?: number
+          extra_memo?: string | null
           final_amount?: number
           id?: string
           late_fee?: number
@@ -2168,33 +2174,53 @@ export type Database = {
       }
       intensive_applications: {
         Row: {
+          billed_at: string | null
+          billed_month: string | null
           child_name: string
           consent_agreed: boolean
           created_at: string
           expectations: string[]
+          fee: number
           grade: string
           id: string
+          student_id: string | null
           wishes: string | null
         }
         Insert: {
+          billed_at?: string | null
+          billed_month?: string | null
           child_name: string
           consent_agreed?: boolean
           created_at?: string
           expectations?: string[]
+          fee?: number
           grade: string
           id?: string
+          student_id?: string | null
           wishes?: string | null
         }
         Update: {
+          billed_at?: string | null
+          billed_month?: string | null
           child_name?: string
           consent_agreed?: boolean
           created_at?: string
           expectations?: string[]
+          fee?: number
           grade?: string
           id?: string
+          student_id?: string | null
           wishes?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "intensive_applications_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lesson_records: {
         Row: {
