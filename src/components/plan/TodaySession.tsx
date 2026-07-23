@@ -774,12 +774,18 @@ export function TodaySession() {
       const g = trackGoals[i];
       const local = perStudent[g.id]?.[sid];
       const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
+      // PLAN-LESSON-SYNC-V2: 개별 학생 기록이 없으면 그룹(bulk) 기록을 상속받아
+      // 중간 합류한 학생·개별 체크가 누락된 학생도 수업일지에 진도 반영.
+      const groupState = goalStates[g.id];
+      const groupUpto = groupState?.upto || '';
       const state = local?.state
         ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
-          : p.status === 'partial' ? 'partial' : null) : null);
+          : p.status === 'partial' ? 'partial' : null) : null)
+        ?? (groupState?.state === 'done' ? 'done'
+          : groupState?.state === 'partial' ? 'partial' : null);
       if (state === 'done') { donePartial.push({ g, state: 'done' }); lastIdx = i; }
       else if (state === 'partial') {
-        donePartial.push({ g, state: 'partial', upto: local?.upto || p?.partial_upto || '' });
+        donePartial.push({ g, state: 'partial', upto: local?.upto || p?.partial_upto || groupUpto || '' });
         lastIdx = i; break;
       } else break;
     }
