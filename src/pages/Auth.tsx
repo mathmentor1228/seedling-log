@@ -10,24 +10,19 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, GraduationCap } from 'lucide-react';
 import { PageTransition } from '@/components/ui/page-transition';
 
+// AUTH-INVITE-ONLY-V1: 공개 회원가입 제거 — 계정은 관리자가 사용자 관리에서 생성해 전달한다.
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일을 입력해주세요'),
   password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
 });
 
-const signupSchema = loginSchema.extend({
-  fullName: z.string().min(2, '이름은 2자 이상이어야 합니다'),
-});
-
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
-  const { signIn, signUp, user, role } = useAuth();
+
+  const { signIn, user, role } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -39,11 +34,7 @@ export default function Auth() {
 
   const validateForm = () => {
     try {
-      if (isLogin) {
-        loginSchema.parse({ email, password });
-      } else {
-        signupSchema.parse({ email, password, fullName });
-      }
+      loginSchema.parse({ email, password });
       setErrors({});
       return true;
     } catch (error) {
@@ -66,35 +57,17 @@ export default function Auth() {
     setIsSubmitting(true);
 
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast({
-            title: '로그인 실패',
-            description: error.message === 'Invalid login credentials' 
-              ? '이메일 또는 비밀번호가 올바르지 않습니다' 
-              : error.message,
-            variant: 'destructive',
-          });
-        } else {
-          toast({ title: '로그인 성공', description: '환영합니다!' });
-        }
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({
+          title: '로그인 실패',
+          description: error.message === 'Invalid login credentials'
+            ? '이메일 또는 비밀번호가 올바르지 않습니다'
+            : error.message,
+          variant: 'destructive',
+        });
       } else {
-        const { error } = await signUp(email, password, fullName);
-        if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              title: '이미 등록된 계정',
-              description: '이 이메일은 이미 등록되어 있습니다. 로그인을 시도해주세요.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({ title: '회원가입 실패', description: error.message, variant: 'destructive' });
-          }
-        } else {
-          toast({ title: '계정이 생성되었습니다!', description: '관리자에게 역할 배정을 요청해주세요.' });
-          setIsLogin(true);
-        }
+        toast({ title: '로그인 성공', description: '환영합니다!' });
       }
     } finally {
       setIsSubmitting(false);
@@ -127,21 +100,13 @@ export default function Auth() {
           style={{ borderRadius: '16px', background: 'hsl(240 33% 5% / 0.85)' }}
         >
           <CardHeader className="pb-4">
-            <CardTitle className="text-base text-foreground">{isLogin ? '로그인' : '회원가입'}</CardTitle>
+            <CardTitle className="text-base text-foreground">로그인</CardTitle>
             <CardDescription className="text-xs">
-              {isLogin ? '이메일과 비밀번호를 입력하세요' : '새 계정을 생성합니다'}
+              이메일과 비밀번호를 입력하세요
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="fullName" className="text-xs">이름</Label>
-                  <Input id="fullName" type="text" placeholder="홍길동" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} className="border-white/10 bg-white/5 focus:border-primary" />
-                  {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
-                </div>
-              )}
-              
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-xs">이메일</Label>
                 <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} className="border-white/10 bg-white/5 focus:border-primary" />
@@ -158,22 +123,16 @@ export default function Auth() {
                 style={{ background: 'linear-gradient(135deg, hsl(239 84% 67%), hsl(263 70% 58%))', borderRadius: '10px' }}
               >
                 {isSubmitting ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{isLogin ? '로그인 중...' : '계정 생성 중...'}</>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />로그인 중...</>
                 ) : (
-                  isLogin ? '로그인' : '회원가입'
+                  '로그인'
                 )}
               </Button>
             </form>
 
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() => { setIsLogin(!isLogin); setErrors({}); }}
-                className="text-xs text-muted-foreground hover:text-white transition-colors duration-200"
-              >
-                {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
-              </button>
-            </div>
+            <p className="mt-4 text-center text-[11px] text-muted-foreground">
+              계정은 관리자가 발급합니다. 필요하시면 학원에 문의해주세요.
+            </p>
           </CardContent>
         </Card>
 

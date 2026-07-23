@@ -21,7 +21,10 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, UserCog, Shield, GraduationCap, Users, Clock, Trash2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Loader2, UserCog, Shield, GraduationCap, Users, Clock, Trash2, UserPlus } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -46,6 +49,40 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<Record<string, AppRole | 'none'>>({});
+
+  // AUTH-INVITE-ONLY-V1: 공개 회원가입 제거 후 관리자가 직접 계정을 만들어 전달
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'teacher' as AppRole, subject: '' });
+
+  const handleCreateUser = async () => {
+    if (!newUser.name.trim() || !newUser.email.trim() || newUser.password.length < 6) {
+      toast({ title: '입력 확인', description: '이름·이메일을 입력하고 비밀번호는 6자 이상으로 해주세요.', variant: 'destructive' });
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          email: newUser.email.trim(),
+          password: newUser.password,
+          full_name: newUser.name.trim(),
+          role: newUser.role,
+          assigned_subject: newUser.subject.trim() || null,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: '계정 생성 완료', description: `${newUser.name} (${newUser.email}) — 비밀번호를 전달해주세요.` });
+      setCreateOpen(false);
+      setNewUser({ name: '', email: '', password: '', role: 'teacher', subject: '' });
+      fetchUsers();
+    } catch (e: any) {
+      toast({ title: '계정 생성 실패', description: e.message || String(e), variant: 'destructive' });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -268,15 +305,63 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-          <UserCog className="w-6 h-6 text-primary" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+            <UserCog className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">사용자 관리</h1>
+            <p className="text-muted-foreground">계정 발급과 권한을 관리합니다 (공개 가입 차단됨)</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">사용자 관리</h1>
-          <p className="text-muted-foreground">사용자 권한을 관리합니다</p>
-        </div>
+        <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+          <UserPlus className="w-4 h-4" />새 계정 만들기
+        </Button>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>새 계정 만들기</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">이름</Label>
+              <Input value={newUser.name} onChange={(e) => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="홍길동" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">이메일 (로그인 아이디)</Label>
+              <Input type="email" value={newUser.email} onChange={(e) => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="teacher@example.com" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">초기 비밀번호 (6자 이상)</Label>
+              <Input type="text" value={newUser.password} onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="전달할 비밀번호" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">권한</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v as AppRole }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="teacher">선생님</SelectItem>
+                  <SelectItem value="assistant">조교</SelectItem>
+                  <SelectItem value="admin">관리자</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">담당 과목 (선택)</Label>
+              <Input value={newUser.subject} onChange={(e) => setNewUser(p => ({ ...p, subject: e.target.value }))} placeholder="수학" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>취소</Button>
+            <Button onClick={handleCreateUser} disabled={creating}>
+              {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />생성 중...</> : '계정 생성'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
