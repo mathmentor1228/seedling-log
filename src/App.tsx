@@ -20,6 +20,7 @@ const PublicReport = lazy(() => import("./pages/PublicReport"));
 const IntensiveApplyPage = lazy(() => import("./pages/IntensiveApplyPage"));
 const IntensiveApplicationsPage = lazy(() => import("./pages/IntensiveApplicationsPage"));
 const ParentPortal = lazy(() => import("./pages/ParentPortal"));
+const PayInfo = lazy(() => import("./pages/PayInfo"));
 const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
@@ -111,6 +112,7 @@ const App = () => (
           <Route path="/summer-intensive" element={<IntensiveApplyPage />} />
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
+          <Route path="/pay-info" element={<PayInfo />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
           <Route path="/quiz-print" element={<QuizPrintPage />} />

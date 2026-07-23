@@ -6,6 +6,13 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
 
+// /pay-info 페이지용 base64url 인코딩 — { s: 학생명, a: 금액, n: 입금자명 }
+function encodePayData(studentName: string, amount: number, depositor: string): string {
+  const jsonBytes = new TextEncoder().encode(JSON.stringify({ s: studentName, a: amount, n: depositor }));
+  const b64 = btoa(String.fromCharCode(...jsonBytes));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -117,6 +124,8 @@ Deno.serve(async (req) => {
             '#{합계금액}': total.toLocaleString(),
             '#{계좌안내}': ACCOUNT_INFO,
             '#{입금자명}': depositor,
+            // v2 템플릿의 "계좌·금액 복사" 버튼 링크 파라미터 (v1 템플릿에서는 무시됨)
+            '#{결제정보}': encodePayData(studentName, total, studentName),
           },
           disableSms: true,
         },
