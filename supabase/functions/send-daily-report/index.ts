@@ -131,13 +131,14 @@ Deno.serve(async (req) => {
     const nextDateStr = nextDate.toISOString().slice(0, 10);
 
     // 2) 학생·기발송·테스트·숙제 데이터 병렬 조회
-    const [studentsRes, sentRes, testRes, vocabRes, hwCheckedRes, hwAssignedRes] = await Promise.all([
+    const [studentsRes, sentRes, testRes, vocabRes, hwCheckedRes, hwAssignedRes, bookLogRes] = await Promise.all([
       admin.from('students').select('id, name, parent_phone, parent_token, enrollment_status').in('id', studentIds),
       admin.from('daily_report_sends').select('student_id').eq('report_date', reportDate).in('student_id', studentIds),
       admin.from('test_records').select('student_id, subject, content, score, passed').eq('test_date', reportDate).in('student_id', studentIds),
       admin.from('vocab_test_results').select('student_id, book_name, day_number, correct_words, total_words, score_percent, passed').eq('test_date', reportDate).in('student_id', studentIds),
       admin.from('homework_assignments').select('student_id, subject, result, checked_at').gte('checked_at', reportDate + 'T00:00:00+09:00').lt('checked_at', nextDateStr + 'T00:00:00+09:00').in('student_id', studentIds),
       admin.from('homework_assignments').select('student_id, subject, content').eq('assigned_date', reportDate).in('student_id', studentIds),
+      admin.from('student_book_progress_log').select('student_id, book_title, subject, book_role, from_page, to_page').eq('progress_date', reportDate).in('student_id', studentIds),
     ]);
 
     const studentMap = new Map((studentsRes.data ?? []).map((s: any) => [s.id, s]));
@@ -155,6 +156,7 @@ Deno.serve(async (req) => {
     const vocabByStudent = groupBy(vocabRes.data);
     const hwCheckedByStudent = groupBy(hwCheckedRes.data);
     const hwAssignedByStudent = groupBy(hwAssignedRes.data);
+    const bookLogByStudent = groupBy(bookLogRes.data);
     const lessonsByStudent = groupBy(activeLessons);
 
     // 3) 수업계획(plan) 진도 — 그날 실제 나간 교재·단원·페이지 (있으면 lesson_range보다 우선)
@@ -234,6 +236,12 @@ Deno.serve(async (req) => {
             const range = l.lesson_range ? ` — ${l.lesson_range}` : '';
             return `· [${l.subject}]${range}`;
           }),
+        // 병행교재(유형/연산 등) 오늘 진도 — TodaySession 마무리에서 입력한 이력
+        ...(bookLogByStudent.get(sid) ?? []).map((b: any) => {
+          const range = b.from_page != null && b.from_page + 1 < b.to_page
+            ? `p.${b.from_page + 1}~${b.to_page}` : `~p.${b.to_page}`;
+          return `· [${b.subject}] ${b.book_title}(${b.book_role}) — ${range}`;
+        }),
       ];
 
       // 테스트: 수업 내 테스트 + 게릴라 테스트 + 단어시험

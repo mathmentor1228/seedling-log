@@ -123,6 +123,25 @@ export function TodaySession() {
 
   // PLAN-VERIFY-LOOP-V1: 확인 루프 — 지난 진행분에 ✓이해/✗미흡 도장 (이번 세션에서 찍은 것)
   const [verifiedLocal, setVerifiedLocal] = useState<Record<string, 'ok' | 'weak'>>({}); // `${goalId}::${studentId}`
+
+  // BOOK-PROGRESS-LOG-V1: 병행교재(유형/연산 등) — 마무리 단계에서 "오늘 어디까지" 페이지 입력
+  type SideBook = { id: string; student_id: string; book_title: string; subject: string; book_role: string; current_page: number; total_pages: number | null };
+  const [sideBooks, setSideBooks] = useState<Record<string, SideBook[]>>({});   // student_id → 책 목록
+  const [sideBookPages, setSideBookPages] = useState<Record<string, string>>({}); // book_progress_id → 입력값
+
+  useEffect(() => {
+    const ids = students.map(s => s.id);
+    if (ids.length === 0) return;
+    (async () => {
+      const { data } = await db.from('student_book_progress')
+        .select('id, student_id, book_title, subject, book_role, current_page, total_pages')
+        .in('student_id', ids).eq('status', 'active');
+      const m: Record<string, SideBook[]> = {};
+      for (const b of (data ?? []) as SideBook[]) (m[b.student_id] ||= []).push(b);
+      setSideBooks(m);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students.length]);
   const [verifyExpanded, setVerifyExpanded] = useState(false);
 
   // PLAN-POS-ADJUST-V1: 진도 위치 조정 모달 + 조정 후 데이터 재로딩 키
@@ -1057,8 +1076,46 @@ export function TodaySession() {
         }
       }
 
+      // BOOK-PROGRESS-LOG-V1: 병행교재 진도 저장 — 책갈피 전진 + 날짜별 이력 기록
+      let sideCount = 0;
+      for (const [bookId, raw] of Object.entries(sideBookPages)) {
+        const to = parseInt(raw, 10);
+        if (!raw.trim() || isNaN(to) || to <= 0) continue;
+        const entry = Object.entries(sideBooks).find(([, list]) => list.some(b => b.id === bookId));
+        if (!entry) continue;
+        const [sid, list] = entry;
+        if (absent.has(sid)) continue;
+        const book = list.find(b => b.id === bookId)!;
+        if (to <= book.current_page) continue; // 되돌리기는 책갈피 화면에서 수동으로
+        const { error: logErr } = await db.from('student_book_progress_log').insert({
+          student_id: sid, book_progress_id: bookId, book_title: book.book_title,
+          subject: book.subject, book_role: book.book_role,
+          progress_date: todayStr, from_page: book.current_page, to_page: to, source: 'lesson',
+        });
+        if (logErr) throw new Error(`병행교재 기록 실패(${book.book_title}): ${logErr.message}`);
+        await db.from('student_book_progress').update({
+          current_page: to, last_source: 'lesson', updated_at: new Date().toISOString(),
+        }).eq('id', bookId);
+        sideCount++;
+      }
+      if (sideCount > 0) {
+        setSideBooks(prev => {
+          const next: Record<string, SideBook[]> = {};
+          for (const [sid, list] of Object.entries(prev)) {
+            next[sid] = list.map(b => {
+              const raw = sideBookPages[b.id];
+              const to = parseInt(raw ?? '', 10);
+              return !isNaN(to) && to > b.current_page ? { ...b, current_page: to } : b;
+            });
+          }
+          return next;
+        });
+        setSideBookPages({});
+      }
+
       setSavedDone(true);
       const parts = ['오늘 기록 저장 완료'];
+      if (sideCount > 0) parts.push(`병행교재 ${sideCount}건`);
       if (makeupCount > 0) parts.push(`결석 보충 큐 ${makeupCount}건`);
       if (lrCount > 0) parts.push(`수업일지 ${lrCount}건`);
       if (hwCheckCount > 0) parts.push(`숙제 확인 ${hwCheckCount}건`);
@@ -2012,6 +2069,32 @@ export function TodaySession() {
               )}
             </div>
           </CardContent></Card>
+
+          {/* BOOK-PROGRESS-LOG-V1: 병행교재 오늘 진도 — 책갈피에 등록된 보조교재의 "오늘 어디까지" */}
+          {students.filter(s => !absent.has(s.id) && (sideBooks[s.id] ?? []).length > 0).length > 0 && (
+            <Card><CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs font-bold text-muted-foreground">📖 병행교재 — 오늘 어디까지 나갔나요?</p>
+                <span className="text-[10px] text-muted-foreground">안 나간 책은 비워두세요. 저장 시 책갈피가 전진하고 학부모 안내에 반영됩니다.</span>
+              </div>
+              <div className="space-y-1.5">
+                {students.filter(s => !absent.has(s.id) && (sideBooks[s.id] ?? []).length > 0).map(s => (
+                  <div key={s.id} className="space-y-1">
+                    {(sideBooks[s.id] ?? []).map((b, i) => (
+                      <div key={b.id} className="flex items-center gap-2">
+                        <span className="font-bold text-xs min-w-[60px]">{i === 0 ? s.name : ''}</span>
+                        <span className="text-xs flex-1 truncate">{b.book_title} <span className="text-muted-foreground">({b.book_role}) · 현재 p.{b.current_page}</span></span>
+                        <Input type="number" inputMode="numeric" placeholder={`p.${b.current_page + 1}~`}
+                          className="h-7 w-24 text-xs"
+                          value={sideBookPages[b.id] ?? ''}
+                          onChange={e => setSideBookPages(p => ({ ...p, [b.id]: e.target.value }))} />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </CardContent></Card>
+          )}
 
           {/* LESSON-HW-BRIDGE-V1: 다음 수업 숙제 부여 */}
           <Card><CardContent className="p-4 space-y-3">
