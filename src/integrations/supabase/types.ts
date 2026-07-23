@@ -885,6 +885,38 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_report_sends: {
+        Row: {
+          id: string
+          report_date: string
+          sent_at: string
+          student_id: string
+          variables: Json | null
+        }
+        Insert: {
+          id?: string
+          report_date: string
+          sent_at?: string
+          student_id: string
+          variables?: Json | null
+        }
+        Update: {
+          id?: string
+          report_date?: string
+          sent_at?: string
+          student_id?: string
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_report_sends_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_acks: {
         Row: {
           acknowledged_at: string
