@@ -983,23 +983,39 @@ export function TodaySession() {
             const perStu = (nextHwPerStudent[s.id] ?? '').trim();
             const hwContent = perStu || (nextHwBulk ?? '').trim();
             if (hwContent) {
-              const { error: nhErr } = await db.from('homework_assignments').insert({
-                student_id: s.id,
-                subject,
-                lesson_record_id: lessonRecordId,
-                assigned_date: todayStr,
-                end_date: nextHwDue || null,
-                content: hwContent,
-                check_status: 'unchecked',
-                // PLAN-LESSON-SYNC-V1: 다른 입력 경로와 같은 타입 체계(regular|daily) 사용
-                homework_type: 'regular',
-                required_submissions: 1,
-                created_by: user?.id || null,
-              });
-              if (nhErr) {
-                throw new Error(`다음 숙제 등록 실패(${s.name}): ${nhErr.message}`);
+              // PLAN-LESSON-SYNC-V2: 같은 세션에서 저장을 여러 번 눌러도 숙제가
+              // 중복 생성되지 않도록 (학생·과목·오늘 날짜·같은 내용) 조회 후 upsert.
+              const { data: existingHw } = await db.from('homework_assignments')
+                .select('id')
+                .eq('student_id', s.id)
+                .eq('subject', subject)
+                .eq('assigned_date', todayStr)
+                .eq('content', hwContent)
+                .maybeSingle();
+              if (existingHw?.id) {
+                const { error: hwUpErr } = await db.from('homework_assignments').update({
+                  end_date: nextHwDue || null,
+                  lesson_record_id: lessonRecordId,
+                  homework_type: 'regular',
+                  required_submissions: 1,
+                }).eq('id', existingHw.id);
+                if (hwUpErr) throw new Error(`다음 숙제 갱신 실패(${s.name}): ${hwUpErr.message}`);
+              } else {
+                const { error: nhErr } = await db.from('homework_assignments').insert({
+                  student_id: s.id,
+                  subject,
+                  lesson_record_id: lessonRecordId,
+                  assigned_date: todayStr,
+                  end_date: nextHwDue || null,
+                  content: hwContent,
+                  check_status: 'unchecked',
+                  homework_type: 'regular',
+                  required_submissions: 1,
+                  created_by: user?.id || null,
+                });
+                if (nhErr) throw new Error(`다음 숙제 등록 실패(${s.name}): ${nhErr.message}`);
+                hwNewCount++;
               }
-              hwNewCount++;
             }
           }
         }
