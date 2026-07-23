@@ -896,6 +896,32 @@ export function TodaySession() {
           else hwByStudent.set(s.id, 'none_assigned');
         }
 
+        // LESSON-CLASS-LINK-V1: 설계에 class_id가 비어있으면 오늘 요일·담당교사 기준으로
+        // 학생별 소속 클래스를 매핑해 일지에 붙여준다. (없으면 반별 오늘일지에서 학생 누락)
+        const studentClassMap = new Map<string, string>();
+        try {
+          const todayDow = new Date(todayStr + 'T12:00:00').getDay();
+          const { data: schedRows } = await db.from('class_schedules')
+            .select('class_id, classes(subject)')
+            .eq('teacher_id', teacherId)
+            .eq('day_of_week', todayDow)
+            .eq('is_active', true);
+          const candidateIds = Array.from(new Set(((schedRows || []) as any[])
+            .filter((r: any) => !subject || !r.classes?.subject || r.classes.subject === subject)
+            .map((r: any) => r.class_id).filter(Boolean)));
+          if (candidateIds.length > 0 && students.length > 0) {
+            const { data: csRows } = await db.from('class_students')
+              .select('class_id, student_id')
+              .in('class_id', candidateIds as string[])
+              .in('student_id', students.map(s => s.id));
+            ((csRows || []) as any[]).forEach((r: any) => {
+              if (r.student_id && r.class_id && !studentClassMap.has(r.student_id)) {
+                studentClassMap.set(r.student_id, r.class_id);
+              }
+            });
+          }
+        } catch { /* best-effort mapping */ }
+
         // 2) 학생별 수업일지 upsert (출결 학생만)
         for (const s of students) {
           const isAbsent = absent.has(s.id);
