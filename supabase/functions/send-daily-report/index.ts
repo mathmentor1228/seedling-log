@@ -9,8 +9,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
-const PORTAL_FALLBACK_FEEDBACK = '별도 전달사항이 없습니다.';
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -234,24 +232,26 @@ Deno.serve(async (req) => {
         if (h.content) hwLines.push(`· [${h.subject}] 새 숙제: ${clip(h.content, 30)}`);
       }
 
-      // 피드백: 교사 기록을 AI가 학부모용으로 재서술 (기록 없으면 기본 문구)
+      // 피드백: 교사 기록을 AI가 학부모용으로 재서술 (기록 없거나 실패하면 섹션 생략)
       const rawNotes = myLessons
         .map((l: any) => [l.parent_direct_message, l.notes].filter(Boolean).join(' / '))
         .filter(Boolean).join('\n');
-      let feedback = PORTAL_FALLBACK_FEEDBACK;
+      let feedback = '';
       if (rawNotes && lovableKey) {
         try { feedback = await rewriteFeedback(lovableKey, name, rawNotes); }
-        catch { feedback = PORTAL_FALLBACK_FEEDBACK; }
+        catch { feedback = ''; }
       }
 
+      // v3 템플릿: 소제목이 변수 안에 포함됨 — 내용 없으면 빈 문자열로 섹션 자체를 생략
+      const section = (title: string, body: string) => body ? `\n\n■ ${title}\n${body}` : '';
       const variables: Record<string, string> = {
         '#{학생명}': name,
         '#{날짜}': formatDateKo(reportDate),
         '#{출결}': clip(attendance, 40),
         '#{수업내역}': clip(lessonLines.join('\n') || '· 기록 없음', 180),
-        '#{테스트결과}': clip(testLines.join('\n') || '· 진행한 테스트가 없습니다.', 180),
-        '#{숙제상태}': clip(hwLines.join('\n') || '· 확인할 숙제가 없습니다.', 180),
-        '#{피드백}': feedback,
+        '#{테스트결과}': section('테스트', clip(testLines.join('\n'), 180)),
+        '#{숙제상태}': section('숙제', clip(hwLines.join('\n'), 180)),
+        '#{피드백}': section('선생님 한마디', feedback),
         '#{token}': student.parent_token,
       };
 
