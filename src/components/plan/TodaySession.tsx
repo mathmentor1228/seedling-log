@@ -975,12 +975,17 @@ export function TodaySession() {
               // PLAN-LESSON-SYNC-V1: 본수업일지 화면은 test_name/test_content를 읽으므로
               // 통일 규칙(LessonRecordForm과 동일)대로 세 필드에 같은 값을 채운다.
               const testName = `${isTestDay && !hasQuiz ? '단원 마무리 테스트' : '쪽지시험'} — ${quiz.label || quizTarget.title}`;
+              // PLAN-LESSON-SYNC-V2: test_result enum(pass/fail/none)까지 채워야 일지/통계에서
+              // '결과값'이 표시된다. 영어 과목은 english_pass_fail도 함께 동기화.
+              const enumResult: 'pass' | 'fail' = quiz.passed ? 'pass' : 'fail';
               return {
                 test_name: testName,
                 test_content: testName,
                 test_title: testName,
+                test_result: enumResult,
                 test_result_text: `${quiz.score}점 / 커트라인 ${cutlineFor(s)}점 — ${quiz.passed ? '통과'
                   : `미달${errorPick[s.id] ? ` (원인: ${ERROR_TYPES.find(e => e.key === errorPick[s.id])?.label})` : ''}`}`,
+                ...(subject === '영어' ? { english_pass_fail: enumResult } : {}),
               };
             })() : {}),
             // PLAN-LESSON-SYNC-V1: 계획 저장 = 그날 일지 확정. 초안으로 남기면

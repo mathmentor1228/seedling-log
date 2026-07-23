@@ -41,6 +41,23 @@ export function WeeklySummaryWidget() {
           id: s.id, name: s.name, school: s.school, grade_year: s.grade_year, hasSummary: has,
         });
       }
+
+      // WEEKLY-SUMMARY-WIDGET-V2: 코멘트가 다른 선생님 소유의 레코드에 저장됐거나
+      // weekly_summary_week=이번주로만 기록된 케이스도 '작성 완료'로 잡아준다.
+      const ids = Array.from(byStudent.keys());
+      if (ids.length > 0) {
+        const { data: anySummary } = await supabase
+          .from('lesson_records')
+          .select('student_id, weekly_summary, weekly_summary_week, lesson_date')
+          .in('student_id', ids)
+          .not('weekly_summary', 'is', null)
+          .or(`weekly_summary_week.eq.${weekStart},and(lesson_date.gte.${weekStart},lesson_date.lte.${weekEnd})`);
+        for (const r of (anySummary || []) as any[]) {
+          const row = byStudent.get(r.student_id);
+          if (row && r.weekly_summary) row.hasSummary = true;
+        }
+      }
+
       setRows(Array.from(byStudent.values()).sort((a, b) => Number(a.hasSummary) - Number(b.hasSummary)));
     } finally {
       setLoading(false);

@@ -36,12 +36,12 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
     setText('');
     (async () => {
       setLoading(true);
+      // WEEKLY-SUMMARY-V2: 소유 teacher_id에 관계없이 이번 주 코멘트를 불러와 표시
       const { data } = await supabase
         .from('lesson_records')
         .select('id, weekly_summary')
-        .eq('teacher_id', user.id)
         .eq('student_id', studentId)
-        .eq('weekly_summary_week', week)
+        .or(`weekly_summary_week.eq.${week},and(lesson_date.gte.${week},lesson_date.lte.${(() => { const d = new Date(week); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })()})`)
         .not('weekly_summary', 'is', null)
         .order('lesson_date', { ascending: false })
         .limit(1)
