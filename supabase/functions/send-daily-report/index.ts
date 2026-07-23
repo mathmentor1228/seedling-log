@@ -157,6 +157,43 @@ Deno.serve(async (req) => {
     const hwAssignedByStudent = groupBy(hwAssignedRes.data);
     const lessonsByStudent = groupBy(activeLessons);
 
+    // 3) 수업계획(plan) 진도 — 그날 실제 나간 교재·단원·페이지 (있으면 lesson_range보다 우선)
+    // 기준은 advanced_at(진도 나간 시각): 나중에 검증(verified) 처리돼도 배운 날짜가 보존됨.
+    // session_id 기준은 그날 검증받은 과거 단원까지 딸려오므로 쓰지 않는다.
+    const planLinesByStudent = new Map<string, Map<string, string[]>>();
+    {
+      const { data: progress } = await admin.from('plan_goal_progress')
+        .select('student_id, status, partial_upto, plan_goals(title, pages, order_index), plan_designs(plan_tracks(textbook, subject))')
+        .gte('advanced_at', reportDate + 'T00:00:00+09:00')
+        .lt('advanced_at', nextDateStr + 'T00:00:00+09:00')
+        .neq('status', 'planned')
+        .in('student_id', studentIds);
+      // 학생×(과목·교재)별로 단원을 모아 한 줄로
+      const grouped = new Map<string, { subject: string; textbook: string; goals: any[] }>();
+      for (const row of progress ?? []) {
+        const track = (row as any).plan_designs?.plan_tracks;
+        if (!track || !row.plan_goals) continue;
+        const subject = track.subject || '수학';
+        const textbook = track.textbook || '';
+        const k = `${row.student_id}|${subject}|${textbook}`;
+        if (!grouped.has(k)) grouped.set(k, { subject, textbook, goals: [] });
+        grouped.get(k)!.goals.push(row);
+      }
+      for (const [k, g] of grouped) {
+        const sid = k.split('|')[0];
+        g.goals.sort((a, b) => (a.plan_goals.order_index ?? 0) - (b.plan_goals.order_index ?? 0));
+        const goalTxt = g.goals.map(r => {
+          const pages = r.partial_upto ? `~${r.partial_upto}` : (r.plan_goals.pages || '');
+          return `${r.plan_goals.title}${pages ? ` (${pages})` : ''}`;
+        }).join(', ');
+        const line = `· [${g.subject}] ${g.textbook} — ${goalTxt}`;
+        if (!planLinesByStudent.has(sid)) planLinesByStudent.set(sid, new Map());
+        const bySubject = planLinesByStudent.get(sid)!;
+        if (!bySubject.has(g.subject)) bySubject.set(g.subject, []);
+        bySubject.get(g.subject)!.push(line);
+      }
+    }
+
     const results: any[] = [];
     const messages: any[] = [];
     const messageMeta: { student_id: string; variables: Record<string, string> }[] = [];
@@ -186,11 +223,18 @@ Deno.serve(async (req) => {
       // 출결: 기록별 출결 상태를 합쳐 중복 제거
       const attendance = [...new Set(myLessons.flatMap((l: any) => l.attendance_status ?? []))].join(', ') || '정상등원';
 
-      // 수업 내역: 과목별 진도
-      const lessonLines = myLessons.map((l: any) => {
-        const range = l.lesson_range ? ` — ${l.lesson_range}` : '';
-        return `· [${l.subject}]${range}`;
-      });
+      // 수업 내역: plan 진도(교재·단원·페이지)가 있으면 우선, 없는 과목만 수업일지 진도 칸으로 폴백
+      const myPlanLines = planLinesByStudent.get(sid);
+      const planSubjects = new Set(myPlanLines ? [...myPlanLines.keys()] : []);
+      const lessonLines = [
+        ...(myPlanLines ? [...myPlanLines.values()].flat() : []),
+        ...myLessons
+          .filter((l: any) => !planSubjects.has(l.subject))
+          .map((l: any) => {
+            const range = l.lesson_range ? ` — ${l.lesson_range}` : '';
+            return `· [${l.subject}]${range}`;
+          }),
+      ];
 
       // 테스트: 수업 내 테스트 + 게릴라 테스트 + 단어시험
       const testLines: string[] = [];
@@ -248,7 +292,7 @@ Deno.serve(async (req) => {
         '#{학생명}': name,
         '#{날짜}': formatDateKo(reportDate),
         '#{출결}': clip(attendance, 40),
-        '#{수업내역}': clip(lessonLines.join('\n') || '· 기록 없음', 180),
+        '#{수업내역}': clip(lessonLines.join('\n') || '· 기록 없음', 250),
         '#{테스트결과}': section('테스트', clip(testLines.join('\n'), 180)),
         '#{숙제상태}': section('숙제', clip(hwLines.join('\n'), 180)),
         '#{피드백}': section('선생님 한마디', feedback),
