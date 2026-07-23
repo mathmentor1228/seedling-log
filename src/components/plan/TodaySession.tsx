@@ -939,7 +939,7 @@ export function TodaySession() {
           // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
           // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
           const { data: existingList } = await db.from('lesson_records')
-            .select('id, learning_issues_note, submitted')
+            .select('id, learning_issues_note, submitted, class_id')
             .eq('student_id', s.id)
             .eq('subject', subject)
             .eq('lesson_date', todayStr)
