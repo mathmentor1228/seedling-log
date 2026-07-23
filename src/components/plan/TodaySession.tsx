@@ -896,6 +896,32 @@ export function TodaySession() {
           else hwByStudent.set(s.id, 'none_assigned');
         }
 
+        // LESSON-CLASS-LINK-V1: 설계에 class_id가 비어있으면 오늘 요일·담당교사 기준으로
+        // 학생별 소속 클래스를 매핑해 일지에 붙여준다. (없으면 반별 오늘일지에서 학생 누락)
+        const studentClassMap = new Map<string, string>();
+        try {
+          const todayDow = new Date(todayStr + 'T12:00:00').getDay();
+          const { data: schedRows } = await db.from('class_schedules')
+            .select('class_id, classes(subject)')
+            .eq('teacher_id', teacherId)
+            .eq('day_of_week', todayDow)
+            .eq('is_active', true);
+          const candidateIds = Array.from(new Set(((schedRows || []) as any[])
+            .filter((r: any) => !subject || !r.classes?.subject || r.classes.subject === subject)
+            .map((r: any) => r.class_id).filter(Boolean)));
+          if (candidateIds.length > 0 && students.length > 0) {
+            const { data: csRows } = await db.from('class_students')
+              .select('class_id, student_id')
+              .in('class_id', candidateIds as string[])
+              .in('student_id', students.map(s => s.id));
+            ((csRows || []) as any[]).forEach((r: any) => {
+              if (r.student_id && r.class_id && !studentClassMap.has(r.student_id)) {
+                studentClassMap.set(r.student_id, r.class_id);
+              }
+            });
+          }
+        } catch { /* best-effort mapping */ }
+
         // 2) 학생별 수업일지 upsert (출결 학생만)
         for (const s of students) {
           const isAbsent = absent.has(s.id);
@@ -913,7 +939,7 @@ export function TodaySession() {
           // UNIFY-LESSON-KEY-V1: 일지 통일 키 = (학생, 과목, 날짜) — 교사·경로가 달라도 하나의 일지에 병합.
           // 제출본 우선, 그다음 오래된 것(원본). 다른 입력 경로(수업일지 폼·테스트 입력)가 만든 기록도 찾는다.
           const { data: existingList } = await db.from('lesson_records')
-            .select('id, learning_issues_note, submitted')
+            .select('id, learning_issues_note, submitted, class_id')
             .eq('student_id', s.id)
             .eq('subject', subject)
             .eq('lesson_date', todayStr)
@@ -963,15 +989,20 @@ export function TodaySession() {
             ...(existingLR?.submitted ? {} : { submitted_at: new Date().toISOString() }),
           };
 
+          const resolvedClassId = design.class_id || studentClassMap.get(s.id) || null;
+
           let lessonRecordId: string | null = null;
           if (existingLR?.id) {
-            // 병합 — 기존 일지의 소유자(teacher_id)·class_id는 건드리지 않는다
+            // 병합 — 기존 일지의 소유자(teacher_id)는 건드리지 않는다.
+            // class_id는 비어 있으면 이번 매핑으로 백필해서 반별 오늘일지에서 보이도록 한다.
             lessonRecordId = existingLR.id;
-            const { error: upErr } = await db.from('lesson_records').update(payload).eq('id', existingLR.id);
+            const updatePayload: any = { ...payload };
+            if (!existingLR.class_id && resolvedClassId) updatePayload.class_id = resolvedClassId;
+            const { error: upErr } = await db.from('lesson_records').update(updatePayload).eq('id', existingLR.id);
             if (upErr) throw new Error(`수업일지 갱신 실패(${s.name}): ${upErr.message}`);
           } else {
             const { data: ins, error: insErr } = await db.from('lesson_records')
-              .insert({ ...payload, teacher_id: teacherId, class_id: design.class_id || null })
+              .insert({ ...payload, teacher_id: teacherId, class_id: resolvedClassId })
               .select('id').single();
             if (insErr) throw new Error(`수업일지 저장 실패(${s.name}): ${insErr.message}`);
             lessonRecordId = ins?.id || null;
