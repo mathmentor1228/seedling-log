@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X, Video,
-  FolderOpen, FolderPlus, ChevronDown, ChevronRight, RotateCw,
+  FolderOpen, FolderPlus, ChevronDown, ChevronRight, RotateCw, ListOrdered,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
@@ -29,7 +29,13 @@ interface Textbook {
   description: string | null;
   created_at: string;
   folder: string | null;
+  // TEXTBOOK-TOC-V1: 단원별 페이지 범위 — 책갈피 단원 표시·페이스 분석의 기준
+  toc: { title: string; start_page: number; end_page: number }[] | null;
+  total_pages: number | null;
 }
+
+// 목차 편집용 행 (입력 중엔 문자열로 다룸)
+interface TocDraftRow { title: string; start_page: string; end_page: string }
 
 interface TextbookExample {
   id: string;
@@ -254,6 +260,89 @@ export function TextbookLibrary() {
       setExamples(prev => prev.map(ex => ex.chapter === oldName ? { ...ex, chapter: newName } : ex));
     }
     setEditingChapter(null);
+  };
+
+  // ── TEXTBOOK-TOC-V1: 목차 등록 ──
+  const [tocEditTb, setTocEditTb] = useState<Textbook | null>(null);
+  const [tocRows, setTocRows] = useState<TocDraftRow[]>([]);
+  const [tocTotalPages, setTocTotalPages] = useState('');
+  const [tocExtracting, setTocExtracting] = useState(false);
+  const [tocSaving, setTocSaving] = useState(false);
+
+  const openTocDialog = (tb: Textbook) => {
+    setTocEditTb(tb);
+    setTocRows((tb.toc ?? []).map(u => ({
+      title: u.title, start_page: String(u.start_page ?? ''), end_page: String(u.end_page ?? ''),
+    })));
+    setTocTotalPages(tb.total_pages ? String(tb.total_pages) : '');
+  };
+
+  // "p.10-17" / "10~17" / "10" → [시작, 끝]
+  const parsePagesStr = (s: string): [string, string] => {
+    const nums = (s.match(/\d+/g) ?? []).map(Number);
+    if (nums.length >= 2) return [String(nums[0]), String(nums[1])];
+    if (nums.length === 1) return [String(nums[0]), ''];
+    return ['', ''];
+  };
+
+  // 끝 페이지가 빈 행은 "다음 단원 시작 - 1"로 자동 채움 (목차에 시작 페이지만 있는 경우가 많음)
+  const fillTocEnds = (rows: TocDraftRow[]): TocDraftRow[] =>
+    rows.map((r, i) => {
+      if (r.end_page.trim() || !r.start_page.trim()) return r;
+      const nextStart = rows.slice(i + 1).map(n => parseInt(n.start_page, 10)).find(n => !isNaN(n));
+      return nextStart && nextStart > parseInt(r.start_page, 10)
+        ? { ...r, end_page: String(nextStart - 1) } : r;
+    });
+
+  const extractTocForTextbook = async (file: File) => {
+    if (!file.type.startsWith('image/')) { toast({ title: '이미지 파일만 업로드해주세요.', variant: 'destructive' }); return; }
+    if (file.size > 8 * 1024 * 1024) { toast({ title: '8MB 이하 이미지만 가능해요.', variant: 'destructive' }); return; }
+    setTocExtracting(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+      const { data, error } = await supabase.functions.invoke('plan-extract-toc', { body: { image: base64 } });
+      if (error) throw error;
+      const chapters = (data as any)?.chapters as { title: string; pages: string }[] | undefined;
+      if (!chapters || chapters.length === 0) {
+        toast({ title: '목차를 인식하지 못했어요', description: '다른 이미지로 다시 시도해주세요.', variant: 'destructive' });
+        return;
+      }
+      const newRows = chapters.map(c => {
+        const [s, e] = parsePagesStr(c.pages);
+        return { title: c.title, start_page: s, end_page: e };
+      });
+      setTocRows(prev => fillTocEnds([...prev, ...newRows]));
+      toast({ title: `${chapters.length}개 단원 추출`, description: '페이지 범위를 확인·수정한 뒤 저장하세요.' });
+    } catch (e: any) {
+      toast({ title: '추출 실패', description: e.message || String(e), variant: 'destructive' });
+    } finally {
+      setTocExtracting(false);
+    }
+  };
+
+  const handleSaveToc = async () => {
+    if (!tocEditTb) return;
+    const cleaned = fillTocEnds(tocRows)
+      .map(r => ({ title: r.title.trim(), start_page: parseInt(r.start_page, 10), end_page: parseInt(r.end_page, 10) }))
+      .filter(r => r.title && !isNaN(r.start_page))
+      .map(r => ({ ...r, end_page: isNaN(r.end_page) ? r.start_page : r.end_page }))
+      .sort((a, b) => a.start_page - b.start_page);
+    if (cleaned.length === 0) { toast({ title: '단원이 없습니다', description: '최소 1개 단원(이름+시작 페이지)이 필요해요.', variant: 'destructive' }); return; }
+    const total = parseInt(tocTotalPages, 10);
+    const totalPages = !isNaN(total) && total > 0 ? total : Math.max(...cleaned.map(r => r.end_page));
+    setTocSaving(true);
+    const { error } = await supabase.from('textbooks')
+      .update({ toc: cleaned, total_pages: totalPages } as any).eq('id', tocEditTb.id);
+    setTocSaving(false);
+    if (error) { toast({ title: '저장 실패', description: error.message, variant: 'destructive' }); return; }
+    setTextbooks(prev => prev.map(tb => tb.id === tocEditTb.id ? { ...tb, toc: cleaned, total_pages: totalPages } : tb));
+    toast({ title: '목차 저장 완료', description: `${cleaned.length}개 단원 · 총 ${totalPages}p` });
+    setTocEditTb(null);
   };
 
   const handleMoveTextbookFolder = async (id: string, folder: string | null) => {
@@ -514,9 +603,16 @@ export function TextbookLibrary() {
           ) : (
             <p className="text-sm font-medium truncate">{tb.title}</p>
           )}
-          <p className="text-xs text-muted-foreground">{[tb.publisher, tb.subject, tb.grade].filter(Boolean).join(' · ')}</p>
+          <p className="text-xs text-muted-foreground">
+            {[tb.publisher, tb.subject, tb.grade].filter(Boolean).join(' · ')}
+            {(tb.toc?.length ?? 0) > 0 && <span className="ml-1 text-primary">· 목차 {tb.toc!.length}단원</span>}
+          </p>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="목차 등록"
+            onClick={e => { e.stopPropagation(); openTocDialog(tb); }}>
+            <ListOrdered className={`w-3.5 h-3.5 ${(tb.toc?.length ?? 0) > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+          </Button>
           {editingTextbookId !== tb.id && (
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
               onClick={e => { e.stopPropagation(); setEditingTextbookId(tb.id); setEditingTextbookTitle(tb.title); }}>
@@ -590,6 +686,74 @@ export function TextbookLibrary() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* TEXTBOOK-TOC-V1: 목차 등록 다이얼로그 */}
+      <Dialog open={!!tocEditTb} onOpenChange={open => { if (!open) setTocEditTb(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <ListOrdered className="w-4 h-4" /> 목차 등록 — {tocEditTb?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={tocExtracting} asChild>
+                <label className="cursor-pointer">
+                  {tocExtracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  목차 사진에서 자동 추출
+                  <input type="file" accept="image/*" className="hidden" disabled={tocExtracting}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) extractTocForTextbook(f); e.target.value = ''; }} />
+                </label>
+              </Button>
+              <span className="text-[11px] text-muted-foreground">목차가 여러 장이면 한 장씩 이어서 올리세요.</span>
+            </div>
+
+            <div className="max-h-[45vh] overflow-y-auto space-y-1.5 pr-1">
+              {tocRows.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  아직 단원이 없어요. 사진에서 추출하거나 아래에서 직접 추가하세요.
+                </p>
+              )}
+              {tocRows.map((r, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground w-5 text-right shrink-0">{i + 1}</span>
+                  <Input value={r.title} placeholder="단원명" className="h-7 text-xs flex-1"
+                    onChange={e => setTocRows(p => p.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} />
+                  <Input value={r.start_page} placeholder="시작p" type="number" className="h-7 w-16 text-xs"
+                    onChange={e => setTocRows(p => p.map((x, j) => j === i ? { ...x, start_page: e.target.value } : x))} />
+                  <span className="text-xs text-muted-foreground">~</span>
+                  <Input value={r.end_page} placeholder="끝p" type="number" className="h-7 w-16 text-xs"
+                    onChange={e => setTocRows(p => p.map((x, j) => j === i ? { ...x, end_page: e.target.value } : x))} />
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                    onClick={() => setTocRows(p => p.filter((_, j) => j !== i))}>
+                    <X className="w-3 h-3 text-muted-foreground" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <Button size="sm" variant="ghost" className="gap-1 text-xs"
+                onClick={() => setTocRows(p => [...p, { title: '', start_page: '', end_page: '' }])}>
+                <Plus className="w-3 h-3" /> 단원 직접 추가
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-[11px] text-muted-foreground">총 페이지</Label>
+                <Input value={tocTotalPages} type="number" placeholder="자동" className="h-7 w-20 text-xs"
+                  onChange={e => setTocTotalPages(e.target.value)} />
+              </div>
+            </div>
+
+            <Button onClick={handleSaveToc} disabled={tocSaving} className="w-full">
+              {tocSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+              목차 저장 ({tocRows.filter(r => r.title.trim() && r.start_page.trim()).length}단원)
+            </Button>
+            <p className="text-[10px] text-muted-foreground">
+              끝 페이지를 비워두면 다음 단원 시작 직전 페이지로 자동 채워집니다. 저장하면 학생 책갈피에 "현재 단원"이 표시되고 페이스 분석의 기준이 됩니다.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left: Textbook list with folders */}
