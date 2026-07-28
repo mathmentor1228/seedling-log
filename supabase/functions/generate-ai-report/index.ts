@@ -815,6 +815,27 @@ Deno.serve(async (req) => {
 
     console.log(`[DATA_DEBUG] Final submitted lessons for AI: ${currentWeekLessons?.length || 0}`);
 
+    // VERBATIM-COMMENT-INTEGRATE-V1: 원문 노출 대상 선생님(이재진·영어)의 주간 코멘트는
+    // 해당 과목 문단을 원문 그대로 구성하도록 프롬프트에 최우선 규칙으로 주입한다.
+    // (weekly_summary는 미제출 레코드에 붙을 수 있어 submitted 필터 없이 별도 조회)
+    const VERBATIM_COMMENT_TEACHER_IDS = [
+      '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
+    ];
+    const { data: verbatimRows } = await supabase
+      .from('lesson_records')
+      .select('subject, teacher_display_name, weekly_summary, weekly_summary_week, lesson_date')
+      .eq('student_id', student_id)
+      .in('teacher_id', VERBATIM_COMMENT_TEACHER_IDS)
+      .not('weekly_summary', 'is', null)
+      .or(`weekly_summary_week.eq.${week_start},and(lesson_date.gte.${week_start},lesson_date.lte.${week_end})`);
+    const verbatimComments: Record<string, { teacher: string; text: string }> = {};
+    for (const r of (verbatimRows ?? []) as any[]) {
+      if (!verbatimComments[r.subject]) {
+        verbatimComments[r.subject] = { teacher: r.teacher_display_name || '담당 선생님', text: r.weekly_summary };
+      }
+    }
+    console.log(`[VERBATIM-COMMENT-INTEGRATE-V1] subjects=${Object.keys(verbatimComments).join(',') || 'none'}`);
+
     if (!currentWeekLessons || currentWeekLessons.length === 0) {
       console.log(`[generate-ai-report] No submitted lessons found. DATA_DEBUG: fetched=${totalFetched} submitted=${submittedCount} draft=${draftCount}`);
       return new Response(
@@ -944,7 +965,7 @@ Deno.serve(async (req) => {
     }
 
     // Build the user prompt with structured data
-    const userPrompt = buildJsonUserPrompt(student_name, week_start, week_end, subjectData);
+    const userPrompt = buildJsonUserPrompt(student_name, week_start, week_end, subjectData, verbatimComments);
 
     console.log('[generate-ai-report] Calling AI gateway for JSON parent report with validation...');
 
@@ -1212,7 +1233,8 @@ function buildJsonUserPrompt(
   studentName: string,
   weekStart: string,
   weekEnd: string,
-  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
+  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>,
+  verbatimComments: Record<string, { teacher: string; text: string }> = {}
 ): string {
   const subjects = Object.keys(subjectData);
   
@@ -1316,6 +1338,22 @@ function buildJsonUserPrompt(
     }
 
     prompt += '\n';
+  }
+
+  // VERBATIM-COMMENT-INTEGRATE-V1: 담당 교사 원문 코멘트 — 해당 과목 문단을 이 원문으로 구성
+  for (const [subject, vc] of Object.entries(verbatimComments)) {
+    prompt += `
+=== [최우선 규칙] ${subject} 과목 — ${vc.teacher} 선생님 주간 코멘트 원문 ===
+"""
+${vc.text}
+"""
+위 원문이 ${subject} 과목 평가의 본문이다. 반드시 지켜라:
+1. ${subject} 과목의 paragraphs는 위 원문을 문단 단위로 나눠 그대로 담는다. 문장·표현·내용·평가를 바꾸거나 요약하거나 새 내용을 추가하지 않는다.
+2. 허용되는 수정은 앞뒤 문단과의 연결이 매끄럽도록 하는 최소한의 접속 표현뿐이다.
+3. "정확히 3문장" 규칙은 ${subject} 과목에는 적용하지 않는다 — 원문 전체를 빠짐없이 담는 것이 우선이다.
+4. ${subject} 수업 데이터가 없더라도 subjects 배열에 ${subject}를 포함하고 위 원문으로 작성한다.
+5. testsSummary·homeworkSummary는 평소처럼 데이터 기반으로 작성한다.
+`;
   }
 
   prompt += `

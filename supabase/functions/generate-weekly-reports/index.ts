@@ -375,38 +375,57 @@ Deno.serve(async (req) => {
             const aiAdminTag = aiReportData?._debug?.admin_tag || aiReportData?.admin_tag;
             qualityTag = determineQualityTag(true, subjectCount, lessonCount, aiAdminTag);
 
-            // WEEKLY-SUMMARY-APPEND-V1: Append teacher-curated weekly comments verbatim so
-            // they always reach parents (independent of AI quality).
-            // lesson_records.teacher_id에는 profiles FK가 없어 embed가 PGRST200으로 실패하고
-            // (에러 미확인 시 data=null → 코멘트 전체 누락), 이름은 teacher_display_name 컬럼으로 충분하다.
-            // 원장 방침(2026-07-29): 코멘트 원문 노출은 이재진(영어) 담당 학생에게만 —
-            // 다른 선생님 몫은 AI 생성 본문이 담당하므로 appendix에서 제외한다.
+            // VERBATIM-COMMENT-INTEGRATE-V1 (원장 방침 2026-07-29):
+            // 이재진(영어) 담당 학생의 주간 코멘트는 generate-ai-report가 영어 문단에
+            // 원문 그대로(연결만 다듬어) 통합한다. 여기서는 통합이 실제로 됐는지 검증하고,
+            // 실패한 코멘트만 안전장치로 원문 섹션을 뒤에 붙인다.
+            // (lesson_records.teacher_id에는 profiles FK가 없어 embed 금지 — teacher_display_name 사용)
             const VERBATIM_COMMENT_TEACHER_IDS = [
               '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
             ];
             const { data: weeklySummaries, error: weeklySummaryErr } = await supabase
               .from('lesson_records')
-              .select('weekly_summary, subject, teacher_id, teacher_display_name, lesson_date')
+              .select('weekly_summary, subject, teacher_id, teacher_display_name, lesson_date, weekly_summary_week')
               .eq('student_id', student.id)
               .in('teacher_id', VERBATIM_COMMENT_TEACHER_IDS)
-              .gte('lesson_date', weekStart)
-              .lte('lesson_date', weekEnd)
-              .not('weekly_summary', 'is', null);
+              .not('weekly_summary', 'is', null)
+              .or(`weekly_summary_week.eq.${weekStart},and(lesson_date.gte.${weekStart},lesson_date.lte.${weekEnd})`);
             if (weeklySummaryErr) console.error('weekly_summary load failed:', weeklySummaryErr.message);
+
+            // 코멘트 문장 앞부분들이 본문에 얼마나 살아있는지로 통합 여부 판정
+            const isIntegrated = (comment: string, body: string) => {
+              const probes = comment
+                .split(/\n+|(?<=다\.)\s*/)
+                .map((s) => s.trim())
+                .filter((s) => s.length >= 15)
+                .map((s) => s.slice(0, 15));
+              if (probes.length === 0) return body.includes(comment.trim().slice(0, 10));
+              const hit = probes.filter((p) => body.includes(p)).length;
+              return hit >= Math.max(1, Math.floor(probes.length * 0.3));
+            };
 
             const seen = new Set<string>();
             const summaryBlocks: string[] = [];
+            let totalComments = 0;
+            let integratedCount = 0;
             for (const r of (weeklySummaries || []) as any[]) {
               const key = `${r.teacher_id}|${r.subject}|${r.weekly_summary}`;
               if (seen.has(key)) continue;
               seen.add(key);
+              totalComments++;
+              if (isIntegrated(r.weekly_summary, aiReportData.parent_message || '')) {
+                integratedCount++;
+                continue;
+              }
               const name = r.teacher_display_name || '담당 선생님';
               summaryBlocks.push(`【${r.subject} ${name}】\n${r.weekly_summary}`);
             }
             const summaryAppendix = summaryBlocks.length > 0
               ? `\n\n---\n💬 담당 선생님 주간 코멘트\n\n${summaryBlocks.join('\n\n')}`
               : '';
-            const missingTag = summaryBlocks.length === 0 ? ' weekly_summary=MISSING' : ` weekly_summary=${summaryBlocks.length}`;
+            const missingTag = totalComments === 0
+              ? ' weekly_summary=MISSING'
+              : ` weekly_summary=${totalComments} integrated=${integratedCount} appended=${summaryBlocks.length}`;
 
             const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`;
             
