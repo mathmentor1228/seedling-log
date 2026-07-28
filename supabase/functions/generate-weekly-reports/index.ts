@@ -377,13 +377,16 @@ Deno.serve(async (req) => {
 
             // WEEKLY-SUMMARY-APPEND-V1: Append teacher-curated weekly comments verbatim so
             // they always reach parents (independent of AI quality).
-            const { data: weeklySummaries } = await supabase
+            // lesson_records.teacher_id에는 profiles FK가 없어 embed가 PGRST200으로 실패하고
+            // (에러 미확인 시 data=null → 코멘트 전체 누락), 이름은 teacher_display_name 컬럼으로 충분하다.
+            const { data: weeklySummaries, error: weeklySummaryErr } = await supabase
               .from('lesson_records')
-              .select('weekly_summary, subject, teacher_id, lesson_date, profiles:teacher_id(full_name)')
+              .select('weekly_summary, subject, teacher_id, teacher_display_name, lesson_date')
               .eq('student_id', student.id)
               .gte('lesson_date', weekStart)
               .lte('lesson_date', weekEnd)
               .not('weekly_summary', 'is', null);
+            if (weeklySummaryErr) console.error('weekly_summary load failed:', weeklySummaryErr.message);
 
             const seen = new Set<string>();
             const summaryBlocks: string[] = [];
@@ -391,7 +394,7 @@ Deno.serve(async (req) => {
               const key = `${r.teacher_id}|${r.subject}|${r.weekly_summary}`;
               if (seen.has(key)) continue;
               seen.add(key);
-              const name = r.profiles?.full_name || '담당 선생님';
+              const name = r.teacher_display_name || '담당 선생님';
               summaryBlocks.push(`【${r.subject} ${name}】\n${r.weekly_summary}`);
             }
             const summaryAppendix = summaryBlocks.length > 0
