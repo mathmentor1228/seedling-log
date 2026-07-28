@@ -50,6 +50,13 @@ export const TEACHERS = [
   { name: '김민희', room: '3층 9강의실' },
 ] as const;
 
+// 주간 핵심 코멘트를 학부모 리포트에 원문 그대로 노출하는 선생님 (원장 방침 2026-07-29).
+// 이 명단에 없는 선생님의 주간 코멘트는 AI 생성 본문이 대신하며, 입력 위젯도 표시하지 않는다.
+// generate-weekly-reports 함수의 VERBATIM_COMMENT_TEACHER_IDS와 반드시 함께 갱신할 것.
+export const VERBATIM_WEEKLY_COMMENT_TEACHER_IDS = [
+  '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
+] as const;
+
 /** 교사별 기본 강의실. 최윤기는 과목별로 다름. */
 export function getTeacherRoom(teacherName: string, subject?: string): string {
   if (!teacherName) return '';

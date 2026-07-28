@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Loader2, MessageSquareText, CheckCircle2 } from 'lucide-react';
 import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
+import { VERBATIM_WEEKLY_COMMENT_TEACHER_IDS } from '@/lib/constants';
 import { WeeklySummaryDialog } from './WeeklySummaryDialog';
 
 interface StudentRow { id: string; name: string; school: string | null; grade_year: number | null; hasSummary: boolean; }
@@ -68,6 +69,9 @@ export function WeeklySummaryWidget() {
 
   const missing = rows.filter(r => !r.hasSummary);
   const done = rows.filter(r => r.hasSummary);
+
+  // 원문 노출 대상 선생님에게만 표시 — 창이 보인다면 쓴 그대로 리포트에 나간다는 뜻.
+  if (!user || !VERBATIM_WEEKLY_COMMENT_TEACHER_IDS.includes(user.id as any)) return null;
 
   return (
     <>
