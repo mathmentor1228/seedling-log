@@ -379,10 +379,16 @@ Deno.serve(async (req) => {
             // they always reach parents (independent of AI quality).
             // lesson_records.teacher_id에는 profiles FK가 없어 embed가 PGRST200으로 실패하고
             // (에러 미확인 시 data=null → 코멘트 전체 누락), 이름은 teacher_display_name 컬럼으로 충분하다.
+            // 원장 방침(2026-07-29): 코멘트 원문 노출은 이재진(영어) 담당 학생에게만 —
+            // 다른 선생님 몫은 AI 생성 본문이 담당하므로 appendix에서 제외한다.
+            const VERBATIM_COMMENT_TEACHER_IDS = [
+              '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
+            ];
             const { data: weeklySummaries, error: weeklySummaryErr } = await supabase
               .from('lesson_records')
               .select('weekly_summary, subject, teacher_id, teacher_display_name, lesson_date')
               .eq('student_id', student.id)
+              .in('teacher_id', VERBATIM_COMMENT_TEACHER_IDS)
               .gte('lesson_date', weekStart)
               .lte('lesson_date', weekEnd)
               .not('weekly_summary', 'is', null);
