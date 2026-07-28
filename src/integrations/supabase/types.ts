@@ -5290,6 +5290,63 @@ export type Database = {
           },
         ]
       }
+      student_book_progress_log: {
+        Row: {
+          book_progress_id: string | null
+          book_role: string | null
+          book_title: string
+          created_at: string
+          from_page: number | null
+          id: string
+          progress_date: string
+          source: string
+          student_id: string
+          subject: string
+          to_page: number
+        }
+        Insert: {
+          book_progress_id?: string | null
+          book_role?: string | null
+          book_title: string
+          created_at?: string
+          from_page?: number | null
+          id?: string
+          progress_date?: string
+          source?: string
+          student_id: string
+          subject?: string
+          to_page: number
+        }
+        Update: {
+          book_progress_id?: string | null
+          book_role?: string | null
+          book_title?: string
+          created_at?: string
+          from_page?: number | null
+          id?: string
+          progress_date?: string
+          source?: string
+          student_id?: string
+          subject?: string
+          to_page?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_book_progress_log_book_progress_id_fkey"
+            columns: ["book_progress_id"]
+            isOneToOne: false
+            referencedRelation: "student_book_progress"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_book_progress_log_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_courses: {
         Row: {
           course_policy_id: string
