@@ -35,9 +35,11 @@ function yesterdayKST(): string {
 }
 
 function formatDateKo(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00+09:00');
+  // dateStr은 이미 KST 달력 날짜(YYYY-MM-DD) — UTC 자정으로 파싱해 UTC getter로 읽어야
+  // 서버 타임존(UTC)에서 하루 밀리지 않는다.
+  const d = new Date(dateStr + 'T00:00:00Z');
   const days = ['일', '월', '화', '수', '목', '금', '토'];
-  return `${d.getMonth() + 1}월 ${d.getDate()}일(${days[d.getDay()]})`;
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일(${days[d.getUTCDay()]})`;
 }
 
 function clip(s: string, max: number): string {
