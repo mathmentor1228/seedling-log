@@ -245,12 +245,12 @@ function StudentDetail({ student }: { student: StudentBasic }) {
       const me = format(endOfMonth(now), 'yyyy-MM-dd');
 
       const [lessons, tests, selfStudy, clinic, schedules, subjectTeachers, examResults] = await Promise.all([
-        supabase.from('lesson_records').select('*').eq('student_id', student.id).order('lesson_date', { ascending: false }),
+        supabase.from('lesson_records').select('*').eq('student_id', student.id).order('lesson_date', { ascending: false }).limit(300),
         supabase.from('lesson_records')
           .select('id, lesson_date, subject, test_content, test_title, test_result_text, english_pass_fail, test_result')
-          .eq('student_id', student.id).not('test_content', 'is', null).neq('test_content', '').order('lesson_date', { ascending: false }),
-        supabase.from('self_study_records').select('*').eq('student_id', student.id).order('study_date', { ascending: false }),
-        supabase.from('clinic_records').select('*, profiles!teacher_id(full_name)').eq('student_id', student.id).order('clinic_date', { ascending: false }),
+          .eq('student_id', student.id).not('test_content', 'is', null).neq('test_content', '').order('lesson_date', { ascending: false }).limit(200),
+        supabase.from('self_study_records').select('*').eq('student_id', student.id).order('study_date', { ascending: false }).limit(200),
+        supabase.from('clinic_records').select('*, profiles!teacher_id(full_name)').eq('student_id', student.id).order('clinic_date', { ascending: false }).limit(200),
         supabase.from('class_schedules')
           .select('day_of_week, start_time, end_time, classes!inner(name, subject, teacher_id)')
           .eq('is_active', true)

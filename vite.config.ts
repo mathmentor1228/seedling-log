@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('xlsx')) return 'xlsx';
           if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf';
           if (id.includes('katex')) return 'katex';
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts';
         },
       },
     },
