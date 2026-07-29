@@ -834,6 +834,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
                       <p className="font-medium text-foreground text-sm">{group.textbook_name}</p>
                       <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", subjectColor(group.subject))}>{group.subject}</span>
                       {isTeacher && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">교사용</Badge>}
+                      {group.is_inhouse && <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{group.inhouse_author ? ` · ${group.inhouse_author}` : ''}</Badge>}
                       {group.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.grade}</Badge>}
                       <Badge className={cn("text-[10px]", statusColor(group.status))}>{group.status}</Badge>
                     </div>
