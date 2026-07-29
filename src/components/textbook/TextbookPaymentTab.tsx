@@ -572,6 +572,9 @@ export function TextbookPaymentTab() {
                   <span className="text-xs text-muted-foreground truncate">
                     {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                   </span>
+                  {dist.textbook_orders?.is_inhouse && (
+                    <Badge className="text-[10px] shrink-0 bg-violet-100 text-violet-700 border-violet-300">자체제작</Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <span>{format(new Date(dist.created_at), 'MM/dd')}</span>
