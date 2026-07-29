@@ -92,6 +92,8 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const [grade, setGrade] = useState('');
   const [category, setCategory] = useState('기타');
   const [textbookType, setTextbookType] = useState<string>('student');
+  const [isInhouse, setIsInhouse] = useState(false);
+  const [inhouseAuthor, setInhouseAuthor] = useState('');
 
   const [editOrder, setEditOrder] = useState<TextbookOrder | null>(null);
   const [editName, setEditName] = useState('');
