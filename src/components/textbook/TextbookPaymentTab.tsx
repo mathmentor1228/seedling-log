@@ -347,9 +347,25 @@ export function TextbookPaymentTab() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-48"
         />
+        <Select value={inhouseFilter} onValueChange={setInhouseFilter}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="교재 구분" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 교재</SelectItem>
+            <SelectItem value="inhouse">자체제작 교재만</SelectItem>
+            <SelectItem value="external">외부 교재만</SelectItem>
+            {inhouseAuthors.map(a => (
+              <SelectItem key={a} value={`author:${a}`}>자체제작 · {a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {inhouseFilter !== 'all' && (
+          <Badge className="bg-violet-100 text-violet-700 border-violet-300">
+            {inhouseFilter === 'external' ? '외부 교재' : inhouseFilter.startsWith('author:') ? `자체제작 · ${inhouseFilter.slice(7)}` : '자체제작'} 필터 적용중
+          </Badge>
+        )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-foreground">{monthlyStats.totalBilled.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">총 청구액</p>
@@ -362,7 +378,12 @@ export function TextbookPaymentTab() {
           <p className="text-xl font-bold text-destructive">{monthlyStats.totalUnpaid.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">미납액</p>
         </Card>
+        <Card className="p-4 text-center border-violet-300">
+          <p className="text-xl font-bold text-violet-600">{monthlyStats.inhouseBilled.toLocaleString()}원</p>
+          <p className="text-xs text-muted-foreground mt-1">자체제작 교재 청구액</p>
+        </Card>
       </div>
+
 
       {/* Unpaid list - grouped by student */}
       {unpaidByStudent.length > 0 && (
