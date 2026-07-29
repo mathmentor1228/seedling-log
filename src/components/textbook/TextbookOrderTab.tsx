@@ -394,6 +394,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
         map.set(key, {
           textbook_name: o.textbook_name, subject: o.subject, unit_price: o.unit_price,
           grade: o.grade || null, category: o.category || null, textbook_type: o.textbook_type || 'student',
+          is_inhouse: !!o.is_inhouse, inhouse_author: o.inhouse_author || null,
           orders: [], totalQty: 0, totalDistributed: 0, status,
           remainingStock: 0, receivedQty: 0,
           _nameCounts: new Map(),
