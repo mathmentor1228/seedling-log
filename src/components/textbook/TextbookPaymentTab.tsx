@@ -40,6 +40,8 @@ export function TextbookPaymentTab() {
   const [userName, setUserName] = useState('');
   const [monthFilter, setMonthFilter] = useState(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState('');
+  // 자체제작 교재 청구건만 따로 솔팅하기 위한 필터
+  const [inhouseFilter, setInhouseFilter] = useState<string>('all'); // all | inhouse | external | author:<name>
 
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
