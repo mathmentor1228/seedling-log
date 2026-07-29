@@ -65,7 +65,7 @@ export function TextbookPaymentTab() {
   const fetchData = useCallback(async () => {
     const { data, error } = await supabase
       .from('textbook_distributions')
-      .select('*, textbook_orders(textbook_name, unit_price, subject)')
+      .select('*, textbook_orders(textbook_name, unit_price, subject, is_inhouse, inhouse_author)')
       .order('created_at', { ascending: false });
     if (error) { toast.error('수납 목록 로드 실패'); setLoading(false); return; }
 
