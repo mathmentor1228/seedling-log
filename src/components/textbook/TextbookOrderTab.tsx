@@ -660,8 +660,12 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="유형" /></SelectTrigger>
           <SelectContent><SelectItem value="all">전체</SelectItem><SelectItem value="student">학생용</SelectItem><SelectItem value="teacher">교사용</SelectItem></SelectContent>
         </Select>
+        <Select value={filterInhouse} onValueChange={setFilterInhouse}>
+          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="제작" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">전체</SelectItem><SelectItem value="inhouse">자체제작</SelectItem><SelectItem value="external">외부교재</SelectItem></SelectContent>
+        </Select>
         {hasActiveFilters && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); setFilterType('all'); }}>
+          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); setFilterType('all'); setFilterInhouse('all'); }}>
             <X className="w-3.5 h-3.5" />초기화
           </Button>
         )}
