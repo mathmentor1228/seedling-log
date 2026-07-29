@@ -245,6 +245,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       unit_price: parseInt(price) || 0, requested_by: user!.id, requested_by_name: userName,
       notes: notes.trim() || null, grade: grade || null, category: category || '기타',
       status: '교재신청', textbook_type: textbookType,
+      is_inhouse: isInhouse, inhouse_author: isInhouse ? (inhouseAuthor.trim() || null) : null,
     } as any);
     if (error) { toast.error('신청 실패'); console.error(error); }
     else {
