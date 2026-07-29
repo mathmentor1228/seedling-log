@@ -511,6 +511,8 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     const g = isEdit ? editGrade : grade; const setG = isEdit ? setEditGrade : setGrade;
     const c = isEdit ? editCategory : category; const setC = isEdit ? setEditCategory : setCategory;
     const t = isEdit ? editTextbookType : textbookType; const setT = isEdit ? setEditTextbookType : setTextbookType;
+    const ih = isEdit ? editIsInhouse : isInhouse; const setIh = isEdit ? setEditIsInhouse : setIsInhouse;
+    const ia = isEdit ? editInhouseAuthor : inhouseAuthor; const setIa = isEdit ? setEditInhouseAuthor : setInhouseAuthor;
 
     return (
       <div className="space-y-4 mt-2">
@@ -529,6 +531,26 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           </div>
           {t === 'teacher' && (
             <p className="text-xs text-amber-600 mt-1">⚠️ 교사용 교재는 학생 배부 대상에서 제외됩니다.</p>
+          )}
+        </div>
+        {/* 자체제작 교재 */}
+        <div className="rounded-lg border p-3 space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+            <input type="checkbox" className="accent-violet-600 w-4 h-4" checked={ih} onChange={e => setIh(e.target.checked)} />
+            자체제작 교재 (원내 제작)
+          </label>
+          {ih && (
+            <div>
+              <label className="text-xs text-muted-foreground">제작 선생님</label>
+              <Select value={ia || '__none__'} onValueChange={v => setIa(v === '__none__' ? '' : v)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">선택 안함</SelectItem>
+                  {INHOUSE_AUTHORS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-violet-600 mt-1">※ 자체제작으로 표시하면 교재비 청구 내역에서 따로 골라볼 수 있습니다.</p>
+            </div>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
