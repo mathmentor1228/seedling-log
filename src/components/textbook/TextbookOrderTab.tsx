@@ -275,6 +275,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setGrade(group.grade || '');
     setCategory(group.category || '기타');
     setTextbookType(group.textbook_type || 'student');
+    setIsInhouse(!!group.is_inhouse); setInhouseAuthor(group.inhouse_author || '');
     setDuplicateWarningShown(true); // skip duplicate popup since user intentionally reorders
     setDuplicateMatches([]);
     setShowDialog(true);
