@@ -209,6 +209,21 @@ export function TextbookPaymentTab() {
     else { toast.success('미납으로 변경되었습니다'); fetchData(); }
   };
 
+  // 자체제작 필터 매칭 (all / inhouse / external / author:<선생님>)
+  const matchesInhouse = useCallback((d: Distribution) => {
+    const o = d.textbook_orders;
+    if (inhouseFilter === 'all') return true;
+    if (inhouseFilter === 'inhouse') return !!o?.is_inhouse;
+    if (inhouseFilter === 'external') return !o?.is_inhouse;
+    if (inhouseFilter.startsWith('author:')) return !!o?.is_inhouse && o?.inhouse_author === inhouseFilter.slice(7);
+    return true;
+  }, [inhouseFilter]);
+
+  const inhouseAuthors = useMemo(
+    () => [...new Set(distributions.map(d => d.textbook_orders?.inhouse_author).filter(Boolean) as string[])],
+    [distributions],
+  );
+
   // Monthly stats
   const monthlyStats = useMemo(() => {
     const [y, m] = monthFilter.split('-').map(Number);
