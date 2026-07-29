@@ -28,7 +28,7 @@ interface Distribution {
   distributed_by_name: string;
   created_at: string;
   depositor_name: string | null;
-  textbook_orders?: { textbook_name: string; unit_price: number; subject: string } | null;
+  textbook_orders?: { textbook_name: string; unit_price: number; subject: string; is_inhouse?: boolean | null; inhouse_author?: string | null } | null;
   parent_phone?: string | null;
   parent_name?: string | null;
 }
@@ -40,6 +40,8 @@ export function TextbookPaymentTab() {
   const [userName, setUserName] = useState('');
   const [monthFilter, setMonthFilter] = useState(() => format(new Date(), 'yyyy-MM'));
   const [searchQuery, setSearchQuery] = useState('');
+  // 자체제작 교재 청구건만 따로 솔팅하기 위한 필터
+  const [inhouseFilter, setInhouseFilter] = useState<string>('all'); // all | inhouse | external | author:<name>
 
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
@@ -63,7 +65,7 @@ export function TextbookPaymentTab() {
   const fetchData = useCallback(async () => {
     const { data, error } = await supabase
       .from('textbook_distributions')
-      .select('*, textbook_orders(textbook_name, unit_price, subject)')
+      .select('*, textbook_orders(textbook_name, unit_price, subject, is_inhouse, inhouse_author)')
       .order('created_at', { ascending: false });
     if (error) { toast.error('수납 목록 로드 실패'); setLoading(false); return; }
 
@@ -207,6 +209,21 @@ export function TextbookPaymentTab() {
     else { toast.success('미납으로 변경되었습니다'); fetchData(); }
   };
 
+  // 자체제작 필터 매칭 (all / inhouse / external / author:<선생님>)
+  const matchesInhouse = useCallback((d: Distribution) => {
+    const o = d.textbook_orders;
+    if (inhouseFilter === 'all') return true;
+    if (inhouseFilter === 'inhouse') return !!o?.is_inhouse;
+    if (inhouseFilter === 'external') return !o?.is_inhouse;
+    if (inhouseFilter.startsWith('author:')) return !!o?.is_inhouse && o?.inhouse_author === inhouseFilter.slice(7);
+    return true;
+  }, [inhouseFilter]);
+
+  const inhouseAuthors = useMemo(
+    () => [...new Set(distributions.map(d => d.textbook_orders?.inhouse_author).filter(Boolean) as string[])],
+    [distributions],
+  );
+
   // Monthly stats
   const monthlyStats = useMemo(() => {
     const [y, m] = monthFilter.split('-').map(Number);
@@ -215,16 +232,18 @@ export function TextbookPaymentTab() {
 
     const monthlyDists = distributions.filter(d => {
       const dt = new Date(d.created_at);
-      return dt >= start && dt <= end;
+      return dt >= start && dt <= end && matchesInhouse(d);
     });
 
     const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
     const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
+    const inhouseBilled = monthlyDists.filter(d => d.textbook_orders?.is_inhouse && d.payment_status !== '개별구매')
+      .reduce((s, d) => s + d.total_amount, 0);
 
-    return { totalBilled, totalPaid, totalUnpaid, count: monthlyDists.length };
-  }, [distributions, monthFilter]);
+    return { totalBilled, totalPaid, totalUnpaid, inhouseBilled, count: monthlyDists.length };
+  }, [distributions, monthFilter, inhouseFilter]);
 
   const monthOptions = useMemo(() => {
     const opts: string[] = [];
@@ -236,18 +255,19 @@ export function TextbookPaymentTab() {
     return opts;
   }, []);
 
-  // Filter distributions by search query
+  // Filter distributions by search query + 자체제작 필터
   const filteredDistributions = useMemo(() => {
-    if (!searchQuery.trim()) return distributions;
     const q = searchQuery.trim().toLowerCase();
-    return distributions.filter(d =>
-      d.student_name.toLowerCase().includes(q) ||
-      (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
-      (d.distributed_by_name || '').toLowerCase().includes(q) ||
-      (d.depositor_name || '').toLowerCase().includes(q) ||
-      (d.parent_name || '').toLowerCase().includes(q)
-    );
-  }, [distributions, searchQuery]);
+    return distributions.filter(d => {
+      if (!matchesInhouse(d)) return false;
+      if (!q) return true;
+      return d.student_name.toLowerCase().includes(q) ||
+        (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
+        (d.distributed_by_name || '').toLowerCase().includes(q) ||
+        (d.depositor_name || '').toLowerCase().includes(q) ||
+        (d.parent_name || '').toLowerCase().includes(q);
+    });
+  }, [distributions, searchQuery, matchesInhouse]);
 
   // Group unpaid by student
   const unpaidByStudent = useMemo(() => {
@@ -327,9 +347,25 @@ export function TextbookPaymentTab() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-48"
         />
+        <Select value={inhouseFilter} onValueChange={setInhouseFilter}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="교재 구분" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 교재</SelectItem>
+            <SelectItem value="inhouse">자체제작 교재만</SelectItem>
+            <SelectItem value="external">외부 교재만</SelectItem>
+            {inhouseAuthors.map(a => (
+              <SelectItem key={a} value={`author:${a}`}>자체제작 · {a}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {inhouseFilter !== 'all' && (
+          <Badge className="bg-violet-100 text-violet-700 border-violet-300">
+            {inhouseFilter === 'external' ? '외부 교재' : inhouseFilter.startsWith('author:') ? `자체제작 · ${inhouseFilter.slice(7)}` : '자체제작'} 필터 적용중
+          </Badge>
+        )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-foreground">{monthlyStats.totalBilled.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">총 청구액</p>
@@ -342,7 +378,12 @@ export function TextbookPaymentTab() {
           <p className="text-xl font-bold text-destructive">{monthlyStats.totalUnpaid.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">미납액</p>
         </Card>
+        <Card className="p-4 text-center border-violet-300">
+          <p className="text-xl font-bold text-violet-600">{monthlyStats.inhouseBilled.toLocaleString()}원</p>
+          <p className="text-xs text-muted-foreground mt-1">자체제작 교재 청구액</p>
+        </Card>
       </div>
+
 
       {/* Unpaid list - grouped by student */}
       {unpaidByStudent.length > 0 && (
@@ -406,8 +447,11 @@ export function TextbookPaymentTab() {
                       {/* List individual textbooks */}
                       {group.dists.map(dist => (
                         <div key={dist.id} className="flex items-center justify-between mt-1.5">
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
+                            {dist.textbook_orders?.is_inhouse && (
+                              <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{dist.textbook_orders?.inhouse_author ? ` · ${dist.textbook_orders.inhouse_author}` : ''}</Badge>
+                            )}
                           </p>
                           <div className="flex items-center gap-1">
                             <Button
@@ -528,6 +572,9 @@ export function TextbookPaymentTab() {
                   <span className="text-xs text-muted-foreground truncate">
                     {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                   </span>
+                  {dist.textbook_orders?.is_inhouse && (
+                    <Badge className="text-[10px] shrink-0 bg-violet-100 text-violet-700 border-violet-300">자체제작</Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <span>{format(new Date(dist.created_at), 'MM/dd')}</span>

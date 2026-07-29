@@ -32,6 +32,8 @@ interface TextbookOrder {
   grade?: string | null;
   category?: string | null;
   textbook_type?: string;
+  is_inhouse?: boolean;
+  inhouse_author?: string | null;
 }
 
 interface TextbookGroup {
@@ -41,6 +43,8 @@ interface TextbookGroup {
   grade: string | null;
   category: string | null;
   textbook_type: string;
+  is_inhouse: boolean;
+  inhouse_author: string | null;
   orders: TextbookOrder[];
   totalQty: number;
   totalDistributed: number;
@@ -58,6 +62,8 @@ interface TextbookOrderTabProps {
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
 const GRADES = ['초등', '중1', '중2', '중3', '고1', '고2', '고3'];
 const CATEGORIES = ['내신', '문법', '개념', '유형', '심화', '독해', '단어', '기타'];
+// 자체제작(원내 제작) 교재의 제작 선생님 후보
+const INHOUSE_AUTHORS = ['이재진', '김민희', '최윤기', '함유빈', '조준희', '이나연', '황은지'];
 const ORDER_STATUSES = ['교재신청', '주문중', '입고완료'] as const;
 const TEXTBOOK_TYPES = [
   { value: 'student', label: '학생용', icon: GraduationCap },
@@ -78,6 +84,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterInhouse, setFilterInhouse] = useState<string>('all');
 
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('수학');
@@ -87,6 +94,8 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const [grade, setGrade] = useState('');
   const [category, setCategory] = useState('기타');
   const [textbookType, setTextbookType] = useState<string>('student');
+  const [isInhouse, setIsInhouse] = useState(false);
+  const [inhouseAuthor, setInhouseAuthor] = useState('');
 
   const [editOrder, setEditOrder] = useState<TextbookOrder | null>(null);
   const [editName, setEditName] = useState('');
@@ -97,6 +106,8 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const [editGrade, setEditGrade] = useState('');
   const [editCategory, setEditCategory] = useState('기타');
   const [editTextbookType, setEditTextbookType] = useState<string>('student');
+  const [editIsInhouse, setEditIsInhouse] = useState(false);
+  const [editInhouseAuthor, setEditInhouseAuthor] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [duplicateWarningShown, setDuplicateWarningShown] = useState(false);
@@ -204,6 +215,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
         textbook_name: tName, subject: matching[0]?.subject || '', unit_price: matching[0]?.unit_price || 0,
         grade: matching[0]?.grade || null, category: matching[0]?.category || null,
         textbook_type: matching[0]?.textbook_type || 'student',
+        is_inhouse: matching.some(o => o.is_inhouse), inhouse_author: matching.find(o => o.inhouse_author)?.inhouse_author || null,
         orders: matching, totalQty: matching.reduce((s, o) => s + o.quantity, 0),
         totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
         status: matching[0]?.status || '교재신청',
@@ -235,12 +247,13 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       unit_price: parseInt(price) || 0, requested_by: user!.id, requested_by_name: userName,
       notes: notes.trim() || null, grade: grade || null, category: category || '기타',
       status: '교재신청', textbook_type: textbookType,
+      is_inhouse: isInhouse, inhouse_author: isInhouse ? (inhouseAuthor.trim() || null) : null,
     } as any);
     if (error) { toast.error('신청 실패'); console.error(error); }
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타'); setTextbookType('student');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타'); setTextbookType('student'); setIsInhouse(false); setInhouseAuthor('');
       setDuplicateWarningShown(false); setDuplicateMatches([]);
       fetchOrders();
     }
@@ -252,6 +265,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setEditQty(String(order.quantity)); setEditPrice(String(order.unit_price));
     setEditNotes(order.notes || ''); setEditGrade(order.grade || ''); setEditCategory(order.category || '기타');
     setEditTextbookType(order.textbook_type || 'student');
+    setEditIsInhouse(!!order.is_inhouse); setEditInhouseAuthor(order.inhouse_author || '');
   };
 
   const openReorder = (group: TextbookGroup) => {
@@ -263,6 +277,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setGrade(group.grade || '');
     setCategory(group.category || '기타');
     setTextbookType(group.textbook_type || 'student');
+    setIsInhouse(!!group.is_inhouse); setInhouseAuthor(group.inhouse_author || '');
     setDuplicateWarningShown(true); // skip duplicate popup since user intentionally reorders
     setDuplicateMatches([]);
     setShowDialog(true);
@@ -277,6 +292,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       textbook_name: editName.trim(), subject: editSubject, quantity: parseInt(editQty) || 1,
       unit_price: parseInt(editPrice) || 0, notes: editNotes.trim() || null, grade: editGrade || null,
       category: editCategory || '기타', textbook_type: editTextbookType, updated_at: new Date().toISOString(),
+      is_inhouse: editIsInhouse, inhouse_author: editIsInhouse ? (editInhouseAuthor.trim() || null) : null,
     } as any).eq('id', editOrder.id);
     if (error) { toast.error('수정 실패'); console.error(error); }
     else { toast.success('교재 정보가 수정되었습니다'); setEditOrder(null); fetchOrders(); }
@@ -380,6 +396,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
         map.set(key, {
           textbook_name: o.textbook_name, subject: o.subject, unit_price: o.unit_price,
           grade: o.grade || null, category: o.category || null, textbook_type: o.textbook_type || 'student',
+          is_inhouse: !!o.is_inhouse, inhouse_author: o.inhouse_author || null,
           orders: [], totalQty: 0, totalDistributed: 0, status,
           remainingStock: 0, receivedQty: 0,
           _nameCounts: new Map(),
@@ -389,6 +406,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       g.orders.push({ ...o, status }); g.totalQty += o.quantity; g.totalDistributed += o.distributed_qty || 0;
       if (o.grade) g.grade = o.grade; if (o.category && o.category !== '기타') g.category = o.category;
       if (o.textbook_type === 'teacher') g.textbook_type = 'teacher';
+      if (o.is_inhouse) { g.is_inhouse = true; if (o.inhouse_author) g.inhouse_author = o.inhouse_author; }
       // 표시명 후보 집계 (가장 자주 쓰인 표기를 대표명으로)
       g._nameCounts.set(o.textbook_name, (g._nameCounts.get(o.textbook_name) || 0) + 1);
     });
@@ -433,11 +451,14 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       const matchesGrade = filterGrade === 'all' || g.grade === filterGrade;
       const matchesCategory = filterCategory === 'all' || g.category === filterCategory;
       const matchesType = filterType === 'all' || g.textbook_type === filterType;
-      return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory && matchesType;
+      const matchesInhouse = filterInhouse === 'all'
+        || (filterInhouse === 'inhouse' && g.is_inhouse)
+        || (filterInhouse === 'external' && !g.is_inhouse);
+      return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory && matchesType && matchesInhouse;
     });
-  }, [groups, searchQuery, filterSubject, filterStatus, filterGrade, filterCategory, filterType]);
+  }, [groups, searchQuery, filterSubject, filterStatus, filterGrade, filterCategory, filterType, filterInhouse]);
 
-  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all' || filterType !== 'all';
+  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all' || filterType !== 'all' || filterInhouse !== 'all';
 
   const subjectColor = (s: string) => {
     switch (s) {
@@ -492,6 +513,8 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     const g = isEdit ? editGrade : grade; const setG = isEdit ? setEditGrade : setGrade;
     const c = isEdit ? editCategory : category; const setC = isEdit ? setEditCategory : setCategory;
     const t = isEdit ? editTextbookType : textbookType; const setT = isEdit ? setEditTextbookType : setTextbookType;
+    const ih = isEdit ? editIsInhouse : isInhouse; const setIh = isEdit ? setEditIsInhouse : setIsInhouse;
+    const ia = isEdit ? editInhouseAuthor : inhouseAuthor; const setIa = isEdit ? setEditInhouseAuthor : setInhouseAuthor;
 
     return (
       <div className="space-y-4 mt-2">
@@ -510,6 +533,26 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           </div>
           {t === 'teacher' && (
             <p className="text-xs text-amber-600 mt-1">⚠️ 교사용 교재는 학생 배부 대상에서 제외됩니다.</p>
+          )}
+        </div>
+        {/* 자체제작 교재 */}
+        <div className="rounded-lg border p-3 space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+            <input type="checkbox" className="accent-violet-600 w-4 h-4" checked={ih} onChange={e => setIh(e.target.checked)} />
+            자체제작 교재 (원내 제작)
+          </label>
+          {ih && (
+            <div>
+              <label className="text-xs text-muted-foreground">제작 선생님</label>
+              <Select value={ia || '__none__'} onValueChange={v => setIa(v === '__none__' ? '' : v)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">선택 안함</SelectItem>
+                  {INHOUSE_AUTHORS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-violet-600 mt-1">※ 자체제작으로 표시하면 교재비 청구 내역에서 따로 골라볼 수 있습니다.</p>
+            </div>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -617,8 +660,12 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="유형" /></SelectTrigger>
           <SelectContent><SelectItem value="all">전체</SelectItem><SelectItem value="student">학생용</SelectItem><SelectItem value="teacher">교사용</SelectItem></SelectContent>
         </Select>
+        <Select value={filterInhouse} onValueChange={setFilterInhouse}>
+          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="제작" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">전체</SelectItem><SelectItem value="inhouse">자체제작</SelectItem><SelectItem value="external">외부교재</SelectItem></SelectContent>
+        </Select>
         {hasActiveFilters && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); setFilterType('all'); }}>
+          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); setFilterType('all'); setFilterInhouse('all'); }}>
             <X className="w-3.5 h-3.5" />초기화
           </Button>
         )}
@@ -787,6 +834,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
                       <p className="font-medium text-foreground text-sm">{group.textbook_name}</p>
                       <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", subjectColor(group.subject))}>{group.subject}</span>
                       {isTeacher && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">교사용</Badge>}
+                      {group.is_inhouse && <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{group.inhouse_author ? ` · ${group.inhouse_author}` : ''}</Badge>}
                       {group.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.grade}</Badge>}
                       <Badge className={cn("text-[10px]", statusColor(group.status))}>{group.status}</Badge>
                     </div>
