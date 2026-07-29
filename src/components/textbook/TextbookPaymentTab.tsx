@@ -255,18 +255,19 @@ export function TextbookPaymentTab() {
     return opts;
   }, []);
 
-  // Filter distributions by search query
+  // Filter distributions by search query + 자체제작 필터
   const filteredDistributions = useMemo(() => {
-    if (!searchQuery.trim()) return distributions;
     const q = searchQuery.trim().toLowerCase();
-    return distributions.filter(d =>
-      d.student_name.toLowerCase().includes(q) ||
-      (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
-      (d.distributed_by_name || '').toLowerCase().includes(q) ||
-      (d.depositor_name || '').toLowerCase().includes(q) ||
-      (d.parent_name || '').toLowerCase().includes(q)
-    );
-  }, [distributions, searchQuery]);
+    return distributions.filter(d => {
+      if (!matchesInhouse(d)) return false;
+      if (!q) return true;
+      return d.student_name.toLowerCase().includes(q) ||
+        (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
+        (d.distributed_by_name || '').toLowerCase().includes(q) ||
+        (d.depositor_name || '').toLowerCase().includes(q) ||
+        (d.parent_name || '').toLowerCase().includes(q);
+    });
+  }, [distributions, searchQuery, matchesInhouse]);
 
   // Group unpaid by student
   const unpaidByStudent = useMemo(() => {
