@@ -404,6 +404,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       g.orders.push({ ...o, status }); g.totalQty += o.quantity; g.totalDistributed += o.distributed_qty || 0;
       if (o.grade) g.grade = o.grade; if (o.category && o.category !== '기타') g.category = o.category;
       if (o.textbook_type === 'teacher') g.textbook_type = 'teacher';
+      if (o.is_inhouse) { g.is_inhouse = true; if (o.inhouse_author) g.inhouse_author = o.inhouse_author; }
       // 표시명 후보 집계 (가장 자주 쓰인 표기를 대표명으로)
       g._nameCounts.set(o.textbook_name, (g._nameCounts.get(o.textbook_name) || 0) + 1);
     });
