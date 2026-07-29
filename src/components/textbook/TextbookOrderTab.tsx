@@ -208,6 +208,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
         textbook_name: tName, subject: matching[0]?.subject || '', unit_price: matching[0]?.unit_price || 0,
         grade: matching[0]?.grade || null, category: matching[0]?.category || null,
         textbook_type: matching[0]?.textbook_type || 'student',
+        is_inhouse: matching.some(o => o.is_inhouse), inhouse_author: matching.find(o => o.inhouse_author)?.inhouse_author || null,
         orders: matching, totalQty: matching.reduce((s, o) => s + o.quantity, 0),
         totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
         status: matching[0]?.status || '교재신청',
