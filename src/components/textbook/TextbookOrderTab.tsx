@@ -251,7 +251,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타'); setTextbookType('student');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타'); setTextbookType('student'); setIsInhouse(false); setInhouseAuthor('');
       setDuplicateWarningShown(false); setDuplicateMatches([]);
       fetchOrders();
     }
