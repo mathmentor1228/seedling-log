@@ -28,7 +28,7 @@ interface Distribution {
   distributed_by_name: string;
   created_at: string;
   depositor_name: string | null;
-  textbook_orders?: { textbook_name: string; unit_price: number; subject: string } | null;
+  textbook_orders?: { textbook_name: string; unit_price: number; subject: string; is_inhouse?: boolean | null; inhouse_author?: string | null } | null;
   parent_phone?: string | null;
   parent_name?: string | null;
 }
