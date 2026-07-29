@@ -217,16 +217,18 @@ export function TextbookPaymentTab() {
 
     const monthlyDists = distributions.filter(d => {
       const dt = new Date(d.created_at);
-      return dt >= start && dt <= end;
+      return dt >= start && dt <= end && matchesInhouse(d);
     });
 
     const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
     const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
+    const inhouseBilled = monthlyDists.filter(d => d.textbook_orders?.is_inhouse && d.payment_status !== '개별구매')
+      .reduce((s, d) => s + d.total_amount, 0);
 
-    return { totalBilled, totalPaid, totalUnpaid, count: monthlyDists.length };
-  }, [distributions, monthFilter]);
+    return { totalBilled, totalPaid, totalUnpaid, inhouseBilled, count: monthlyDists.length };
+  }, [distributions, monthFilter, inhouseFilter]);
 
   const monthOptions = useMemo(() => {
     const opts: string[] = [];
