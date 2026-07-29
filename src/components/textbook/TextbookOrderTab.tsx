@@ -449,11 +449,14 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       const matchesGrade = filterGrade === 'all' || g.grade === filterGrade;
       const matchesCategory = filterCategory === 'all' || g.category === filterCategory;
       const matchesType = filterType === 'all' || g.textbook_type === filterType;
-      return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory && matchesType;
+      const matchesInhouse = filterInhouse === 'all'
+        || (filterInhouse === 'inhouse' && g.is_inhouse)
+        || (filterInhouse === 'external' && !g.is_inhouse);
+      return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory && matchesType && matchesInhouse;
     });
-  }, [groups, searchQuery, filterSubject, filterStatus, filterGrade, filterCategory, filterType]);
+  }, [groups, searchQuery, filterSubject, filterStatus, filterGrade, filterCategory, filterType, filterInhouse]);
 
-  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all' || filterType !== 'all';
+  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all' || filterType !== 'all' || filterInhouse !== 'all';
 
   const subjectColor = (s: string) => {
     switch (s) {
