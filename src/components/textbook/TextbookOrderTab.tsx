@@ -263,6 +263,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     setEditQty(String(order.quantity)); setEditPrice(String(order.unit_price));
     setEditNotes(order.notes || ''); setEditGrade(order.grade || ''); setEditCategory(order.category || '기타');
     setEditTextbookType(order.textbook_type || 'student');
+    setEditIsInhouse(!!order.is_inhouse); setEditInhouseAuthor(order.inhouse_author || '');
   };
 
   const openReorder = (group: TextbookGroup) => {
