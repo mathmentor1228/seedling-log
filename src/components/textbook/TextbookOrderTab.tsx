@@ -32,6 +32,8 @@ interface TextbookOrder {
   grade?: string | null;
   category?: string | null;
   textbook_type?: string;
+  is_inhouse?: boolean;
+  inhouse_author?: string | null;
 }
 
 interface TextbookGroup {
