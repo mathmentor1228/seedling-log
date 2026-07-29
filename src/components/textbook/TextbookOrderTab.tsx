@@ -82,6 +82,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterInhouse, setFilterInhouse] = useState<string>('all');
 
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('수학');
