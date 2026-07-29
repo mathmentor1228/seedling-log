@@ -290,6 +290,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       textbook_name: editName.trim(), subject: editSubject, quantity: parseInt(editQty) || 1,
       unit_price: parseInt(editPrice) || 0, notes: editNotes.trim() || null, grade: editGrade || null,
       category: editCategory || '기타', textbook_type: editTextbookType, updated_at: new Date().toISOString(),
+      is_inhouse: editIsInhouse, inhouse_author: editIsInhouse ? (editInhouseAuthor.trim() || null) : null,
     } as any).eq('id', editOrder.id);
     if (error) { toast.error('수정 실패'); console.error(error); }
     else { toast.success('교재 정보가 수정되었습니다'); setEditOrder(null); fetchOrders(); }
