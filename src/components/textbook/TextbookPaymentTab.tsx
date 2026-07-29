@@ -447,8 +447,11 @@ export function TextbookPaymentTab() {
                       {/* List individual textbooks */}
                       {group.dists.map(dist => (
                         <div key={dist.id} className="flex items-center justify-between mt-1.5">
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
+                            {dist.textbook_orders?.is_inhouse && (
+                              <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{dist.textbook_orders?.inhouse_author ? ` · ${dist.textbook_orders.inhouse_author}` : ''}</Badge>
+                            )}
                           </p>
                           <div className="flex items-center gap-1">
                             <Button
