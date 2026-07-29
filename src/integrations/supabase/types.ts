@@ -6981,6 +6981,8 @@ export type Database = {
           distributed_qty: number
           grade: string | null
           id: string
+          inhouse_author: string | null
+          is_inhouse: boolean
           notes: string | null
           quantity: number
           requested_by: string
@@ -7000,6 +7002,8 @@ export type Database = {
           distributed_qty?: number
           grade?: string | null
           id?: string
+          inhouse_author?: string | null
+          is_inhouse?: boolean
           notes?: string | null
           quantity?: number
           requested_by: string
@@ -7019,6 +7023,8 @@ export type Database = {
           distributed_qty?: number
           grade?: string | null
           id?: string
+          inhouse_author?: string | null
+          is_inhouse?: boolean
           notes?: string | null
           quantity?: number
           requested_by?: string
