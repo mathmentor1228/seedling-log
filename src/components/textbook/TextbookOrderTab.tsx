@@ -45,7 +45,7 @@ interface TextbookGroup {
   textbook_type: string;
   is_inhouse: boolean;
   inhouse_author: string | null;
-
+  orders: TextbookOrder[];
   totalQty: number;
   totalDistributed: number;
   status: string;
