@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, Map } from 'lucide-react';
+import { ChevronDown, Map as MapIcon } from 'lucide-react';
 import { PlanGoal } from './planApi';
 
 type StudentLite = { id: string; name: string; type: 'A' | 'B' | 'C' | null };
@@ -107,7 +107,7 @@ export function TrackMapPanel({
           className={`flex items-center gap-2 w-full text-left ${open ? '' : 'px-4 py-3 hover:bg-muted/30 transition rounded-xl'}`}
           onClick={() => setOpen(o => !o)}
           title={open ? '접기' : '전체 목차와 학생별 위치 보기'}>
-          <Map className="w-4 h-4 text-primary shrink-0" />
+          <MapIcon className="w-4 h-4 text-primary shrink-0" />
           <span className="text-sm font-extrabold">전체 목차 · 학생별 위치</span>
           <span className="text-[11px] text-muted-foreground">
             {trackGoals.length}개 목표 중 {groupPosIdx + 1}개 완료
