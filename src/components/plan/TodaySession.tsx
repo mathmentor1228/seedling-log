@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PlanGoal, SessionRole, ROLE_LABELS, countProgressSessions, cancelSession, uncancelSession } from './planApi';
 import { ProgressAdjustModal } from './ProgressAdjustModal';
+import { TrackMapPanel } from './TrackMapPanel';
 
 const db = supabase as any;
 
@@ -1637,12 +1638,25 @@ export function TodaySession() {
               <p className="text-muted-foreground">진도 대신 1단계의 밀린 할 일(재시험·재학습)을 소화하는 날입니다. 단원 마무리 테스트 결과는 1단계 쪽지시험 칸에 기록하세요.</p>
             </CardContent></Card>
           ) : todayGoals.length === 0 ? (
-            <Card><CardContent className="p-8 text-center text-sm text-muted-foreground space-y-2">
-              <p>🎉 끝점까지 모든 목표를 나갔습니다 — 확인·복습만 남았어요.</p>
-              <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
-                진도 위치 조정 (기록이 실제와 다르면)
-              </Button>
-            </CardContent></Card>
+            <>
+              <Card><CardContent className="p-8 text-center text-sm text-muted-foreground space-y-2">
+                <p>🎉 끝점까지 모든 목표를 나갔습니다 — 확인·복습만 남았어요.</p>
+                <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
+                  진도 위치 조정 (기록이 실제와 다르면)
+                </Button>
+              </CardContent></Card>
+              <TrackMapPanel
+                trackGoals={trackGoals}
+                students={students.filter(s => !absent.has(s.id))}
+                progress={progress}
+                perStudent={perStudent}
+                todayStartIdx={todayStartIdx}
+                todayEndIdx={todayEndIdx}
+                groupPosIdx={groupPosIdx}
+                remainSessions={remainSessions}
+                pace={pace}
+              />
+            </>
           ) : (
             <>
               {/* 오늘 목표 요약 배너 — 어디부터 어디까지 + 페이스 조정 */}
@@ -1696,6 +1710,19 @@ export function TodaySession() {
                   </div>
                 );
               })()}
+
+              {/* TRACK-MAP-V1: 전체 목차 + 학생별 위치·개인 페이스 지도 — 기록 전에 맥락부터 */}
+              <TrackMapPanel
+                trackGoals={trackGoals}
+                students={students.filter(s => !absent.has(s.id))}
+                progress={progress}
+                perStudent={perStudent}
+                todayStartIdx={todayStartIdx}
+                todayEndIdx={todayEndIdx}
+                groupPosIdx={groupPosIdx}
+                remainSessions={remainSessions}
+                pace={pace}
+              />
 
               {/* 🚀 총 도달 페이지 (권장) — 학생별로 실제 나간 페이지만 적으면 자동으로 여러 목표에 나눠 기록 */}
               {(() => {
