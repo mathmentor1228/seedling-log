@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
@@ -126,6 +126,7 @@ export function TeacherAttendanceView() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
+  const studentFetchSequence = useRef(0);
 
   const [absenceDialog, setAbsenceDialog] = useState<{
     open: boolean;
@@ -270,6 +271,7 @@ export function TeacherAttendanceView() {
   }, [teacherId, today]);
 
   const fetchStudents = useCallback(async () => {
+    const fetchSequence = ++studentFetchSequence.current;
     try {
       if (slots.length === 0) return;
 
@@ -361,7 +363,7 @@ export function TeacherAttendanceView() {
             if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
             else if (attendance.includes('지각')) status = '지각';
             else if (attendance.includes('미등원')) status = '미등원';
-            else if (attendance.includes('정상등원') || isEarly) status = '등원';
+            else if (attendance.includes('정상등원') || attendance.includes('출석') || isEarly) status = '등원';
             else if (log?.checked_in_at) status = '등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
@@ -380,11 +382,15 @@ export function TeacherAttendanceView() {
           .filter((s): s is StudentAttendance => s !== null)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       });
-      setStudentMap(map);
-      setLoading(false);
+      // Realtime emits several overlapping fetches during bulk attendance.
+      // Discard stale responses so an older partial snapshot cannot win.
+      if (fetchSequence === studentFetchSequence.current) {
+        setStudentMap(map);
+        setLoading(false);
+      }
     } catch (err) {
       console.error('fetchStudents error:', err);
-      setLoading(false);
+      if (fetchSequence === studentFetchSequence.current) setLoading(false);
     }
   }, [slots, today]);
 
@@ -492,6 +498,23 @@ export function TeacherAttendanceView() {
         console.warn('Student status update skipped:', studentStatusError);
       }
 
+      // Save the physical check-in first. A submitted journal may be protected
+      // from edits, but that must never roll the attendance button back.
+      if (newStatus === '등원' || newStatus === '지각') {
+        const { data: existing, error: existingLogError } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+        if (existingLogError) throw existingLogError;
+        if (existing?.length) {
+          const { error: updateLogError } = await supabase.from('attendance_logs').update({ checked_in_at: nowIso, checked_out_at: null }).eq('id', existing[0].id);
+          if (updateLogError) throw updateLogError;
+        } else {
+          const { error: insertLogError } = await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+          if (insertLogError) throw insertLogError;
+        }
+      } else {
+        const { error: clearLogsError } = await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
+        if (clearLogsError) throw clearLogsError;
+      }
+
       // Skip lesson_records writes for exam-prep slots (no class_id)
       if (!activeSlot.isExamPrep && activeSlot.classId) {
         const { data: existingLesson, error: existingLessonError } = await supabase
@@ -502,7 +525,7 @@ export function TeacherAttendanceView() {
           .eq('lesson_date', today)
           .eq('subject', activeSlot.subject as any)
           .maybeSingle();
-        if (existingLessonError) throw existingLessonError;
+        if (existingLessonError) console.warn('Attendance journal lookup skipped:', existingLessonError);
 
         const mergedLessonRange = lessonRangeText
           ? existingLesson?.lesson_range?.includes(lessonRangeText)
@@ -518,7 +541,7 @@ export function TeacherAttendanceView() {
 
         if (existingLesson) {
           const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
-          if (updateLessonError) throw updateLessonError;
+          if (updateLessonError) console.warn('Attendance journal sync skipped:', updateLessonError);
         } else {
           const { error: insertLessonError } = await safeUpsertLessonRecord({
             teacher_id: teacherId,
@@ -533,24 +556,9 @@ export function TeacherAttendanceView() {
             attendance_status: lessonAttendanceStatus,
             submitted: false,
           });
-          if (insertLessonError) throw insertLessonError;
+          if (insertLessonError) console.warn('Attendance journal sync skipped:', insertLessonError);
 
         }
-      }
-
-      if (newStatus === '등원' || newStatus === '지각') {
-        const { data: existing, error: existingLogError } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
-        if (existingLogError) throw existingLogError;
-        if (existing?.length) {
-          const { error: updateLogError } = await supabase.from('attendance_logs').update({ checked_in_at: nowIso, checked_out_at: null }).eq('id', existing[0].id);
-          if (updateLogError) throw updateLogError;
-        } else {
-          const { error: insertLogError } = await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
-          if (insertLogError) throw insertLogError;
-        }
-      } else {
-        const { error: clearLogsError } = await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
-        if (clearLogsError) throw clearLogsError;
       }
 
       if (supplementaryDate) {

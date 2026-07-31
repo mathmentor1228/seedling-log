@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { StudentEntry, getDayOfWeek, fmtTime, ROOMS } from './types';
 
@@ -14,9 +14,11 @@ export function useAttendanceData({ userId, role, selectedRoom }: UseAttendanceD
   const [roomCounts, setRoomCounts] = useState<Record<string, number>>({});
   const [capacities, setCapacities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const fetchSequenceRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!userId) return;
+    const fetchSequence = ++fetchSequenceRef.current;
     const today = new Date().toISOString().split('T')[0];
     const dayOfWeek = getDayOfWeek(today);
 
@@ -154,6 +156,7 @@ export function useAttendanceData({ userId, role, selectedRoom }: UseAttendanceD
 
     const order: Record<string, number> = { not_arrived: 0, checked_in: 1, checked_out: 2 };
     result.sort((a, b) => order[a.status] - order[b.status]);
+    if (fetchSequence !== fetchSequenceRef.current) return;
     setAllEntries(result);
     setEntries(result.filter(e => e.roomId === selectedRoom));
 
