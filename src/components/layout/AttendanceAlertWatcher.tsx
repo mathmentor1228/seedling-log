@@ -122,7 +122,7 @@ export function AttendanceAlertWatcher() {
       setOpen(false);
       return;
     }
-    const today = now.toISOString().split('T')[0];
+    const today = getTodayKST();
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
