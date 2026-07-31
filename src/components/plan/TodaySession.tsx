@@ -986,7 +986,7 @@ export function TodaySession() {
             lesson_range: range,
             homework_status: hwStatus,
             next_lesson_goal: summary.nextGoalTitle || null,
-            attendance_status: isAbsent ? ['결석'] : ['출석'],
+            attendance_status: isAbsent ? ['결석'] : ['정상등원'],
             // PLAN-REPORT-BRIDGE-V1: 주간리포트 AI가 읽는 서술 근거 채우기
             learning_issues_note: mergedNote,
             ...(note.trim() ? { notes: note.trim() } : {}),

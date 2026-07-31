@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Clock, Check, X, BellRing } from 'lucide-react';
 import { toast } from 'sonner';
+import { getTodayKST } from '@/lib/utils';
 
 interface OverdueEntry {
   key: string;          // studentId_room_slotStart
@@ -50,7 +51,7 @@ function loadMuteAll(userId?: string): number {
     const raw = localStorage.getItem(userKey(MUTE_ALL_KEY_BASE, userId));
     if (!raw) return 0;
     const parsed = JSON.parse(raw) as { date: string; until: number };
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayKST();
     if (parsed.date !== today) return 0;
     return parsed.until || 0;
   } catch {
@@ -58,7 +59,7 @@ function loadMuteAll(userId?: string): number {
   }
 }
 function saveMuteAll(until: number, userId?: string) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayKST();
   localStorage.setItem(userKey(MUTE_ALL_KEY_BASE, userId), JSON.stringify({ date: today, until }));
 }
 
@@ -78,7 +79,7 @@ function loadDayMap(key: string): Map<string, number> {
     const raw = localStorage.getItem(key);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw) as { date: string; items: Record<string, number> };
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayKST();
     if (parsed.date !== today) return new Map();
     return new Map(Object.entries(parsed.items));
   } catch {
@@ -86,7 +87,7 @@ function loadDayMap(key: string): Map<string, number> {
   }
 }
 function saveDayMap(key: string, m: Map<string, number>) {
-  const today = new Date().toISOString().split('T')[0];
+    const today = getTodayKST();
   localStorage.setItem(
     key,
     JSON.stringify({ date: today, items: Object.fromEntries(m.entries()) })
@@ -121,7 +122,7 @@ export function AttendanceAlertWatcher() {
       setOpen(false);
       return;
     }
-    const today = now.toISOString().split('T')[0];
+    const today = getTodayKST();
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -335,7 +336,7 @@ export function AttendanceAlertWatcher() {
     setBusy(e.key, true);
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = getTodayKST();
       const { data: existing } = await supabase
         .from('attendance_logs')
         .select('id')
@@ -370,7 +371,7 @@ export function AttendanceAlertWatcher() {
   const handleMarkAbsent = async (e: OverdueEntry) => {
     setBusy(e.key, true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayKST();
       await supabase.from('attendance').upsert({
         student_id: e.studentId,
         att_date: today,
