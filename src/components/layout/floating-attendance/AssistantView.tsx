@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StudentEntry, ROOMS, getCurrentSlot } from './types';
 import { StudentRow } from './StudentRow';
 import { supabase } from '@/integrations/supabase/client';
+import { getTodayKST } from '@/lib/utils';
 
 interface AssistantViewProps {
   selectedRoom: string;
@@ -69,7 +70,7 @@ export function AssistantView({
   };
 
   const handleGuerillaAdd = async (studentId: string, studentName: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayKST();
     const { getDayOfWeek } = await import('./types');
     await supabase.from('room_assignments').insert({
       student_ids: [studentId],
