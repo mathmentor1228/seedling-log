@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useState, useCallback } from 'react';
 import { StudentEntry, fmtTime } from './types';
 import { toast } from 'sonner';
+import { getTodayKST } from '@/lib/utils';
 
 interface OptimisticSetters {
   setEntries: React.Dispatch<React.SetStateAction<StudentEntry[]>>;
@@ -51,7 +52,7 @@ export function useAttendanceActions(
     }
 
     const now = new Date().toISOString();
-    const today = now.split('T')[0];
+    const today = getTodayKST();
     const timeStr = fmtTime(now);
 
     // Optimistic update

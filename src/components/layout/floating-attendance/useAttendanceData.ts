@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { StudentEntry, getDayOfWeek, fmtTime, ROOMS } from './types';
+import { getTodayKST } from '@/lib/utils';
 
 interface UseAttendanceDataOptions {
   userId: string | undefined;
@@ -19,7 +20,7 @@ export function useAttendanceData({ userId, role, selectedRoom }: UseAttendanceD
   const fetchData = useCallback(async () => {
     if (!userId) return;
     const fetchSequence = ++fetchSequenceRef.current;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayKST();
     const dayOfWeek = getDayOfWeek(today);
 
     // Fetch capacities

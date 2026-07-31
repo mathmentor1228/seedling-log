@@ -362,9 +362,9 @@ export function TeacherAttendanceView() {
             let status: AttendanceStatus = '미등원';
             if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
             else if (attendance.includes('지각')) status = '지각';
-            else if (attendance.includes('미등원')) status = '미등원';
             else if (attendance.includes('정상등원') || attendance.includes('출석') || isEarly) status = '등원';
             else if (log?.checked_in_at) status = '등원';
+            else if (attendance.includes('미등원')) status = '미등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
             else if (student.baseStatus === '등원') status = '등원';
