@@ -6,9 +6,24 @@ interface AdminViewProps {
   roomCounts: Record<string, number>;
   capacities: Record<string, number>;
   loading: boolean;
+  loadingIds: Set<string>;
+  onCheckIn: (studentId: string, roomId: string) => void;
+  onCheckOut: (logId: string) => void;
+  onCancelCheckIn: (logId: string) => void;
+  onCancelCheckOut: (logId: string) => void;
 }
 
-export function AdminView({ allEntries, roomCounts, capacities, loading }: AdminViewProps) {
+export function AdminView({
+  allEntries,
+  roomCounts,
+  capacities,
+  loading,
+  loadingIds,
+  onCheckIn,
+  onCheckOut,
+  onCancelCheckIn,
+  onCancelCheckOut,
+}: AdminViewProps) {
   const today = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 
   const totalIn = ROOMS.reduce((sum, r) => sum + (roomCounts[r.id] ?? 0), 0);
@@ -49,7 +64,7 @@ export function AdminView({ allEntries, roomCounts, capacities, loading }: Admin
         })}
       </div>
 
-      {/* All students (read-only) */}
+      {/* All students */}
       <div style={{ maxHeight: 220, overflowY: 'auto', padding: '4px 8px' }}>
         {loading ? (
           <div style={{ fontSize: 11, textAlign: 'center', padding: 12, opacity: 0.5 }}>로딩 중…</div>
@@ -60,9 +75,13 @@ export function AdminView({ allEntries, roomCounts, capacities, loading }: Admin
             <StudentRow
               key={`${e.studentId}_${e.roomId}`}
               entry={e}
-              readOnly
               showRoom
               showTeacher
+              isLoading={loadingIds.has(e.studentId) || Boolean(e.logId && loadingIds.has(e.logId))}
+              onCheckIn={onCheckIn}
+              onCheckOut={onCheckOut}
+              onCancelCheckIn={onCancelCheckIn}
+              onCancelCheckOut={onCancelCheckOut}
             />
           ))
         )}
