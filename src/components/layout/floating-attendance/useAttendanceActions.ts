@@ -80,21 +80,32 @@ export function useAttendanceActions(
         .eq('room_id', roomId)
         .maybeSingle();
 
+      let persistedLogId: string;
       if (existing) {
         const { error } = await supabase.from('attendance_logs')
           .update({ checked_in_at: now, checked_out_at: null })
           .eq('id', existing.id);
         if (error) throw error;
+        persistedLogId = existing.id;
       } else {
-        const { error } = await supabase.from('attendance_logs').insert({
-          student_id: studentId,
-          room_id: roomId,
-          date: today,
-          checked_in_at: now,
-          recorded_by: userId,
-        });
+        const { data: inserted, error } = await supabase
+          .from('attendance_logs')
+          .insert({
+            student_id: studentId,
+            room_id: roomId,
+            date: today,
+            checked_in_at: now,
+            recorded_by: userId,
+          })
+          .select('id')
+          .single();
         if (error) throw error;
+        persistedLogId = inserted.id;
       }
+
+      const syncPersistedId = (e: StudentEntry): StudentEntry => ({ ...e, logId: persistedLogId });
+      setters.setEntries(prev => updateEntryInList(prev, studentId, roomId, syncPersistedId));
+      setters.setAllEntries(prev => updateEntryInList(prev, studentId, roomId, syncPersistedId));
     } catch {
       // Rollback
       await setters.refetch();
