@@ -44,6 +44,10 @@ export function useAttendanceActions(
     setLoadingIds(prev => { const s = new Set(prev); s.delete(id); return s; });
 
   const handleCheckIn = useCallback(async (studentId: string, roomId: string) => {
+    if (!userId) {
+      toast.error('로그인 정보를 확인할 수 없습니다');
+      return;
+    }
     const cap = capacities[roomId] ?? 999;
     const currentCount = roomCounts[roomId] ?? 0;
     if (currentCount >= cap) {
@@ -77,17 +81,19 @@ export function useAttendanceActions(
         .maybeSingle();
 
       if (existing) {
-        await supabase.from('attendance_logs')
+        const { error } = await supabase.from('attendance_logs')
           .update({ checked_in_at: now, checked_out_at: null })
           .eq('id', existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from('attendance_logs').insert({
+        const { error } = await supabase.from('attendance_logs').insert({
           student_id: studentId,
           room_id: roomId,
           date: today,
           checked_in_at: now,
-          recorded_by: userId!,
+          recorded_by: userId,
         });
+        if (error) throw error;
       }
     } catch {
       // Rollback
@@ -116,14 +122,16 @@ export function useAttendanceActions(
     });
     setters.setAllEntries(prev => updateEntryByLogId(prev, logId, updater));
     if (roomId) {
-      setters.setRoomCounts(prev => ({ ...prev, [roomId!]: Math.max((prev[roomId!] ?? 0) - 1, 0) }));
+      const resolvedRoomId = roomId;
+      setters.setRoomCounts(prev => ({ ...prev, [resolvedRoomId]: Math.max((prev[resolvedRoomId] ?? 0) - 1, 0) }));
     }
     addLoading(logId);
 
     try {
-      await supabase.from('attendance_logs')
+      const { error } = await supabase.from('attendance_logs')
         .update({ checked_out_at: now })
         .eq('id', logId);
+      if (error) throw error;
     } catch {
       await setters.refetch();
       toast.error('저장 실패 — 다시 시도해주세요');
@@ -141,14 +149,16 @@ export function useAttendanceActions(
     setters.setEntries(prev => updateEntryByLogId(prev, logId, updater));
     setters.setAllEntries(prev => updateEntryByLogId(prev, logId, updater));
     if (roomId) {
-      setters.setRoomCounts(prev => ({ ...prev, [roomId!]: Math.max((prev[roomId!] ?? 0) - 1, 0) }));
+      const resolvedRoomId = roomId;
+      setters.setRoomCounts(prev => ({ ...prev, [resolvedRoomId]: Math.max((prev[resolvedRoomId] ?? 0) - 1, 0) }));
     }
     addLoading(logId);
 
     try {
-      await supabase.from('attendance_logs')
+      const { error } = await supabase.from('attendance_logs')
         .update({ checked_in_at: null, checked_out_at: null })
         .eq('id', logId);
+      if (error) throw error;
     } catch {
       await setters.refetch();
       toast.error('저장 실패 — 다시 시도해주세요');
@@ -166,14 +176,16 @@ export function useAttendanceActions(
     setters.setEntries(prev => updateEntryByLogId(prev, logId, updater));
     setters.setAllEntries(prev => updateEntryByLogId(prev, logId, updater));
     if (roomId) {
-      setters.setRoomCounts(prev => ({ ...prev, [roomId!]: (prev[roomId!] ?? 0) + 1 }));
+      const resolvedRoomId = roomId;
+      setters.setRoomCounts(prev => ({ ...prev, [resolvedRoomId]: (prev[resolvedRoomId] ?? 0) + 1 }));
     }
     addLoading(logId);
 
     try {
-      await supabase.from('attendance_logs')
+      const { error } = await supabase.from('attendance_logs')
         .update({ checked_out_at: null })
         .eq('id', logId);
+      if (error) throw error;
     } catch {
       await setters.refetch();
       toast.error('저장 실패 — 다시 시도해주세요');
