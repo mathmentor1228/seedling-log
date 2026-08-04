@@ -284,9 +284,11 @@ export function TextbookPaymentTab() {
     });
   }, [distributions, searchQuery, matchesInhouse]);
 
-  // Group unpaid by student
+  // Group unpaid by student (선택 월까지 배부된 미납 건 = 당월분 + 이월분)
   const unpaidByStudent = useMemo(() => {
-    const unpaid = filteredDistributions.filter(d => d.payment_status === '미납');
+    const unpaid = filteredDistributions.filter(d =>
+      d.payment_status === '미납' && new Date(d.created_at) <= monthRange.end,
+    );
     const grouped = new Map<string, { studentId: string; studentName: string; parentName: string | null; parentPhone: string | null; dists: Distribution[] }>();
     for (const d of unpaid) {
       if (!grouped.has(d.student_id)) {
@@ -295,7 +297,8 @@ export function TextbookPaymentTab() {
       grouped.get(d.student_id)!.dists.push(d);
     }
     return Array.from(grouped.values());
-  }, [filteredDistributions]);
+  }, [filteredDistributions, monthRange]);
+
 
   // Batch target: students with at least one un-billed unpaid item (최초 청구 대상)
   const batchTargets = useMemo(
