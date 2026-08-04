@@ -529,8 +529,8 @@ export function TodaySession() {
     if (Number.isNaN(score) || score < 0 || score > 100) { toast.error('0~100 점수를 입력해주세요'); return; }
     const cut = cutlineFor(stu);
     const passed = score >= cut;
-    // 시험 내용을 적었으면 그것이 기록·큐·일지의 라벨, 비우면 목표명
-    const quizLabel = quizContent.trim() || quizTarget.title;
+    // 학생별 시험 내용 > 공통 시험 내용 > 목표명 순으로 라벨 결정
+    const quizLabel = (quizContentPerStudent[stu.id] || '').trim() || quizContent.trim() || quizTarget.title;
     try {
       const baseCheck = {
         design_id: designId, session_id: sessionId, student_id: stu.id,
