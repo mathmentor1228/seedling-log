@@ -224,26 +224,41 @@ export function TextbookPaymentTab() {
     [distributions],
   );
 
-  // Monthly stats
-  const monthlyStats = useMemo(() => {
+  // 선택 월 범위 (미납은 다음 달로 이월되어 계속 잡힘)
+  const monthRange = useMemo(() => {
     const [y, m] = monthFilter.split('-').map(Number);
-    const start = startOfMonth(new Date(y, m - 1));
-    const end = endOfMonth(new Date(y, m - 1));
+    return { start: startOfMonth(new Date(y, m - 1)), end: endOfMonth(new Date(y, m - 1)) };
+  }, [monthFilter]);
+
+  // 이월 여부: 이전 달에 배부됐지만 아직 미납인 건
+  const isCarryOver = useCallback((d: Distribution) => (
+    d.payment_status === '미납' && new Date(d.created_at) < monthRange.start
+  ), [monthRange]);
+
+  // Monthly stats (당월 배부분 + 이전 달에서 이월된 미납분)
+  const monthlyStats = useMemo(() => {
+    const { start, end } = monthRange;
 
     const monthlyDists = distributions.filter(d => {
+      if (!matchesInhouse(d)) return false;
       const dt = new Date(d.created_at);
-      return dt >= start && dt <= end && matchesInhouse(d);
+      if (dt >= start && dt <= end) return true;
+      // 이전 달 미납 건은 이번 달로 이월
+      return dt < start && d.payment_status === '미납';
     });
 
+    const carryOverDists = monthlyDists.filter(isCarryOver);
     const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
     const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
+    const carryOverAmount = carryOverDists.reduce((s, d) => s + d.total_amount, 0);
     const inhouseBilled = monthlyDists.filter(d => d.textbook_orders?.is_inhouse && d.payment_status !== '개별구매')
       .reduce((s, d) => s + d.total_amount, 0);
 
-    return { totalBilled, totalPaid, totalUnpaid, inhouseBilled, count: monthlyDists.length };
-  }, [distributions, monthFilter, inhouseFilter]);
+    return { totalBilled, totalPaid, totalUnpaid, carryOverAmount, carryOverCount: carryOverDists.length, inhouseBilled, count: monthlyDists.length };
+  }, [distributions, monthRange, inhouseFilter, matchesInhouse, isCarryOver]);
+
 
   const monthOptions = useMemo(() => {
     const opts: string[] = [];
@@ -269,9 +284,11 @@ export function TextbookPaymentTab() {
     });
   }, [distributions, searchQuery, matchesInhouse]);
 
-  // Group unpaid by student
+  // Group unpaid by student (선택 월까지 배부된 미납 건 = 당월분 + 이월분)
   const unpaidByStudent = useMemo(() => {
-    const unpaid = filteredDistributions.filter(d => d.payment_status === '미납');
+    const unpaid = filteredDistributions.filter(d =>
+      d.payment_status === '미납' && new Date(d.created_at) <= monthRange.end,
+    );
     const grouped = new Map<string, { studentId: string; studentName: string; parentName: string | null; parentPhone: string | null; dists: Distribution[] }>();
     for (const d of unpaid) {
       if (!grouped.has(d.student_id)) {
@@ -280,7 +297,8 @@ export function TextbookPaymentTab() {
       grouped.get(d.student_id)!.dists.push(d);
     }
     return Array.from(grouped.values());
-  }, [filteredDistributions]);
+  }, [filteredDistributions, monthRange]);
+
 
   // Batch target: students with at least one un-billed unpaid item (최초 청구 대상)
   const batchTargets = useMemo(
@@ -365,10 +383,10 @@ export function TextbookPaymentTab() {
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-foreground">{monthlyStats.totalBilled.toLocaleString()}원</p>
-          <p className="text-xs text-muted-foreground mt-1">총 청구액</p>
+          <p className="text-xs text-muted-foreground mt-1">총 청구액 (이월 포함)</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-green-600">{monthlyStats.totalPaid.toLocaleString()}원</p>
@@ -378,11 +396,16 @@ export function TextbookPaymentTab() {
           <p className="text-xl font-bold text-destructive">{monthlyStats.totalUnpaid.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">미납액</p>
         </Card>
+        <Card className="p-4 text-center border-amber-300">
+          <p className="text-xl font-bold text-amber-600">{monthlyStats.carryOverAmount.toLocaleString()}원</p>
+          <p className="text-xs text-muted-foreground mt-1">전월 이월 미납 ({monthlyStats.carryOverCount}건)</p>
+        </Card>
         <Card className="p-4 text-center border-violet-300">
           <p className="text-xl font-bold text-violet-600">{monthlyStats.inhouseBilled.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">자체제작 교재 청구액</p>
         </Card>
       </div>
+
 
 
       {/* Unpaid list - grouped by student */}
@@ -442,6 +465,9 @@ export function TextbookPaymentTab() {
                         {group.dists.length > 1 && (
                           <Badge variant="outline" className="text-[10px]">{group.dists.length}건</Badge>
                         )}
+                        {group.dists.some(isCarryOver) && (
+                          <Badge className="text-[10px] bg-amber-500 text-white border-amber-500">이월 미납</Badge>
+                        )}
                       </div>
 
                       {/* List individual textbooks */}
@@ -449,10 +475,16 @@ export function TextbookPaymentTab() {
                         <div key={dist.id} className="flex items-center justify-between mt-1.5">
                           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
+                            {isCarryOver(dist) && (
+                              <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">
+                                {format(new Date(dist.created_at), 'yyyy-MM')} 이월
+                              </Badge>
+                            )}
                             {dist.textbook_orders?.is_inhouse && (
                               <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{dist.textbook_orders?.inhouse_author ? ` · ${dist.textbook_orders.inhouse_author}` : ''}</Badge>
                             )}
                           </p>
+
                           <div className="flex items-center gap-1">
                             <Button
                               size="sm"
