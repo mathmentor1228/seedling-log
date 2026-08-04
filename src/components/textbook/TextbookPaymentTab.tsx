@@ -465,6 +465,9 @@ export function TextbookPaymentTab() {
                         {group.dists.length > 1 && (
                           <Badge variant="outline" className="text-[10px]">{group.dists.length}건</Badge>
                         )}
+                        {group.dists.some(isCarryOver) && (
+                          <Badge className="text-[10px] bg-amber-500 text-white border-amber-500">이월 미납</Badge>
+                        )}
                       </div>
 
                       {/* List individual textbooks */}
@@ -472,10 +475,16 @@ export function TextbookPaymentTab() {
                         <div key={dist.id} className="flex items-center justify-between mt-1.5">
                           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
+                            {isCarryOver(dist) && (
+                              <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">
+                                {format(new Date(dist.created_at), 'yyyy-MM')} 이월
+                              </Badge>
+                            )}
                             {dist.textbook_orders?.is_inhouse && (
                               <Badge className="text-[10px] bg-violet-100 text-violet-700 border-violet-300">자체제작{dist.textbook_orders?.inhouse_author ? ` · ${dist.textbook_orders.inhouse_author}` : ''}</Badge>
                             )}
                           </p>
+
                           <div className="flex items-center gap-1">
                             <Button
                               size="sm"
