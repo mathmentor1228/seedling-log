@@ -276,7 +276,34 @@ export function TodaySession() {
             .order('assigned_date', { ascending: false })
             .limit(300);
           setOpenHws((hws || []) as OpenHw[]);
+
+          // PLAN-HW-BRIDGE-V3: 같은 날짜·같은 과목으로 다른 경로(수업일지 일괄작성 등)에서
+          // 이미 내준 숙제가 있으면 "다음 수업 숙제" 칸에 되살려 유기적으로 연결한다.
+          const { data: sameDayHw } = await db.from('homework_assignments')
+            .select('student_id, content, end_date, created_at')
+            .in('student_id', studentIds)
+            .eq('subject', subj)
+            .eq('assigned_date', sessionDate)
+            .order('created_at', { ascending: true })
+            .limit(300);
+          const perStuHw: Record<string, string> = {};
+          let dueFromHw = '';
+          for (const h of ((sameDayHw || []) as any[])) {
+            if (!h.content) continue;
+            perStuHw[h.student_id] = h.content;
+            if (!dueFromHw && h.end_date) dueFromHw = h.end_date;
+          }
+          const contents = Object.values(perStuHw);
+          if (contents.length > 0) {
+            setNextHwPerStudent(prev => ({ ...perStuHw, ...prev }));
+            const uniq = Array.from(new Set(contents));
+            if (uniq.length === 1 && contents.length === studentIds.length) {
+              setNextHwBulk(prev => prev || uniq[0]);
+            }
+            if (dueFromHw) setNextHwDue(dueFromHw);
+          }
         }
+
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
