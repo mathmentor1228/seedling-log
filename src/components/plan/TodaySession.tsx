@@ -95,6 +95,8 @@ export function TodaySession() {
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean; label: string }>>({});
   // PLAN-QUIZ-CONTENT-V1: 시험 내용(선택) — 비우면 quizTarget 목표명으로 기록
   const [quizContent, setQuizContent] = useState('');
+  // PLAN-QUIZ-CONTENT-V2: 학생별 시험 내용(선택) — 아이마다 시험 범위가 다를 때
+  const [quizContentPerStudent, setQuizContentPerStudent] = useState<Record<string, string>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
   const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
   // 학생별 진도 상태 — goalId → studentId → {state, upto}
