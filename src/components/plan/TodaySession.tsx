@@ -276,7 +276,34 @@ export function TodaySession() {
             .order('assigned_date', { ascending: false })
             .limit(300);
           setOpenHws((hws || []) as OpenHw[]);
+
+          // PLAN-HW-BRIDGE-V3: 같은 날짜·같은 과목으로 다른 경로(수업일지 일괄작성 등)에서
+          // 이미 내준 숙제가 있으면 "다음 수업 숙제" 칸에 되살려 유기적으로 연결한다.
+          const { data: sameDayHw } = await db.from('homework_assignments')
+            .select('student_id, content, end_date, created_at')
+            .in('student_id', studentIds)
+            .eq('subject', subj)
+            .eq('assigned_date', sessionDate)
+            .order('created_at', { ascending: true })
+            .limit(300);
+          const perStuHw: Record<string, string> = {};
+          let dueFromHw = '';
+          for (const h of ((sameDayHw || []) as any[])) {
+            if (!h.content) continue;
+            perStuHw[h.student_id] = h.content;
+            if (!dueFromHw && h.end_date) dueFromHw = h.end_date;
+          }
+          const contents = Object.values(perStuHw);
+          if (contents.length > 0) {
+            setNextHwPerStudent(prev => ({ ...perStuHw, ...prev }));
+            const uniq = Array.from(new Set(contents));
+            if (uniq.length === 1 && contents.length === studentIds.length) {
+              setNextHwBulk(prev => prev || uniq[0]);
+            }
+            if (dueFromHw) setNextHwDue(dueFromHw);
+          }
         }
+
       } catch (e: any) {
         toast.error(`불러오기 실패: ${e.message || e}`);
       } finally {
@@ -1039,17 +1066,20 @@ export function TodaySession() {
             const perStu = (nextHwPerStudent[s.id] ?? '').trim();
             const hwContent = perStu || (nextHwBulk ?? '').trim();
             if (hwContent) {
-              // PLAN-LESSON-SYNC-V2: 같은 세션에서 저장을 여러 번 눌러도 숙제가
-              // 중복 생성되지 않도록 (학생·과목·오늘 날짜·같은 내용) 조회 후 upsert.
-              const { data: existingHw } = await db.from('homework_assignments')
-                .select('id')
+              // PLAN-HW-BRIDGE-V3: 같은 학생·과목·날짜의 숙제는 내용이 달라도 하나로 본다.
+              // (수업일지 일괄작성 등 다른 경로에서 만든 숙제를 중복 생성하지 않고 갱신)
+              const { data: existingHwList } = await db.from('homework_assignments')
+                .select('id, content')
                 .eq('student_id', s.id)
                 .eq('subject', subject)
                 .eq('assigned_date', todayStr)
-                .eq('content', hwContent)
-                .maybeSingle();
+                .order('created_at', { ascending: true })
+                .limit(5);
+              const existingHw = ((existingHwList || []) as any[])
+                .find(h => h.content === hwContent) || (existingHwList || [])[0] || null;
               if (existingHw?.id) {
                 const { error: hwUpErr } = await db.from('homework_assignments').update({
+                  content: hwContent,
                   end_date: nextHwDue || null,
                   lesson_record_id: lessonRecordId,
                   homework_type: 'regular',
@@ -1057,6 +1087,7 @@ export function TodaySession() {
                 }).eq('id', existingHw.id);
                 if (hwUpErr) throw new Error(`다음 숙제 갱신 실패(${s.name}): ${hwUpErr.message}`);
               } else {
+
                 const { error: nhErr } = await db.from('homework_assignments').insert({
                   student_id: s.id,
                   subject,
