@@ -224,26 +224,41 @@ export function TextbookPaymentTab() {
     [distributions],
   );
 
-  // Monthly stats
-  const monthlyStats = useMemo(() => {
+  // 선택 월 범위 (미납은 다음 달로 이월되어 계속 잡힘)
+  const monthRange = useMemo(() => {
     const [y, m] = monthFilter.split('-').map(Number);
-    const start = startOfMonth(new Date(y, m - 1));
-    const end = endOfMonth(new Date(y, m - 1));
+    return { start: startOfMonth(new Date(y, m - 1)), end: endOfMonth(new Date(y, m - 1)) };
+  }, [monthFilter]);
+
+  // 이월 여부: 이전 달에 배부됐지만 아직 미납인 건
+  const isCarryOver = useCallback((d: Distribution) => (
+    d.payment_status === '미납' && new Date(d.created_at) < monthRange.start
+  ), [monthRange]);
+
+  // Monthly stats (당월 배부분 + 이전 달에서 이월된 미납분)
+  const monthlyStats = useMemo(() => {
+    const { start, end } = monthRange;
 
     const monthlyDists = distributions.filter(d => {
+      if (!matchesInhouse(d)) return false;
       const dt = new Date(d.created_at);
-      return dt >= start && dt <= end && matchesInhouse(d);
+      if (dt >= start && dt <= end) return true;
+      // 이전 달 미납 건은 이번 달로 이월
+      return dt < start && d.payment_status === '미납';
     });
 
+    const carryOverDists = monthlyDists.filter(isCarryOver);
     const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
     const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
+    const carryOverAmount = carryOverDists.reduce((s, d) => s + d.total_amount, 0);
     const inhouseBilled = monthlyDists.filter(d => d.textbook_orders?.is_inhouse && d.payment_status !== '개별구매')
       .reduce((s, d) => s + d.total_amount, 0);
 
-    return { totalBilled, totalPaid, totalUnpaid, inhouseBilled, count: monthlyDists.length };
-  }, [distributions, monthFilter, inhouseFilter]);
+    return { totalBilled, totalPaid, totalUnpaid, carryOverAmount, carryOverCount: carryOverDists.length, inhouseBilled, count: monthlyDists.length };
+  }, [distributions, monthRange, inhouseFilter, matchesInhouse, isCarryOver]);
+
 
   const monthOptions = useMemo(() => {
     const opts: string[] = [];
