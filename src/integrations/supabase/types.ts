@@ -8187,6 +8187,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      remove_student_from_schedules: {
+        Args: { _student_id: string }
+        Returns: undefined
+      }
       resolve_teacher_display_name_for_record: {
         Args: { _record_date?: string; _teacher_id: string }
         Returns: string
