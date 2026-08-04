@@ -95,6 +95,8 @@ export function TodaySession() {
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean; label: string }>>({});
   // PLAN-QUIZ-CONTENT-V1: 시험 내용(선택) — 비우면 quizTarget 목표명으로 기록
   const [quizContent, setQuizContent] = useState('');
+  // PLAN-QUIZ-CONTENT-V2: 학생별 시험 내용(선택) — 아이마다 시험 범위가 다를 때
+  const [quizContentPerStudent, setQuizContentPerStudent] = useState<Record<string, string>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
   const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
   // 학생별 진도 상태 — goalId → studentId → {state, upto}
@@ -529,8 +531,8 @@ export function TodaySession() {
     if (Number.isNaN(score) || score < 0 || score > 100) { toast.error('0~100 점수를 입력해주세요'); return; }
     const cut = cutlineFor(stu);
     const passed = score >= cut;
-    // 시험 내용을 적었으면 그것이 기록·큐·일지의 라벨, 비우면 목표명
-    const quizLabel = quizContent.trim() || quizTarget.title;
+    // 학생별 시험 내용 > 공통 시험 내용 > 목표명 순으로 라벨 결정
+    const quizLabel = (quizContentPerStudent[stu.id] || '').trim() || quizContent.trim() || quizTarget.title;
     try {
       const baseCheck = {
         design_id: designId, session_id: sessionId, student_id: stu.id,
@@ -539,7 +541,7 @@ export function TodaySession() {
       };
       // content_note는 마이그레이션 전이면 빼고 재시도
       let { data: check, error } = await db.from('plan_checks')
-        .insert({ ...baseCheck, content_note: quizContent.trim() || null }).select().single();
+        .insert({ ...baseCheck, content_note: quizLabel === quizTarget.title ? null : quizLabel }).select().single();
       if (error && /column|schema|content_note/i.test(String(error.message))) {
         ({ data: check, error } = await db.from('plan_checks').insert(baseCheck).select().single());
       }
@@ -1456,6 +1458,16 @@ export function TodaySession() {
                         </p>
                       )}
                       <p className="text-[11px] text-muted-foreground">커트라인 {cut}점</p>
+                      {saved ? (
+                        (quizContentPerStudent[s.id] || '').trim() ? (
+                          <p className="text-[10px] text-muted-foreground truncate">📝 {quizContentPerStudent[s.id]}</p>
+                        ) : null
+                      ) : (
+                        <Input className="h-7 text-[11px]"
+                          placeholder={`이 학생 시험 내용 (다를 때만)`}
+                          value={quizContentPerStudent[s.id] ?? ''}
+                          onChange={e => setQuizContentPerStudent(p => ({ ...p, [s.id]: e.target.value }))} />
+                      )}
                       {saved ? (
                         <p className={`text-sm font-extrabold ${saved.passed ? 'text-green-700' : 'text-red-600'}`}>
                           {saved.score}점 — {saved.passed ? '통과' : '미달'}
