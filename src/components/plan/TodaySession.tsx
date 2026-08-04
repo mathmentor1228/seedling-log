@@ -1066,17 +1066,20 @@ export function TodaySession() {
             const perStu = (nextHwPerStudent[s.id] ?? '').trim();
             const hwContent = perStu || (nextHwBulk ?? '').trim();
             if (hwContent) {
-              // PLAN-LESSON-SYNC-V2: 같은 세션에서 저장을 여러 번 눌러도 숙제가
-              // 중복 생성되지 않도록 (학생·과목·오늘 날짜·같은 내용) 조회 후 upsert.
-              const { data: existingHw } = await db.from('homework_assignments')
-                .select('id')
+              // PLAN-HW-BRIDGE-V3: 같은 학생·과목·날짜의 숙제는 내용이 달라도 하나로 본다.
+              // (수업일지 일괄작성 등 다른 경로에서 만든 숙제를 중복 생성하지 않고 갱신)
+              const { data: existingHwList } = await db.from('homework_assignments')
+                .select('id, content')
                 .eq('student_id', s.id)
                 .eq('subject', subject)
                 .eq('assigned_date', todayStr)
-                .eq('content', hwContent)
-                .maybeSingle();
+                .order('created_at', { ascending: true })
+                .limit(5);
+              const existingHw = ((existingHwList || []) as any[])
+                .find(h => h.content === hwContent) || (existingHwList || [])[0] || null;
               if (existingHw?.id) {
                 const { error: hwUpErr } = await db.from('homework_assignments').update({
+                  content: hwContent,
                   end_date: nextHwDue || null,
                   lesson_record_id: lessonRecordId,
                   homework_type: 'regular',
@@ -1084,6 +1087,7 @@ export function TodaySession() {
                 }).eq('id', existingHw.id);
                 if (hwUpErr) throw new Error(`다음 숙제 갱신 실패(${s.name}): ${hwUpErr.message}`);
               } else {
+
                 const { error: nhErr } = await db.from('homework_assignments').insert({
                   student_id: s.id,
                   subject,
