@@ -1459,6 +1459,16 @@ export function TodaySession() {
                       )}
                       <p className="text-[11px] text-muted-foreground">커트라인 {cut}점</p>
                       {saved ? (
+                        (quizContentPerStudent[s.id] || '').trim() ? (
+                          <p className="text-[10px] text-muted-foreground truncate">📝 {quizContentPerStudent[s.id]}</p>
+                        ) : null
+                      ) : (
+                        <Input className="h-7 text-[11px]"
+                          placeholder={`이 학생 시험 내용 (다를 때만)`}
+                          value={quizContentPerStudent[s.id] ?? ''}
+                          onChange={e => setQuizContentPerStudent(p => ({ ...p, [s.id]: e.target.value }))} />
+                      )}
+                      {saved ? (
                         <p className={`text-sm font-extrabold ${saved.passed ? 'text-green-700' : 'text-red-600'}`}>
                           {saved.score}점 — {saved.passed ? '통과' : '미달'}
                         </p>
