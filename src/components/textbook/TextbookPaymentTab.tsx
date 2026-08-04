@@ -383,10 +383,10 @@ export function TextbookPaymentTab() {
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-foreground">{monthlyStats.totalBilled.toLocaleString()}원</p>
-          <p className="text-xs text-muted-foreground mt-1">총 청구액</p>
+          <p className="text-xs text-muted-foreground mt-1">총 청구액 (이월 포함)</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-xl font-bold text-green-600">{monthlyStats.totalPaid.toLocaleString()}원</p>
@@ -396,11 +396,16 @@ export function TextbookPaymentTab() {
           <p className="text-xl font-bold text-destructive">{monthlyStats.totalUnpaid.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">미납액</p>
         </Card>
+        <Card className="p-4 text-center border-amber-300">
+          <p className="text-xl font-bold text-amber-600">{monthlyStats.carryOverAmount.toLocaleString()}원</p>
+          <p className="text-xs text-muted-foreground mt-1">전월 이월 미납 ({monthlyStats.carryOverCount}건)</p>
+        </Card>
         <Card className="p-4 text-center border-violet-300">
           <p className="text-xl font-bold text-violet-600">{monthlyStats.inhouseBilled.toLocaleString()}원</p>
           <p className="text-xs text-muted-foreground mt-1">자체제작 교재 청구액</p>
         </Card>
       </div>
+
 
 
       {/* Unpaid list - grouped by student */}
