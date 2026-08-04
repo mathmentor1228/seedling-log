@@ -541,7 +541,7 @@ export function TodaySession() {
       };
       // content_note는 마이그레이션 전이면 빼고 재시도
       let { data: check, error } = await db.from('plan_checks')
-        .insert({ ...baseCheck, content_note: quizContent.trim() || null }).select().single();
+        .insert({ ...baseCheck, content_note: quizLabel === quizTarget.title ? null : quizLabel }).select().single();
       if (error && /column|schema|content_note/i.test(String(error.message))) {
         ({ data: check, error } = await db.from('plan_checks').insert(baseCheck).select().single());
       }
