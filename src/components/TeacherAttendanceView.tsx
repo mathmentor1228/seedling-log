@@ -492,12 +492,6 @@ export function TeacherAttendanceView() {
         return updated;
       });
 
-      const dbStatus = newStatus === '미등원' ? '미등원' : newStatus;
-      const { error: studentStatusError } = await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
-      if (studentStatusError) {
-        console.warn('Student status update skipped:', studentStatusError);
-      }
-
       // Save the physical check-in first. A submitted journal may be protected
       // from edits, but that must never roll the attendance button back.
       if (newStatus === '등원' || newStatus === '지각') {
@@ -612,7 +606,6 @@ export function TeacherAttendanceView() {
         return updated;
       });
 
-      await supabase.from('students').update({ status: '결석' } as any).eq('id', studentId);
       await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
 
       const { data: existingLesson } = await supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('class_id', activeSlot.classId).eq('lesson_date', today).eq('subject', activeSlot.subject as any).maybeSingle();
