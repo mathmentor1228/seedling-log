@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.remove_student_from_schedules(uuid) FROM anon, authenticated, public;
+REVOKE EXECUTE ON FUNCTION public.cleanup_schedules_on_withdrawal() FROM anon, authenticated, public;
