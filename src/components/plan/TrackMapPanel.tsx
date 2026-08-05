@@ -98,8 +98,9 @@ export function TrackMapPanel({
   const dotCls = (state: string | null) =>
     state === 'done' ? 'bg-green-100 text-green-800 border-green-300'
       : state === 'partial' ? 'bg-amber-100 text-amber-800 border-amber-300'
-        : state === 'defer' ? 'bg-muted text-muted-foreground border-muted-foreground/30'
-          : 'bg-background text-muted-foreground/50 border-muted';
+        : state === 'skip' ? 'bg-slate-200 text-slate-600 border-slate-400 line-through'
+          : state === 'defer' ? 'bg-muted text-muted-foreground border-muted-foreground/30'
+            : 'bg-background text-muted-foreground/50 border-muted';
 
   return (
     <Card>
