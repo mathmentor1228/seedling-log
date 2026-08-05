@@ -402,6 +402,7 @@ export function TodaySession() {
       if (st === 'advanced' || st === 'verified_ok' || st === 'verified_weak') return 'done';
       if (st === 'partial') return 'partial';
       if (st === 'deferred') return 'defer';
+      if (st === 'skipped') return 'skip';
       return null;
     };
     const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>> = {};
