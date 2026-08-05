@@ -674,8 +674,13 @@ export function TodaySession() {
     return r.start === r.end ? `p.${r.start}` : `p.${r.start} 부터 → p.${r.end} 까지`;
   }
   function parsePageInput(raw: string): number | null {
-    const m = (raw || '').match(/\d+/);
-    return m ? Number(m[0]) : null;
+    const nums = (raw || '').match(/\d+/g);
+    return nums && nums.length > 0 ? Number(nums[nums.length - 1]) : null;
+  }
+  // PLAN-SKIP-GOAL-V1: "71~85"처럼 시작 페이지를 같이 적으면, 그 앞 목표들은 "건너뜀"으로 기록
+  function parseFromPage(raw: string): number | null {
+    const nums = (raw || '').match(/\d+/g);
+    return nums && nums.length >= 2 ? Number(nums[0]) : null;
   }
   // 오늘 시작 goal 인덱스 = 첫 todayGoal의 trackGoals 내 인덱스
   const todayStartIdx = useMemo(() => {
