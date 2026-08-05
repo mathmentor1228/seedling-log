@@ -39,13 +39,14 @@ export function TrackMapPanel({
 
   // 학생×목표 유효 상태 — 화면에서 막 누른 값(perStudent)이 저장된 값보다 우선
   const stateOf = useMemo(() => {
-    const byGoalStudent = new Map<string, 'done' | 'partial' | 'defer'>();
+    const byGoalStudent = new Map<string, 'done' | 'partial' | 'defer' | 'skip'>();
     const uptoMap = new Map<string, string>();
     for (const p of progress) {
       const k = `${p.goal_id}::${p.student_id}`;
       if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) byGoalStudent.set(k, 'done');
       else if (p.status === 'partial') { byGoalStudent.set(k, 'partial'); uptoMap.set(k, p.partial_upto || ''); }
       else if (p.status === 'deferred') byGoalStudent.set(k, 'defer');
+      else if (p.status === 'skipped') byGoalStudent.set(k, 'skip');
     }
     for (const [gid, stuMap] of Object.entries(perStudent)) {
       for (const [sid, st] of Object.entries(stuMap)) {
@@ -65,7 +66,7 @@ export function TrackMapPanel({
     const lastIdx = trackGoals.length - 1;
     return students.map(s => {
       let posIdx = -1;
-      trackGoals.forEach((g, i) => { if (stateOf(g.id, s.id).state === 'done') posIdx = i; });
+      trackGoals.forEach((g, i) => { { const _s = stateOf(g.id, s.id).state; if (_s === 'done' || _s === 'skip') posIdx = i; } });
       const nextGoal = posIdx + 1 <= lastIdx ? trackGoals[posIdx + 1] : null;
       const nextPartial = nextGoal ? stateOf(nextGoal.id, s.id) : { state: null, upto: '' };
       const hasPartial = nextPartial.state === 'partial';
