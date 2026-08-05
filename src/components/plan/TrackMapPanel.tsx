@@ -180,7 +180,7 @@ export function TrackMapPanel({
                         return (
                           <span key={s.id}
                             className={`inline-flex items-center justify-center min-w-[18px] min-h-[18px] rounded-full border text-[9px] font-bold ${dotCls(st.state)}`}
-                            title={`${s.name} — ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부 ~${st.upto || '?'}` : st.state === 'defer' ? '미룸' : '기록 없음'}`}>
+                            title={`${s.name} — ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부 ~${st.upto || '?'}` : st.state === 'defer' ? '미룸' : st.state === 'skip' ? '건너뜀(생략)' : '기록 없음'}`}>
                             {s.name.charAt(0)}
                           </span>
                         );
