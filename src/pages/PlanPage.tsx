@@ -452,6 +452,7 @@ function PlanHome() {
                             <CalendarX className="w-4 h-4" />
                           </Button>
                         </div>
+                        </div>
                         )}
                       </CardContent>
                     </Card>
