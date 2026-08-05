@@ -9,7 +9,7 @@ import { PlanGoal } from './planApi';
 
 type StudentLite = { id: string; name: string; type: 'A' | 'B' | 'C' | null };
 type ProgressLite = { student_id: string; goal_id: string; status: string; partial_upto: string | null };
-type LocalState = { state: 'done' | 'partial' | 'defer'; upto: string };
+type LocalState = { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string };
 
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 
@@ -39,13 +39,14 @@ export function TrackMapPanel({
 
   // 학생×목표 유효 상태 — 화면에서 막 누른 값(perStudent)이 저장된 값보다 우선
   const stateOf = useMemo(() => {
-    const byGoalStudent = new Map<string, 'done' | 'partial' | 'defer'>();
+    const byGoalStudent = new Map<string, 'done' | 'partial' | 'defer' | 'skip'>();
     const uptoMap = new Map<string, string>();
     for (const p of progress) {
       const k = `${p.goal_id}::${p.student_id}`;
       if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) byGoalStudent.set(k, 'done');
       else if (p.status === 'partial') { byGoalStudent.set(k, 'partial'); uptoMap.set(k, p.partial_upto || ''); }
       else if (p.status === 'deferred') byGoalStudent.set(k, 'defer');
+      else if (p.status === 'skipped') byGoalStudent.set(k, 'skip');
     }
     for (const [gid, stuMap] of Object.entries(perStudent)) {
       for (const [sid, st] of Object.entries(stuMap)) {
@@ -65,7 +66,7 @@ export function TrackMapPanel({
     const lastIdx = trackGoals.length - 1;
     return students.map(s => {
       let posIdx = -1;
-      trackGoals.forEach((g, i) => { if (stateOf(g.id, s.id).state === 'done') posIdx = i; });
+      trackGoals.forEach((g, i) => { { const _s = stateOf(g.id, s.id).state; if (_s === 'done' || _s === 'skip') posIdx = i; } });
       const nextGoal = posIdx + 1 <= lastIdx ? trackGoals[posIdx + 1] : null;
       const nextPartial = nextGoal ? stateOf(nextGoal.id, s.id) : { state: null, upto: '' };
       const hasPartial = nextPartial.state === 'partial';
@@ -97,8 +98,9 @@ export function TrackMapPanel({
   const dotCls = (state: string | null) =>
     state === 'done' ? 'bg-green-100 text-green-800 border-green-300'
       : state === 'partial' ? 'bg-amber-100 text-amber-800 border-amber-300'
-        : state === 'defer' ? 'bg-muted text-muted-foreground border-muted-foreground/30'
-          : 'bg-background text-muted-foreground/50 border-muted';
+        : state === 'skip' ? 'bg-slate-200 text-slate-600 border-slate-400 line-through'
+          : state === 'defer' ? 'bg-muted text-muted-foreground border-muted-foreground/30'
+            : 'bg-background text-muted-foreground/50 border-muted';
 
   return (
     <Card>
@@ -178,7 +180,7 @@ export function TrackMapPanel({
                         return (
                           <span key={s.id}
                             className={`inline-flex items-center justify-center min-w-[18px] min-h-[18px] rounded-full border text-[9px] font-bold ${dotCls(st.state)}`}
-                            title={`${s.name} — ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부 ~${st.upto || '?'}` : st.state === 'defer' ? '미룸' : '기록 없음'}`}>
+                            title={`${s.name} — ${st.state === 'done' ? '완료' : st.state === 'partial' ? `일부 ~${st.upto || '?'}` : st.state === 'defer' ? '미룸' : st.state === 'skip' ? '건너뜀(생략)' : '기록 없음'}`}>
                             {s.name.charAt(0)}
                           </span>
                         );

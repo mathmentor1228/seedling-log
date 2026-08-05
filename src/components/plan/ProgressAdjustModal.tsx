@@ -13,7 +13,7 @@ import {
 } from './planApi';
 
 const db = supabase as any;
-const ADVANCED = ['advanced', 'partial', 'verified_ok', 'verified_weak'];
+const ADVANCED = ['advanced', 'partial', 'verified_ok', 'verified_weak', 'skipped'];
 
 export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, endGoalId, title, onChanged }: {
   open: boolean;
@@ -94,6 +94,7 @@ export function ProgressAdjustModal({ open, onOpenChange, designId, trackId, end
       if (!r) out.none.push(s.name);
       else if (['advanced', 'verified_ok', 'verified_weak'].includes(r.status)) out.done.push(s.name);
       else if (r.status === 'partial') out.partial.push(`${s.name}${r.partial_upto ? ` (~${r.partial_upto})` : ''}`);
+      else if (r.status === 'skipped') out.defer.push(`${s.name} (건너뜀)`);
       else if (r.status === 'deferred') out.defer.push(s.name);
       else out.none.push(s.name); // skipped_absent 등 — 안 나간 것으로 표시
     }

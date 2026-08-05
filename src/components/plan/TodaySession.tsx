@@ -98,9 +98,9 @@ export function TodaySession() {
   // PLAN-QUIZ-CONTENT-V2: 학생별 시험 내용(선택) — 아이마다 시험 범위가 다를 때
   const [quizContentPerStudent, setQuizContentPerStudent] = useState<Record<string, string>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
-  const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
+  const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | 'skip' | null; upto: string }>>({});
   // 학생별 진도 상태 — goalId → studentId → {state, upto}
-  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>>>({});
+  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>>>({});
   const [uptoDrafts, setUptoDrafts] = useState<Record<string, string>>({}); // key: `${goalId}::${studentId|__all__}`
   const [note, setNote] = useState('');
   const [nextMemo, setNextMemo] = useState('');
@@ -334,7 +334,7 @@ export function TodaySession() {
     if (!sessionId) return s;
     for (const p of progress) {
       if ((p as any).session_id === sessionId
-        && ['advanced', 'partial', 'deferred', 'verified_ok', 'verified_weak'].includes(p.status)) {
+        && ['advanced', 'partial', 'deferred', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status)) {
         s.add(p.goal_id);
       }
     }
@@ -344,7 +344,7 @@ export function TodaySession() {
   const advancedSet = useMemo(() => {
     const s = new Set<string>();
     for (const p of pastProgress) {
-      if (['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status)) s.add(p.goal_id);
+      if (['advanced', 'partial', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status)) s.add(p.goal_id);
     }
     return s;
   }, [pastProgress]);
@@ -398,14 +398,15 @@ export function TodaySession() {
   useEffect(() => {
     if (!sessionId || loading) return;
     if (hydratedFor === sessionId) return;
-    const statusToState = (st: string): 'done' | 'partial' | 'defer' | null => {
+    const statusToState = (st: string): 'done' | 'partial' | 'defer' | 'skip' | null => {
       if (st === 'advanced' || st === 'verified_ok' || st === 'verified_weak') return 'done';
       if (st === 'partial') return 'partial';
       if (st === 'deferred') return 'defer';
+      if (st === 'skipped') return 'skip';
       return null;
     };
-    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
-    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer', { count: number; upto: string }>> = {};
+    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>> = {};
+    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer' | 'skip', { count: number; upto: string }>> = {};
     for (const p of progress) {
       if ((p as any).session_id !== sessionId) continue;
       const st = statusToState(p.status);
@@ -413,13 +414,13 @@ export function TodaySession() {
       const upto = p.partial_upto || '';
       perStu[p.goal_id] = perStu[p.goal_id] || {};
       perStu[p.goal_id][p.student_id] = { state: st, upto };
-      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' } };
+      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' }, skip: { count: 0, upto: '' } };
       goalCounts[p.goal_id][st].count += 1;
       if (st === 'partial' && upto) goalCounts[p.goal_id].partial.upto = upto;
     }
-    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }> = {};
+    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | 'skip' | null; upto: string }> = {};
     for (const [gid, c] of Object.entries(goalCounts)) {
-      const top = (['done', 'partial', 'defer'] as const)
+      const top = (['done', 'partial', 'defer', 'skip'] as const)
         .reduce((a, b) => (c[a].count >= c[b].count ? a : b));
       if (c[top].count > 0) goalSt[gid] = { state: top, upto: c[top].upto };
     }
@@ -607,13 +608,14 @@ export function TodaySession() {
     }
   }
 
-  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string, onlyStudentIds?: string[]) {
+  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer' | 'skip', upto?: string, onlyStudentIds?: string[]) {
     if (!sessionId) return;
     const targetIds = onlyStudentIds ?? students.filter(s => !absent.has(s.id)).map(s => s.id);
     // PLAN-ABSENT-3WAY-V1: 미루기(defer) 학생은 기록을 안 남긴다 → 목표가 그 학생 풀에 남아 자동 재분배
     const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)
       && (absentHandling[s.id] ?? 'skip') !== 'defer').map(s => s.id);
-    const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred' } as const;
+    // PLAN-SKIP-GOAL-V1: 'skip' = 의도적으로 건너뛴(생략) 진도 — 위치는 앞으로 나가되 "안 나간 부분"으로 표시
+    const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred', skip: 'skipped' } as const;
     try {
       const rows = [
         ...targetIds.map(sid => ({
@@ -652,6 +654,7 @@ export function TodaySession() {
       if (state === 'done') toast.success(`진도 기록 — ${targetIds.length}명 반영${absentIds.length ? ` (결석 ${absentIds.length}명 스킵 표시)` : ''}`);
       if (state === 'partial') toast.success(`${upto}까지 기록 — ${targetIds.length}명, 다음 수업에 "이어서"로 자동 표기`);
       if (state === 'defer') toast(`미루기 — ${targetIds.length}명, 남은 수업에 자동 재분배`);
+      if (state === 'skip') toast(`⤼ 건너뜀 — ${targetIds.length}명, 이 목표는 생략하고 다음 진도로 넘어갑니다`);
     } catch (e: any) {
       toast.error(`진도 저장 실패: ${e.message || e}`);
     }
@@ -671,8 +674,13 @@ export function TodaySession() {
     return r.start === r.end ? `p.${r.start}` : `p.${r.start} 부터 → p.${r.end} 까지`;
   }
   function parsePageInput(raw: string): number | null {
-    const m = (raw || '').match(/\d+/);
-    return m ? Number(m[0]) : null;
+    const nums = (raw || '').match(/\d+/g);
+    return nums && nums.length > 0 ? Number(nums[nums.length - 1]) : null;
+  }
+  // PLAN-SKIP-GOAL-V1: "71~85"처럼 시작 페이지를 같이 적으면, 그 앞 목표들은 "건너뜀"으로 기록
+  function parseFromPage(raw: string): number | null {
+    const nums = (raw || '').match(/\d+/g);
+    return nums && nums.length >= 2 ? Number(nums[0]) : null;
   }
   // 오늘 시작 goal 인덱스 = 첫 todayGoal의 trackGoals 내 인덱스
   const todayStartIdx = useMemo(() => {
@@ -698,16 +706,18 @@ export function TodaySession() {
     trackGoals.forEach((g, i) => {
       const has = pastProgress.some(p =>
         p.goal_id === g.id && p.student_id === studentId &&
-        ['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status));
+        ['advanced', 'partial', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status));
       if (has) idx = i;
     });
     return idx + 1;
   }
 
-  async function applyReachedPage(studentIds: string[], page: number): Promise<{ lastDoneIdx: number; partialIdx: number | null } | null> {
+  async function applyReachedPage(studentIds: string[], page: number, fromPage?: number | null):
+    Promise<{ lastDoneIdx: number; partialIdx: number | null; skipped: number } | null> {
     if (!sessionId || studentIds.length === 0) return null;
     let lastDoneIdx = -1;
     let partialIdx: number | null = null;
+    let skipped = 0;
 
     // 시작 인덱스가 같은 학생끼리 묶어서 처리 (그룹 일괄이어도 각자 위치에서 출발)
     const groupsByStart = new Map<number, string[]>();
@@ -722,6 +732,13 @@ export function TodaySession() {
         const g = trackGoals[i];
         const range = extractPageRange(g.pages);
         if (!range) break;
+        // PLAN-SKIP-GOAL-V1: 시작 페이지보다 앞선 목표 = 이번에 안 다룬 부분 → 건너뜀 기록 후 통과
+        if (fromPage != null && range.end < fromPage) {
+          await setGoalState(g.id, 'skip', undefined, ids);
+          skipped += 1;
+          localDone = i;
+          continue;
+        }
         if (page >= range.end) {
           await setGoalState(g.id, 'done', undefined, ids);
           localDone = i;
@@ -735,32 +752,34 @@ export function TodaySession() {
       }
       lastDoneIdx = Math.max(lastDoneIdx, localDone);
     }
-    return { lastDoneIdx, partialIdx };
+    return { lastDoneIdx, partialIdx, skipped };
   }
 
 
   async function submitReached(scope: 'all' | string, raw: string) {
     const page = parsePageInput(raw);
-    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68)'); return; }
+    const fromPage = parseFromPage(raw);
+    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68, 건너뛰었다면 71~85)'); return; }
     const targetIds = scope === 'all'
       ? students.filter(s => !absent.has(s.id)).map(s => s.id)
       : [scope];
     if (targetIds.length === 0) { toast.error('대상 학생이 없어요'); return; }
-    const result = await applyReachedPage(targetIds, page);
+    const result = await applyReachedPage(targetIds, page, fromPage);
     if (!result) return;
     // 여유(순항) 계산: 오늘 예정 마지막 goal 인덱스 대비 얼마나 앞섰는지
     const extraGoals = result.lastDoneIdx - todayEndIdx;
     const paceVal = pace ?? 1;
     const extraSessions = extraGoals > 0 && paceVal > 0 ? (extraGoals / paceVal) : 0;
     const label = scope === 'all' ? `${targetIds.length}명` : (students.find(s => s.id === scope)?.name || '학생');
+    const skipNote = result.skipped > 0 ? ` (건너뛴 목표 ${result.skipped}개 — 생략 표시)` : '';
     if (extraGoals > 0) {
-      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)`);
+      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)${skipNote}`);
     } else if (result.partialIdx != null && result.partialIdx === todayEndIdx) {
-      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록`);
+      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록${skipNote}`);
     } else if (result.lastDoneIdx >= todayEndIdx) {
-      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록`);
+      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록${skipNote}`);
     } else {
-      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만`);
+      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만${skipNote}`);
     }
   }
 
@@ -1826,7 +1845,7 @@ export function TodaySession() {
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-sm font-extrabold text-primary">🚀 총 도달 페이지 (권장)</span>
                         <span className="text-[11px] text-muted-foreground">
-                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요
+                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요 · 일부를 건너뛰었다면 <b>71~85</b>처럼 시작~끝을 적으면 앞부분은 "건너뜀"으로 표시
                           {todayEndPage != null && ` · 오늘 목표 끝: p.${todayEndPage}`}
                         </span>
                       </div>
@@ -1835,8 +1854,8 @@ export function TodaySession() {
                       <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
                         <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
                         <Input
-                          placeholder="예: 68"
-                          className="h-7 w-24 text-center text-xs"
+                          placeholder="68 또는 71~85"
+                          className="h-7 w-28 text-center text-xs"
                           value={reachedDrafts['__all__'] ?? ''}
                           onChange={e => setReachedDrafts(p => ({ ...p, __all__: e.target.value }))}
                           onKeyDown={e => { if (e.key === 'Enter') submitReached('all', reachedDrafts['__all__'] || ''); }}
@@ -1883,8 +1902,8 @@ export function TodaySession() {
                               )}
                               <div className="ml-auto flex items-center gap-1">
                                 <Input
-                                  placeholder="p.68"
-                                  className="h-7 w-20 text-center text-xs"
+                                  placeholder="68 / 71~85"
+                                  className="h-7 w-24 text-center text-xs"
                                   value={reachedDrafts[s.id] ?? ''}
                                   onChange={e => setReachedDrafts(p => ({ ...p, [s.id]: e.target.value }))}
                                   onKeyDown={e => { if (e.key === 'Enter') submitReached(s.id, reachedDrafts[s.id] || ''); }}
@@ -1899,6 +1918,7 @@ export function TodaySession() {
                       </div>
                       <p className="text-[10px] text-muted-foreground">
                         아래 목표별 카드는 세부 조정이 필요할 때만 쓰세요. 여기서 페이지만 적으면 자동 채워집니다.
+                        특정 단원을 통째로 넘겼다면 목표 카드의 <b>⤼ 건너뜀</b> 버튼을 쓰세요.
                       </p>
                     </CardContent>
                   </Card>
@@ -1918,23 +1938,26 @@ export function TodaySession() {
                   if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) return { state: 'done' as const, upto: '' };
                   if (p.status === 'partial') return { state: 'partial' as const, upto: p.partial_upto || '' };
                   if (p.status === 'deferred') return { state: 'defer' as const, upto: '' };
+                  if (p.status === 'skipped') return { state: 'skip' as const, upto: '' };
                   return null;
                 };
                 const bulkKey = `${goal.id}::__all__`;
                 // 접힘 요약: 출석 학생들의 상태 집계
                 const isOpen = openGoalCards.has(goal.id);
-                let cDone = 0, cPartial = 0, cDefer = 0;
+                let cDone = 0, cPartial = 0, cDefer = 0, cSkip = 0;
                 presentStudents.forEach(s => {
                   const ss = getStuState(s.id);
                   if (ss?.state === 'done') cDone++;
                   else if (ss?.state === 'partial') cPartial++;
                   else if (ss?.state === 'defer') cDefer++;
+                  else if (ss?.state === 'skip') cSkip++;
                 });
                 return (
                   <Card key={goal.id} className={
                     st?.state === 'done' ? 'border-green-300 bg-green-50/40'
                       : st?.state === 'partial' ? 'border-amber-300 bg-amber-50/40'
-                        : st?.state === 'defer' ? 'opacity-70' : ''}>
+                        : st?.state === 'skip' ? 'border-slate-300 bg-slate-50/60 opacity-80'
+                          : st?.state === 'defer' ? 'opacity-70' : ''}>
                     <CardContent className={isOpen ? 'p-4 space-y-3' : 'p-0'}>
                       <button
                         className={`flex items-center gap-2 flex-wrap w-full text-left ${isOpen ? '' : 'px-4 py-3 hover:bg-muted/30 transition rounded-xl'}`}
@@ -1961,7 +1984,10 @@ export function TodaySession() {
                           {cDefer > 0 && (
                             <Badge variant="outline" className="text-[10px] text-muted-foreground">→ {cDefer}</Badge>
                           )}
-                          {!isOpen && cDone === 0 && cPartial === 0 && cDefer === 0 && (
+                          {cSkip > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-slate-400 text-slate-600 bg-slate-100">⤼ 건너뜀 {cSkip}</Badge>
+                          )}
+                          {!isOpen && cDone === 0 && cPartial === 0 && cDefer === 0 && cSkip === 0 && (
                             <span className="text-[10px] text-muted-foreground">세부 조정</span>
                           )}
                           <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -1985,7 +2011,7 @@ export function TodaySession() {
                         </Button>
                         <Input
                           placeholder="p.55"
-                          className="h-7 w-20 text-center text-xs"
+                          className="h-7 w-24 text-center text-xs"
                           value={uptoDrafts[bulkKey] ?? ''}
                           onChange={e => setUptoDrafts(p => ({ ...p, [bulkKey]: e.target.value }))}
                         />
@@ -1995,6 +2021,8 @@ export function TodaySession() {
                           setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
                         }}>◐ 모두 일부만</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600" title="이 목표는 다루지 않고 넘어갑니다 (진도 위치는 다음으로 이동)"
+                          onClick={() => setGoalState(goal.id, 'skip')}>⤼ 전체 건너뜀</Button>
                       </div>
 
                       {/* 학생별 개별 기록 — 다르면 개별 처리 */}
@@ -2014,8 +2042,9 @@ export function TodaySession() {
                                 <Badge variant="outline" className={`text-[10px] ${
                                   ss.state === 'done' ? 'border-green-400 text-green-700 bg-green-50'
                                     : ss.state === 'partial' ? 'border-amber-400 text-amber-700 bg-amber-50'
-                                      : 'border-muted-foreground/40 text-muted-foreground'}`}>
-                                  {ss.state === 'done' ? '✓ 다 나감' : ss.state === 'partial' ? `◐ ~${ss.upto}` : '→ 미룸'}
+                                      : ss.state === 'skip' ? 'border-slate-400 text-slate-600 bg-slate-100'
+                                        : 'border-muted-foreground/40 text-muted-foreground'}`}>
+                                  {ss.state === 'done' ? '✓ 다 나감' : ss.state === 'partial' ? `◐ ~${ss.upto}` : ss.state === 'skip' ? '⤼ 건너뜀' : '→ 미룸'}
                                 </Badge>
                               )}
                               <div className="ml-auto flex items-center gap-1">
@@ -2034,6 +2063,8 @@ export function TodaySession() {
                                   setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`, [s.id]);
                                 }}>일부만</Button>
                                 <Button size="sm" variant={ss?.state === 'defer' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'defer', undefined, [s.id])}>미룸</Button>
+                                <Button size="sm" variant={ss?.state === 'skip' ? 'default' : 'ghost'} className="h-7 text-xs px-2 text-slate-600" title="이 학생은 이 목표를 건너뜁니다"
+                                  onClick={() => setGoalState(goal.id, 'skip', undefined, [s.id])}>⤼ 건너뜀</Button>
                               </div>
                             </div>
                           );
@@ -2082,8 +2113,8 @@ export function TodaySession() {
             <p>· 진도: {(() => {
               // TODAY-SUMMARY-FIX-V1: 요약은 이번 세션에 저장된 진도(DB) + 이번 화면 기록(로컬)을 합산해서 표시.
               // goalStates만 읽으면 페이지 입력(학생별 기록) 방식이 항상 "기록 없음"으로 나오는 버그가 있었음.
-              const byGoal: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
-              const put = (gid: string, sid: string, state: 'done' | 'partial' | 'defer', upto: string) => {
+              const byGoal: Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>> = {};
+              const put = (gid: string, sid: string, state: 'done' | 'partial' | 'defer' | 'skip', upto: string) => {
                 (byGoal[gid] ||= {})[sid] = { state, upto };
               };
               for (const p of progress) {
@@ -2091,6 +2122,7 @@ export function TodaySession() {
                 if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) put(p.goal_id, p.student_id, 'done', '');
                 else if (p.status === 'partial') put(p.goal_id, p.student_id, 'partial', p.partial_upto || '');
                 else if (p.status === 'deferred') put(p.goal_id, p.student_id, 'defer', '');
+                else if (p.status === 'skipped') put(p.goal_id, p.student_id, 'skip', '');
               }
               for (const [gid, st] of Object.entries(goalStates)) {
                 if (st.state) students.filter(s => !absent.has(s.id)).forEach(s => put(gid, s.id, st.state!, st.upto));
@@ -2106,12 +2138,14 @@ export function TodaySession() {
                 const done = states.filter(s => s.state === 'done').length;
                 const partials = states.filter(s => s.state === 'partial');
                 const defer = states.filter(s => s.state === 'defer').length;
+                const skip = states.filter(s => s.state === 'skip').length;
                 const upto = partials.find(p => p.upto)?.upto || '';
                 const total = states.length;
                 const parts = [
                   done > 0 ? (done === total ? '완료' : `완료 ${done}명`) : '',
                   partials.length > 0 ? `일부${upto ? `(~${upto})` : ''}${partials.length === total ? '' : ` ${partials.length}명`}` : '',
                   defer > 0 ? (defer === total ? '미룸' : `미룸 ${defer}명`) : '',
+                  skip > 0 ? (skip === total ? '건너뜀(생략)' : `건너뜀 ${skip}명`) : '',
                 ].filter(Boolean).join(', ');
                 return { idx: g?.order_index ?? 0, label: parts };
               }).sort((a, b) => a.idx - b.idx);

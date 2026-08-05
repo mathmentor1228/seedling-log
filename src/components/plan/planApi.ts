@@ -313,7 +313,7 @@ export async function fetchTrackProgress(
   ((goalsRes.data || []) as any[]).forEach(g => { (goalsByTrack.get(g.track_id) || goalsByTrack.set(g.track_id, []).get(g.track_id))!.push(g); });
   // 완료로 치는 상태 vs 위치에만 반영하는 상태를 분리.
   // partial(일부만)은 위치엔 포함하되 완료가 아니다 — 다 안 나갔는데 "지금: 다음 목표"로 표시되던 버그 수정.
-  const FULL = new Set(['advanced', 'verified_ok', 'verified_weak']);
+  const FULL = new Set(['advanced', 'verified_ok', 'verified_weak', 'skipped']);
   const progByDesign = new Map<string, any[]>();
   ((progRes.data || []) as any[]).forEach(p => { (progByDesign.get(p.design_id) || progByDesign.set(p.design_id, []).get(p.design_id))!.push(p); });
 
@@ -373,7 +373,7 @@ export async function setDesignPosition(
   if (doneGoalIds.length > 0 && studentIds.length > 0) {
     const existing = await fetchDesignProgressRows(designId);
     const keep = new Set(existing
-      .filter(r => ['advanced', 'verified_ok', 'verified_weak'].includes(r.status))
+      .filter(r => ['advanced', 'verified_ok', 'verified_weak', 'skipped'].includes(r.status))
       .map(r => `${r.student_id}::${r.goal_id}`));
     const rows: any[] = [];
     for (const gid of doneGoalIds) {
@@ -555,7 +555,7 @@ export type PrincipalDesignOverview = {
   targetDate: string | null;
   students: PrincipalStudentRow[];
 };
-const ADVANCED_FAMILY = ['advanced', 'partial', 'verified_ok', 'verified_weak'];
+const ADVANCED_FAMILY = ['advanced', 'partial', 'verified_ok', 'verified_weak', 'skipped'];
 
 export async function fetchPrincipalOverview(): Promise<PrincipalDesignOverview[]> {
   const designs = await fetchDesigns();
