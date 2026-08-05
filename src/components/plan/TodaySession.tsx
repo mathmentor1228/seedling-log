@@ -614,7 +614,8 @@ export function TodaySession() {
     // PLAN-ABSENT-3WAY-V1: 미루기(defer) 학생은 기록을 안 남긴다 → 목표가 그 학생 풀에 남아 자동 재분배
     const absentIds = onlyStudentIds ? [] : students.filter(s => absent.has(s.id)
       && (absentHandling[s.id] ?? 'skip') !== 'defer').map(s => s.id);
-    const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred' } as const;
+    // PLAN-SKIP-GOAL-V1: 'skip' = 의도적으로 건너뛴(생략) 진도 — 위치는 앞으로 나가되 "안 나간 부분"으로 표시
+    const statusMap = { done: 'advanced', partial: 'partial', defer: 'deferred', skip: 'skipped' } as const;
     try {
       const rows = [
         ...targetIds.map(sid => ({
