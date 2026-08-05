@@ -1845,7 +1845,7 @@ export function TodaySession() {
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-sm font-extrabold text-primary">🚀 총 도달 페이지 (권장)</span>
                         <span className="text-[11px] text-muted-foreground">
-                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요
+                          학생이 실제 나간 마지막 페이지만 적으면 여러 목표에 자동 분배해서 기록해요 · 일부를 건너뛰었다면 <b>71~85</b>처럼 시작~끝을 적으면 앞부분은 "건너뜀"으로 표시
                           {todayEndPage != null && ` · 오늘 목표 끝: p.${todayEndPage}`}
                         </span>
                       </div>
@@ -1854,8 +1854,8 @@ export function TodaySession() {
                       <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2">
                         <span className="text-[11px] font-bold text-muted-foreground mr-1">전체 일괄:</span>
                         <Input
-                          placeholder="예: 68"
-                          className="h-7 w-24 text-center text-xs"
+                          placeholder="68 또는 71~85"
+                          className="h-7 w-28 text-center text-xs"
                           value={reachedDrafts['__all__'] ?? ''}
                           onChange={e => setReachedDrafts(p => ({ ...p, __all__: e.target.value }))}
                           onKeyDown={e => { if (e.key === 'Enter') submitReached('all', reachedDrafts['__all__'] || ''); }}
@@ -1902,8 +1902,8 @@ export function TodaySession() {
                               )}
                               <div className="ml-auto flex items-center gap-1">
                                 <Input
-                                  placeholder="p.68"
-                                  className="h-7 w-20 text-center text-xs"
+                                  placeholder="68 / 71~85"
+                                  className="h-7 w-24 text-center text-xs"
                                   value={reachedDrafts[s.id] ?? ''}
                                   onChange={e => setReachedDrafts(p => ({ ...p, [s.id]: e.target.value }))}
                                   onKeyDown={e => { if (e.key === 'Enter') submitReached(s.id, reachedDrafts[s.id] || ''); }}
@@ -1918,6 +1918,7 @@ export function TodaySession() {
                       </div>
                       <p className="text-[10px] text-muted-foreground">
                         아래 목표별 카드는 세부 조정이 필요할 때만 쓰세요. 여기서 페이지만 적으면 자동 채워집니다.
+                        특정 단원을 통째로 넘겼다면 목표 카드의 <b>⤼ 건너뜀</b> 버튼을 쓰세요.
                       </p>
                     </CardContent>
                   </Card>
@@ -2004,7 +2005,7 @@ export function TodaySession() {
                         </Button>
                         <Input
                           placeholder="p.55"
-                          className="h-7 w-20 text-center text-xs"
+                          className="h-7 w-24 text-center text-xs"
                           value={uptoDrafts[bulkKey] ?? ''}
                           onChange={e => setUptoDrafts(p => ({ ...p, [bulkKey]: e.target.value }))}
                         />
