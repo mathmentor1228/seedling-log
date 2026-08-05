@@ -1938,23 +1938,26 @@ export function TodaySession() {
                   if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) return { state: 'done' as const, upto: '' };
                   if (p.status === 'partial') return { state: 'partial' as const, upto: p.partial_upto || '' };
                   if (p.status === 'deferred') return { state: 'defer' as const, upto: '' };
+                  if (p.status === 'skipped') return { state: 'skip' as const, upto: '' };
                   return null;
                 };
                 const bulkKey = `${goal.id}::__all__`;
                 // 접힘 요약: 출석 학생들의 상태 집계
                 const isOpen = openGoalCards.has(goal.id);
-                let cDone = 0, cPartial = 0, cDefer = 0;
+                let cDone = 0, cPartial = 0, cDefer = 0, cSkip = 0;
                 presentStudents.forEach(s => {
                   const ss = getStuState(s.id);
                   if (ss?.state === 'done') cDone++;
                   else if (ss?.state === 'partial') cPartial++;
                   else if (ss?.state === 'defer') cDefer++;
+                  else if (ss?.state === 'skip') cSkip++;
                 });
                 return (
                   <Card key={goal.id} className={
                     st?.state === 'done' ? 'border-green-300 bg-green-50/40'
                       : st?.state === 'partial' ? 'border-amber-300 bg-amber-50/40'
-                        : st?.state === 'defer' ? 'opacity-70' : ''}>
+                        : st?.state === 'skip' ? 'border-slate-300 bg-slate-50/60 opacity-80'
+                          : st?.state === 'defer' ? 'opacity-70' : ''}>
                     <CardContent className={isOpen ? 'p-4 space-y-3' : 'p-0'}>
                       <button
                         className={`flex items-center gap-2 flex-wrap w-full text-left ${isOpen ? '' : 'px-4 py-3 hover:bg-muted/30 transition rounded-xl'}`}
@@ -1981,7 +1984,10 @@ export function TodaySession() {
                           {cDefer > 0 && (
                             <Badge variant="outline" className="text-[10px] text-muted-foreground">→ {cDefer}</Badge>
                           )}
-                          {!isOpen && cDone === 0 && cPartial === 0 && cDefer === 0 && (
+                          {cSkip > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-slate-400 text-slate-600 bg-slate-100">⤼ 건너뜀 {cSkip}</Badge>
+                          )}
+                          {!isOpen && cDone === 0 && cPartial === 0 && cDefer === 0 && cSkip === 0 && (
                             <span className="text-[10px] text-muted-foreground">세부 조정</span>
                           )}
                           <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -2015,6 +2021,8 @@ export function TodaySession() {
                           setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
                         }}>◐ 모두 일부만</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600" title="이 목표는 다루지 않고 넘어갑니다 (진도 위치는 다음으로 이동)"
+                          onClick={() => setGoalState(goal.id, 'skip')}>⤼ 전체 건너뜀</Button>
                       </div>
 
                       {/* 학생별 개별 기록 — 다르면 개별 처리 */}
@@ -2034,8 +2042,9 @@ export function TodaySession() {
                                 <Badge variant="outline" className={`text-[10px] ${
                                   ss.state === 'done' ? 'border-green-400 text-green-700 bg-green-50'
                                     : ss.state === 'partial' ? 'border-amber-400 text-amber-700 bg-amber-50'
-                                      : 'border-muted-foreground/40 text-muted-foreground'}`}>
-                                  {ss.state === 'done' ? '✓ 다 나감' : ss.state === 'partial' ? `◐ ~${ss.upto}` : '→ 미룸'}
+                                      : ss.state === 'skip' ? 'border-slate-400 text-slate-600 bg-slate-100'
+                                        : 'border-muted-foreground/40 text-muted-foreground'}`}>
+                                  {ss.state === 'done' ? '✓ 다 나감' : ss.state === 'partial' ? `◐ ~${ss.upto}` : ss.state === 'skip' ? '⤼ 건너뜀' : '→ 미룸'}
                                 </Badge>
                               )}
                               <div className="ml-auto flex items-center gap-1">
@@ -2054,6 +2063,8 @@ export function TodaySession() {
                                   setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`, [s.id]);
                                 }}>일부만</Button>
                                 <Button size="sm" variant={ss?.state === 'defer' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'defer', undefined, [s.id])}>미룸</Button>
+                                <Button size="sm" variant={ss?.state === 'skip' ? 'default' : 'ghost'} className="h-7 text-xs px-2 text-slate-600" title="이 학생은 이 목표를 건너뜁니다"
+                                  onClick={() => setGoalState(goal.id, 'skip', undefined, [s.id])}>⤼ 건너뜀</Button>
                               </div>
                             </div>
                           );
