@@ -2122,6 +2122,7 @@ export function TodaySession() {
                 if (['advanced', 'verified_ok', 'verified_weak'].includes(p.status)) put(p.goal_id, p.student_id, 'done', '');
                 else if (p.status === 'partial') put(p.goal_id, p.student_id, 'partial', p.partial_upto || '');
                 else if (p.status === 'deferred') put(p.goal_id, p.student_id, 'defer', '');
+                else if (p.status === 'skipped') put(p.goal_id, p.student_id, 'skip', '');
               }
               for (const [gid, st] of Object.entries(goalStates)) {
                 if (st.state) students.filter(s => !absent.has(s.id)).forEach(s => put(gid, s.id, st.state!, st.upto));
@@ -2137,12 +2138,14 @@ export function TodaySession() {
                 const done = states.filter(s => s.state === 'done').length;
                 const partials = states.filter(s => s.state === 'partial');
                 const defer = states.filter(s => s.state === 'defer').length;
+                const skip = states.filter(s => s.state === 'skip').length;
                 const upto = partials.find(p => p.upto)?.upto || '';
                 const total = states.length;
                 const parts = [
                   done > 0 ? (done === total ? '완료' : `완료 ${done}명`) : '',
                   partials.length > 0 ? `일부${upto ? `(~${upto})` : ''}${partials.length === total ? '' : ` ${partials.length}명`}` : '',
                   defer > 0 ? (defer === total ? '미룸' : `미룸 ${defer}명`) : '',
+                  skip > 0 ? (skip === total ? '건너뜀(생략)' : `건너뜀 ${skip}명`) : '',
                 ].filter(Boolean).join(', ');
                 return { idx: g?.order_index ?? 0, label: parts };
               }).sort((a, b) => a.idx - b.idx);
