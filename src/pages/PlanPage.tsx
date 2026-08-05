@@ -6,6 +6,7 @@ import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
   fetchBriefings, fetchPlannerStatus, fetchTrackProgress, fetchTracks, fetchGoals,
   cancelSession, uncancelSession, fetchSessionStatusFor, SessionStatusInfo,
+  fetchLessonLogStatusFor, LessonLogStatus,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
   PlanBriefing, PrinterStatus, PlanProgress,
 } from '@/components/plan/planApi';
