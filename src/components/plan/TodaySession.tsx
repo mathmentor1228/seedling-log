@@ -712,10 +712,12 @@ export function TodaySession() {
     return idx + 1;
   }
 
-  async function applyReachedPage(studentIds: string[], page: number): Promise<{ lastDoneIdx: number; partialIdx: number | null } | null> {
+  async function applyReachedPage(studentIds: string[], page: number, fromPage?: number | null):
+    Promise<{ lastDoneIdx: number; partialIdx: number | null; skipped: number } | null> {
     if (!sessionId || studentIds.length === 0) return null;
     let lastDoneIdx = -1;
     let partialIdx: number | null = null;
+    let skipped = 0;
 
     // 시작 인덱스가 같은 학생끼리 묶어서 처리 (그룹 일괄이어도 각자 위치에서 출발)
     const groupsByStart = new Map<number, string[]>();
@@ -730,6 +732,13 @@ export function TodaySession() {
         const g = trackGoals[i];
         const range = extractPageRange(g.pages);
         if (!range) break;
+        // PLAN-SKIP-GOAL-V1: 시작 페이지보다 앞선 목표 = 이번에 안 다룬 부분 → 건너뜀 기록 후 통과
+        if (fromPage != null && range.end < fromPage) {
+          await setGoalState(g.id, 'skip', undefined, ids);
+          skipped += 1;
+          localDone = i;
+          continue;
+        }
         if (page >= range.end) {
           await setGoalState(g.id, 'done', undefined, ids);
           localDone = i;
@@ -743,32 +752,34 @@ export function TodaySession() {
       }
       lastDoneIdx = Math.max(lastDoneIdx, localDone);
     }
-    return { lastDoneIdx, partialIdx };
+    return { lastDoneIdx, partialIdx, skipped };
   }
 
 
   async function submitReached(scope: 'all' | string, raw: string) {
     const page = parsePageInput(raw);
-    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68)'); return; }
+    const fromPage = parseFromPage(raw);
+    if (page == null) { toast.error('페이지 숫자를 적어주세요 (예: 68 또는 p.68, 건너뛰었다면 71~85)'); return; }
     const targetIds = scope === 'all'
       ? students.filter(s => !absent.has(s.id)).map(s => s.id)
       : [scope];
     if (targetIds.length === 0) { toast.error('대상 학생이 없어요'); return; }
-    const result = await applyReachedPage(targetIds, page);
+    const result = await applyReachedPage(targetIds, page, fromPage);
     if (!result) return;
     // 여유(순항) 계산: 오늘 예정 마지막 goal 인덱스 대비 얼마나 앞섰는지
     const extraGoals = result.lastDoneIdx - todayEndIdx;
     const paceVal = pace ?? 1;
     const extraSessions = extraGoals > 0 && paceVal > 0 ? (extraGoals / paceVal) : 0;
     const label = scope === 'all' ? `${targetIds.length}명` : (students.find(s => s.id === scope)?.name || '학생');
+    const skipNote = result.skipped > 0 ? ` (건너뛴 목표 ${result.skipped}개 — 생략 표시)` : '';
     if (extraGoals > 0) {
-      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)`);
+      toast.success(`🚀 ${label} 순항중 — 계획보다 +${extraGoals}목표 앞섬 (약 ${extraSessions.toFixed(1)}회분 여유)${skipNote}`);
     } else if (result.partialIdx != null && result.partialIdx === todayEndIdx) {
-      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록`);
+      toast.success(`✓ ${label} 오늘 목표 도달 — p.${page}까지 기록${skipNote}`);
     } else if (result.lastDoneIdx >= todayEndIdx) {
-      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록`);
+      toast.success(`✓ ${label} 오늘 목표 완료 — p.${page}까지 기록${skipNote}`);
     } else {
-      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만`);
+      toast(`◐ ${label} p.${page}까지 기록 — 오늘 목표 일부만${skipNote}`);
     }
   }
 
