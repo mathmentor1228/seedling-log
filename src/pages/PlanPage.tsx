@@ -6,6 +6,7 @@ import {
   fetchDesigns, fetchIntensives, fetchCoTeachers, fetchRostersFor, fetchTodayIntensiveDesignIds,
   fetchBriefings, fetchPlannerStatus, fetchTrackProgress, fetchTracks, fetchGoals,
   cancelSession, uncancelSession, fetchSessionStatusFor, SessionStatusInfo,
+  fetchLessonLogStatusFor, LessonLogStatus,
   ROLE_LABELS, DAY_LABELS, SessionRole, PlanIntensive, PlanCoTeacher, RosterStudent,
   PlanBriefing, PrinterStatus, PlanProgress,
 } from '@/components/plan/planApi';
@@ -83,6 +84,8 @@ function PlanHome() {
   const [sessionStatus, setSessionStatus] = useState<Record<string, SessionStatusInfo>>({});
   const [cancelFor, setCancelFor] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // PLAN-LOGSTATUS-V1: 해당 날짜 수업일지 작성 현황
+  const [logStatus, setLogStatus] = useState<Record<string, LessonLogStatus>>({});
 
   function openStart(d: any) {
     setPickIds(new Set());
@@ -143,6 +146,16 @@ function PlanHome() {
       setPrintStatus(printMap);
       setProgressMap(progMap);
       setSessionStatus(statusMap);
+      try {
+        setLogStatus(await fetchLessonLogStatusFor(
+          list.map((d: any) => ({
+            id: d.id,
+            subject: d.plan_tracks?.subject || null,
+            studentIds: (rosterMap[d.id] || []).map((s: RosterStudent) => s.id),
+          })),
+          todayStr,
+        ));
+      } catch { setLogStatus({}); }
       const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
       await Promise.all(list.map(async (d: any) => {
         const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
@@ -387,12 +400,38 @@ function PlanHome() {
                             </Button>
                           </div>
                         ) : (
+                        <div className="space-y-2">
+                        {(() => {
+                          const ls = logStatus[d.id];
+                          const written = (ls?.draft || 0) + (ls?.submitted || 0);
+                          if (!ls || written === 0) return null;
+                          const allDone = ls.submitted > 0 && ls.submitted >= ls.total;
+                          return (
+                            <p className={`text-xs rounded-md px-2.5 py-1.5 border ${allDone ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+                              {allDone
+                                ? `✅ 이 날짜 수업일지 제출 완료 (${ls.submitted}/${ls.total}명) — 다시 열면 기존 기록을 이어서 수정합니다`
+                                : `📝 이미 작성 중 — 제출 ${ls.submitted} · 임시저장 ${ls.draft} / 총 ${ls.total}명 (중복 기입 주의)`}
+                            </p>
+                          );
+                        })()}
                         <div className="flex gap-2">
-                          <Button asChild className="flex-1">
-                            <Link to={`/plan/${d.id}/today${isRealToday ? '' : `?date=${selectedDate}`}`}>
-                              <Play className="w-4 h-4 mr-1" />{isRealToday ? '오늘 수업 시작' : `${now.getMonth() + 1}/${now.getDate()} 수업 기입`}
-                            </Link>
-                          </Button>
+                          {(() => {
+                            const ls = logStatus[d.id];
+                            const written = (ls?.draft || 0) + (ls?.submitted || 0);
+                            const allDone = !!ls && ls.submitted > 0 && ls.submitted >= ls.total;
+                            const label = written === 0
+                              ? (isRealToday ? '오늘 수업 시작' : `${now.getMonth() + 1}/${now.getDate()} 수업 기입`)
+                              : allDone ? '수업일지 완료 — 열어서 수정'
+                              : `작성 중 이어쓰기 (${written}/${ls!.total}명)`;
+                            return (
+                              <Button asChild className="flex-1" variant={written === 0 ? 'default' : allDone ? 'outline' : 'secondary'}>
+                                <Link to={`/plan/${d.id}/today${isRealToday ? '' : `?date=${selectedDate}`}`}>
+                                  {written === 0 ? <Play className="w-4 h-4 mr-1" /> : allDone ? <Check className="w-4 h-4 mr-1" /> : <NotebookPen className="w-4 h-4 mr-1" />}
+                                  {label}
+                                </Link>
+                              </Button>
+                            );
+                          })()}
                           <Button variant="outline" onClick={() => openStart(d)} title="개인만 골라서 수업">
                             <UserCheck className="w-4 h-4" />
                           </Button>
@@ -412,6 +451,7 @@ function PlanHome() {
                             onClick={() => { setCancelReason(''); setCancelFor(d); }}>
                             <CalendarX className="w-4 h-4" />
                           </Button>
+                        </div>
                         </div>
                         )}
                       </CardContent>

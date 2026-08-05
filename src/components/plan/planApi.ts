@@ -458,6 +458,33 @@ export async function fetchSessionStatusFor(designIds: string[], dateStr: string
   return out;
 }
 
+// PLAN-LOGSTATUS-V1: 해당 날짜에 이미 작성된 수업일지(임시저장/제출) 현황 — 중복 기입 방지용
+export type LessonLogStatus = { total: number; draft: number; submitted: number };
+export async function fetchLessonLogStatusFor(
+  entries: { id: string; subject: string | null; studentIds: string[] }[],
+  dateStr: string,
+): Promise<Record<string, LessonLogStatus>> {
+  const out: Record<string, LessonLogStatus> = {};
+  const allIds = Array.from(new Set(entries.flatMap(e => e.studentIds)));
+  if (allIds.length === 0) return out;
+  const { data } = await db.from('lesson_records')
+    .select('student_id, subject, submitted')
+    .in('student_id', allIds)
+    .eq('lesson_date', dateStr);
+  const rows = (data || []) as any[];
+  for (const e of entries) {
+    const set = new Set(e.studentIds);
+    const mine = rows.filter(r => set.has(r.student_id) && (!e.subject || r.subject === e.subject));
+    const doneIds = new Set(mine.filter(r => r.submitted).map(r => r.student_id));
+    const draftIds = new Set(mine.filter(r => !r.submitted).map(r => r.student_id));
+    doneIds.forEach(id => draftIds.delete(id));
+    out[e.id] = { total: e.studentIds.length, draft: draftIds.size, submitted: doneIds.size };
+  }
+  return out;
+}
+
+
+
 // 오늘 특강 세션이 있는 설계 id 집합 (materialize된 plan_sessions 기준)
 export async function fetchTodayIntensiveDesignIds(todayStr: string): Promise<Set<string>> {
   const { data } = await db.from('plan_sessions')
