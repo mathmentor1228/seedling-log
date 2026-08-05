@@ -414,7 +414,7 @@ export function TodaySession() {
       const upto = p.partial_upto || '';
       perStu[p.goal_id] = perStu[p.goal_id] || {};
       perStu[p.goal_id][p.student_id] = { state: st, upto };
-      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' } };
+      goalCounts[p.goal_id] = goalCounts[p.goal_id] || { done: { count: 0, upto: '' }, partial: { count: 0, upto: '' }, defer: { count: 0, upto: '' }, skip: { count: 0, upto: '' } };
       goalCounts[p.goal_id][st].count += 1;
       if (st === 'partial' && upto) goalCounts[p.goal_id].partial.upto = upto;
     }
