@@ -84,6 +84,8 @@ function PlanHome() {
   const [sessionStatus, setSessionStatus] = useState<Record<string, SessionStatusInfo>>({});
   const [cancelFor, setCancelFor] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // PLAN-LOGSTATUS-V1: 해당 날짜 수업일지 작성 현황
+  const [logStatus, setLogStatus] = useState<Record<string, LessonLogStatus>>({});
 
   function openStart(d: any) {
     setPickIds(new Set());
