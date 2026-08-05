@@ -691,28 +691,53 @@ export function TodaySession() {
   // 학생별 "총 도달 페이지" 입력 초안
   const [reachedDrafts, setReachedDrafts] = useState<Record<string, string>>({}); // studentId | '__all__'
 
+  // PLAN-PAGE-PER-STUDENT-V2: 학생마다 위치가 다르다 — 그룹 위치가 아니라 "그 학생의 위치"에서 스캔한다.
+  // (이전 버그: 뒤처진 학생은 그룹 시작 목표의 페이지 범위보다 앞이라 즉시 break → 아무 것도 기록되지 않음)
+  function studentStartIdx(studentId: string): number {
+    let idx = -1;
+    trackGoals.forEach((g, i) => {
+      const has = pastProgress.some(p =>
+        p.goal_id === g.id && p.student_id === studentId &&
+        ['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status));
+      if (has) idx = i;
+    });
+    return idx + 1;
+  }
+
   async function applyReachedPage(studentIds: string[], page: number): Promise<{ lastDoneIdx: number; partialIdx: number | null } | null> {
-    if (todayGoals.length === 0 || !sessionId) return null;
-    let lastDoneIdx = todayStartIdx - 1;
+    if (!sessionId || studentIds.length === 0) return null;
+    let lastDoneIdx = -1;
     let partialIdx: number | null = null;
-    // 오늘 시작부터 트랙 끝까지 훑으며 자동 판단
-    for (let i = todayStartIdx; i < trackGoals.length; i++) {
-      const g = trackGoals[i];
-      const range = extractPageRange(g.pages);
-      if (!range) break;
-      if (page >= range.end) {
-        await setGoalState(g.id, 'done', undefined, studentIds);
-        lastDoneIdx = i;
-      } else if (page >= range.start) {
-        await setGoalState(g.id, 'partial', `p.${page}`, studentIds);
-        partialIdx = i;
-        break;
-      } else {
-        break;
+
+    // 시작 인덱스가 같은 학생끼리 묶어서 처리 (그룹 일괄이어도 각자 위치에서 출발)
+    const groupsByStart = new Map<number, string[]>();
+    for (const sid of studentIds) {
+      const st = Math.min(studentStartIdx(sid), Math.max(todayStartIdx, 0));
+      groupsByStart.set(st, [...(groupsByStart.get(st) || []), sid]);
+    }
+
+    for (const [startIdx, ids] of groupsByStart) {
+      let localDone = startIdx - 1;
+      for (let i = startIdx; i < trackGoals.length; i++) {
+        const g = trackGoals[i];
+        const range = extractPageRange(g.pages);
+        if (!range) break;
+        if (page >= range.end) {
+          await setGoalState(g.id, 'done', undefined, ids);
+          localDone = i;
+        } else if (page >= range.start) {
+          await setGoalState(g.id, 'partial', `p.${page}`, ids);
+          partialIdx = partialIdx == null ? i : Math.max(partialIdx, i);
+          break;
+        } else {
+          break;
+        }
       }
+      lastDoneIdx = Math.max(lastDoneIdx, localDone);
     }
     return { lastDoneIdx, partialIdx };
   }
+
 
   async function submitReached(scope: 'all' | string, raw: string) {
     const page = parsePageInput(raw);
