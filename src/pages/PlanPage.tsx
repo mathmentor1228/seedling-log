@@ -146,6 +146,16 @@ function PlanHome() {
       setPrintStatus(printMap);
       setProgressMap(progMap);
       setSessionStatus(statusMap);
+      try {
+        setLogStatus(await fetchLessonLogStatusFor(
+          list.map((d: any) => ({
+            id: d.id,
+            subject: d.plan_tracks?.subject || null,
+            studentIds: (rosterMap[d.id] || []).map((s: RosterStudent) => s.id),
+          })),
+          todayStr,
+        ));
+      } catch { setLogStatus({}); }
       const map: Record<string, { intensives: PlanIntensive[]; coTeachers: PlanCoTeacher[] }> = {};
       await Promise.all(list.map(async (d: any) => {
         const [ints, cos] = await Promise.all([fetchIntensives(d.id), fetchCoTeachers(d.id)]);
