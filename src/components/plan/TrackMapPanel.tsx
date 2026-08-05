@@ -9,7 +9,7 @@ import { PlanGoal } from './planApi';
 
 type StudentLite = { id: string; name: string; type: 'A' | 'B' | 'C' | null };
 type ProgressLite = { student_id: string; goal_id: string; status: string; partial_upto: string | null };
-type LocalState = { state: 'done' | 'partial' | 'defer'; upto: string };
+type LocalState = { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string };
 
 const TYPE_COLORS: Record<string, string> = { A: 'text-violet-700', B: 'text-sky-700', C: 'text-amber-700' };
 
