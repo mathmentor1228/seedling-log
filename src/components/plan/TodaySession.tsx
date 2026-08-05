@@ -98,9 +98,9 @@ export function TodaySession() {
   // PLAN-QUIZ-CONTENT-V2: 학생별 시험 내용(선택) — 아이마다 시험 범위가 다를 때
   const [quizContentPerStudent, setQuizContentPerStudent] = useState<Record<string, string>>({});
   const [errorPick, setErrorPick] = useState<Record<string, string>>({});
-  const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }>>({});
+  const [goalStates, setGoalStates] = useState<Record<string, { state: 'done' | 'partial' | 'defer' | 'skip' | null; upto: string }>>({});
   // 학생별 진도 상태 — goalId → studentId → {state, upto}
-  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>>>({});
+  const [perStudent, setPerStudent] = useState<Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>>>({});
   const [uptoDrafts, setUptoDrafts] = useState<Record<string, string>>({}); // key: `${goalId}::${studentId|__all__}`
   const [note, setNote] = useState('');
   const [nextMemo, setNextMemo] = useState('');
@@ -334,7 +334,7 @@ export function TodaySession() {
     if (!sessionId) return s;
     for (const p of progress) {
       if ((p as any).session_id === sessionId
-        && ['advanced', 'partial', 'deferred', 'verified_ok', 'verified_weak'].includes(p.status)) {
+        && ['advanced', 'partial', 'deferred', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status)) {
         s.add(p.goal_id);
       }
     }
@@ -344,7 +344,7 @@ export function TodaySession() {
   const advancedSet = useMemo(() => {
     const s = new Set<string>();
     for (const p of pastProgress) {
-      if (['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status)) s.add(p.goal_id);
+      if (['advanced', 'partial', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status)) s.add(p.goal_id);
     }
     return s;
   }, [pastProgress]);
@@ -398,14 +398,14 @@ export function TodaySession() {
   useEffect(() => {
     if (!sessionId || loading) return;
     if (hydratedFor === sessionId) return;
-    const statusToState = (st: string): 'done' | 'partial' | 'defer' | null => {
+    const statusToState = (st: string): 'done' | 'partial' | 'defer' | 'skip' | null => {
       if (st === 'advanced' || st === 'verified_ok' || st === 'verified_weak') return 'done';
       if (st === 'partial') return 'partial';
       if (st === 'deferred') return 'defer';
       return null;
     };
-    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
-    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer', { count: number; upto: string }>> = {};
+    const perStu: Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>> = {};
+    const goalCounts: Record<string, Record<'done' | 'partial' | 'defer' | 'skip', { count: number; upto: string }>> = {};
     for (const p of progress) {
       if ((p as any).session_id !== sessionId) continue;
       const st = statusToState(p.status);
@@ -417,9 +417,9 @@ export function TodaySession() {
       goalCounts[p.goal_id][st].count += 1;
       if (st === 'partial' && upto) goalCounts[p.goal_id].partial.upto = upto;
     }
-    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | null; upto: string }> = {};
+    const goalSt: Record<string, { state: 'done' | 'partial' | 'defer' | 'skip' | null; upto: string }> = {};
     for (const [gid, c] of Object.entries(goalCounts)) {
-      const top = (['done', 'partial', 'defer'] as const)
+      const top = (['done', 'partial', 'defer', 'skip'] as const)
         .reduce((a, b) => (c[a].count >= c[b].count ? a : b));
       if (c[top].count > 0) goalSt[gid] = { state: top, upto: c[top].upto };
     }
@@ -607,7 +607,7 @@ export function TodaySession() {
     }
   }
 
-  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer', upto?: string, onlyStudentIds?: string[]) {
+  async function setGoalState(goalId: string, state: 'done' | 'partial' | 'defer' | 'skip', upto?: string, onlyStudentIds?: string[]) {
     if (!sessionId) return;
     const targetIds = onlyStudentIds ?? students.filter(s => !absent.has(s.id)).map(s => s.id);
     // PLAN-ABSENT-3WAY-V1: 미루기(defer) 학생은 기록을 안 남긴다 → 목표가 그 학생 풀에 남아 자동 재분배
@@ -698,7 +698,7 @@ export function TodaySession() {
     trackGoals.forEach((g, i) => {
       const has = pastProgress.some(p =>
         p.goal_id === g.id && p.student_id === studentId &&
-        ['advanced', 'partial', 'verified_ok', 'verified_weak'].includes(p.status));
+        ['advanced', 'partial', 'skipped', 'verified_ok', 'verified_weak'].includes(p.status));
       if (has) idx = i;
     });
     return idx + 1;
@@ -2082,8 +2082,8 @@ export function TodaySession() {
             <p>· 진도: {(() => {
               // TODAY-SUMMARY-FIX-V1: 요약은 이번 세션에 저장된 진도(DB) + 이번 화면 기록(로컬)을 합산해서 표시.
               // goalStates만 읽으면 페이지 입력(학생별 기록) 방식이 항상 "기록 없음"으로 나오는 버그가 있었음.
-              const byGoal: Record<string, Record<string, { state: 'done' | 'partial' | 'defer'; upto: string }>> = {};
-              const put = (gid: string, sid: string, state: 'done' | 'partial' | 'defer', upto: string) => {
+              const byGoal: Record<string, Record<string, { state: 'done' | 'partial' | 'defer' | 'skip'; upto: string }>> = {};
+              const put = (gid: string, sid: string, state: 'done' | 'partial' | 'defer' | 'skip', upto: string) => {
                 (byGoal[gid] ||= {})[sid] = { state, upto };
               };
               for (const p of progress) {
