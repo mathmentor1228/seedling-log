@@ -208,6 +208,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
   const [perStudentIssuesTags, setPerStudentIssuesTags] = useState<Record<string, string[]>>({});
   const [perStudentTest, setPerStudentTest] = useState<Record<string, string>>({});
+  // TEST-RESULT-SYNC-V2: carry score text + pass/fail per student
+  const [perStudentTestScore, setPerStudentTestScore] = useState<Record<string, string>>({});
+  const [perStudentTestResult, setPerStudentTestResult] = useState<Record<string, 'pass' | 'fail' | 'none'>>({});
   const [perStudentMemo, setPerStudentMemo] = useState<Record<string, string>>({});
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
