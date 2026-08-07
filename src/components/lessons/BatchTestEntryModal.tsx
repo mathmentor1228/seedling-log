@@ -225,8 +225,9 @@ export function BatchTestEntryModal({
             understanding_score: null,
             homework_status: 'none_assigned', // HW-STATUS-ENUM-V2: must be valid enum
             lesson_range: '테스트',
-            submitted: true,
-            submitted_at: new Date().toISOString(),
+            // LESSON-SUBMIT-GATE-V1: 테스트 결과만 입력된 상태는 미완성 일지 → 임시저장(초안)으로 생성
+            submitted: false,
+            submitted_at: null,
             test_content: testContent,
             test_name: testContent,
             test_date: date,

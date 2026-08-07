@@ -231,8 +231,10 @@ export function UnifiedRecordModal({
               understanding_score: null,
               homework_status: 'none_assigned',
               lesson_range: types.join('+'),
-              submitted: true,
-              submitted_at: new Date().toISOString(),
+              // LESSON-SUBMIT-GATE-V1: 테스트/자습/클리닉 단독 기록은 일지 초안으로만 생성.
+              // 일지 제출은 수업일지 작성 화면에서 내용이 완성된 뒤에만 이뤄져야 함.
+              submitted: false,
+              submitted_at: null,
             })
             .select('id')
             .single();
