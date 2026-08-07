@@ -884,11 +884,15 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           };
         }
         newPerTest[draft.id] = src.content;
+        newPerTestScore[draft.id] = src.scoreText || '';
+        newPerTestResult[draft.id] = src.result;
         updatedCount++;
       }
 
       setDrafts(updatedDrafts);
       setPerStudentTest(newPerTest);
+      setPerStudentTestScore(newPerTestScore);
+      setPerStudentTestResult(newPerTestResult);
       // SYNC-TEST-RESULT-DISPLAY-V1: auto-open per-student view so synced score is visible
       if (updatedCount > 0) setUsePerStudentTest(true);
 
