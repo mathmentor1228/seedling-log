@@ -272,6 +272,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentIssuesNote({});
     setPerStudentIssuesTags({});
     setPerStudentTest({});
+    setPerStudentTestScore({});
+    setPerStudentTestResult({});
     setPerStudentMemo({});
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
