@@ -378,8 +378,9 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
               test_time: row.testTime,
               test_assistant: row.testAssistant || null,
               english_pass_fail: englishPassFailValue,
-              submitted: true,
-              submitted_at: new Date().toISOString(),
+              // LESSON-SUBMIT-GATE-V1: 테스트 값만 있는 일지는 미완성 → 임시저장(초안)
+              submitted: false,
+              submitted_at: null,
             });
 
             if (error) throw error;
