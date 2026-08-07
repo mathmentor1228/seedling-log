@@ -1087,6 +1087,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           payload.test_content = test.trim();
           payload.test_name = test.trim();
         }
+        const tScore = (perStudentTestScore[id] || '').trim();
+        const tResult = perStudentTestResult[id];
+        if (tScore) payload.test_result_text = tScore;
+        if (tResult) {
+          payload.test_result = tResult;
+          const rec = drafts.find(d => d.id === id);
+          if (rec?.subject === '영어') payload.english_pass_fail = tResult === 'none' ? null : tResult;
+        }
 
         const pMsg = usePerStudentParentMsg ? (perStudentParentMsg[id] ?? parentDirectMessage) : parentDirectMessage;
         if (pMsg.trim()) payload.parent_direct_message = pMsg.trim();
