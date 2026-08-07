@@ -840,6 +840,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       let skippedCount = 0;
       const updatedDrafts = [...drafts];
       const newPerTest: Record<string, string> = { ...perStudentTest };
+      const newPerTestScore: Record<string, string> = { ...perStudentTestScore };
+      const newPerTestResult: Record<string, 'pass' | 'fail' | 'none'> = { ...perStudentTestResult };
 
       for (const draft of targets) {
         const key = `${draft.student_id}::${draft.subject}`;
