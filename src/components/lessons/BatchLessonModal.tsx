@@ -606,6 +606,16 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           p.test_content = unified;
           p.test_name = unified;
           p.test_title = unified;
+          if (recordId) {
+            const scoreVal = (perStudentTestScore[recordId] || '').trim();
+            const resVal = perStudentTestResult[recordId] || 'none';
+            p.test_result_text = scoreVal || null;
+            p.test_result = resVal;
+            const rec = drafts.find(d => d.id === recordId);
+            if (rec?.subject === '영어') {
+              p.english_pass_fail = resVal === 'none' ? null : resVal;
+            }
+          }
         }
         if (activeFields.has('parent_direct_message')) {
           const val = (usePerStudentParentMsg && recordId)
