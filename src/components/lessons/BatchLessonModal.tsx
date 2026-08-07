@@ -442,6 +442,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       if (d.learning_issues_note) perIssueNote[d.id] = d.learning_issues_note;
       if (d.learning_issues?.length) perIssueTags[d.id] = d.learning_issues;
       if (d.test_content || d.test_name) perTest[d.id] = d.test_content || d.test_name || '';
+      if (d.test_result_text) perTestScore[d.id] = d.test_result_text;
+      if (d.test_result === 'pass' || d.test_result === 'fail') perTestResult[d.id] = d.test_result;
       if (d.notes) perMemo[d.id] = d.notes;
       if (d.next_lesson_goal) perGoal[d.id] = d.next_lesson_goal;
       if (d.attendance_status?.length) perAtt[d.id] = d.attendance_status;
@@ -453,6 +455,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentIssuesNote(perIssueNote);
     setPerStudentIssuesTags(perIssueTags);
     setPerStudentTest(perTest);
+    setPerStudentTestScore(perTestScore);
+    setPerStudentTestResult(perTestResult);
+    if (Object.keys(perTestScore).length > 0 || Object.keys(perTestResult).length > 0) setUsePerStudentTest(true);
     setPerStudentMemo(perMemo);
     setPerStudentNextGoal(perGoal);
     setPerStudentAttendance(perAtt);
