@@ -208,6 +208,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
   const [perStudentIssuesTags, setPerStudentIssuesTags] = useState<Record<string, string[]>>({});
   const [perStudentTest, setPerStudentTest] = useState<Record<string, string>>({});
+  // TEST-RESULT-SYNC-V2: carry score text + pass/fail per student
+  const [perStudentTestScore, setPerStudentTestScore] = useState<Record<string, string>>({});
+  const [perStudentTestResult, setPerStudentTestResult] = useState<Record<string, 'pass' | 'fail' | 'none'>>({});
   const [perStudentMemo, setPerStudentMemo] = useState<Record<string, string>>({});
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
@@ -269,6 +272,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentIssuesNote({});
     setPerStudentIssuesTags({});
     setPerStudentTest({});
+    setPerStudentTestScore({});
+    setPerStudentTestResult({});
     setPerStudentMemo({});
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
@@ -425,6 +430,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     const perIssueNote: Record<string, string> = {};
     const perIssueTags: Record<string, string[]> = {};
     const perTest: Record<string, string> = {};
+    const perTestScore: Record<string, string> = {};
+    const perTestResult: Record<string, 'pass' | 'fail' | 'none'> = {};
     const perMemo: Record<string, string> = {};
     const perGoal: Record<string, string> = {};
     const perAtt: Record<string, string[]> = {};
@@ -437,6 +444,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       if (d.learning_issues_note) perIssueNote[d.id] = d.learning_issues_note;
       if (d.learning_issues?.length) perIssueTags[d.id] = d.learning_issues;
       if (d.test_content || d.test_name) perTest[d.id] = d.test_content || d.test_name || '';
+      if (d.test_result_text) perTestScore[d.id] = d.test_result_text;
+      if (d.test_result === 'pass' || d.test_result === 'fail') perTestResult[d.id] = d.test_result;
       if (d.notes) perMemo[d.id] = d.notes;
       if (d.next_lesson_goal) perGoal[d.id] = d.next_lesson_goal;
       if (d.attendance_status?.length) perAtt[d.id] = d.attendance_status;
@@ -448,6 +457,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentIssuesNote(perIssueNote);
     setPerStudentIssuesTags(perIssueTags);
     setPerStudentTest(perTest);
+    setPerStudentTestScore(perTestScore);
+    setPerStudentTestResult(perTestResult);
+    if (Object.keys(perTestScore).length > 0 || Object.keys(perTestResult).length > 0) setUsePerStudentTest(true);
     setPerStudentMemo(perMemo);
     setPerStudentNextGoal(perGoal);
     setPerStudentAttendance(perAtt);
@@ -594,6 +606,16 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           p.test_content = unified;
           p.test_name = unified;
           p.test_title = unified;
+          if (recordId) {
+            const scoreVal = (perStudentTestScore[recordId] || '').trim();
+            const resVal = perStudentTestResult[recordId] || 'none';
+            p.test_result_text = scoreVal || null;
+            p.test_result = resVal;
+            const rec = drafts.find(d => d.id === recordId);
+            if (rec?.subject === '영어') {
+              p.english_pass_fail = resVal === 'none' ? null : resVal;
+            }
+          }
         }
         if (activeFields.has('parent_direct_message')) {
           const val = (usePerStudentParentMsg && recordId)
@@ -818,6 +840,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       let skippedCount = 0;
       const updatedDrafts = [...drafts];
       const newPerTest: Record<string, string> = { ...perStudentTest };
+      const newPerTestScore: Record<string, string> = { ...perStudentTestScore };
+      const newPerTestResult: Record<string, 'pass' | 'fail' | 'none'> = { ...perStudentTestResult };
 
       for (const draft of targets) {
         const key = `${draft.student_id}::${draft.subject}`;
@@ -860,11 +884,15 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           };
         }
         newPerTest[draft.id] = src.content;
+        newPerTestScore[draft.id] = src.scoreText || '';
+        newPerTestResult[draft.id] = src.result;
         updatedCount++;
       }
 
       setDrafts(updatedDrafts);
       setPerStudentTest(newPerTest);
+      setPerStudentTestScore(newPerTestScore);
+      setPerStudentTestResult(newPerTestResult);
       // SYNC-TEST-RESULT-DISPLAY-V1: auto-open per-student view so synced score is visible
       if (updatedCount > 0) setUsePerStudentTest(true);
 
@@ -1058,6 +1086,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (test.trim()) {
           payload.test_content = test.trim();
           payload.test_name = test.trim();
+        }
+        const tScore = (perStudentTestScore[id] || '').trim();
+        const tResult = perStudentTestResult[id];
+        if (tScore) payload.test_result_text = tScore;
+        if (tResult) {
+          payload.test_result = tResult;
+          const rec = drafts.find(d => d.id === id);
+          if (rec?.subject === '영어') payload.english_pass_fail = tResult === 'none' ? null : tResult;
         }
 
         const pMsg = usePerStudentParentMsg ? (perStudentParentMsg[id] ?? parentDirectMessage) : parentDirectMessage;
@@ -1705,11 +1741,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                           className="h-8 text-sm"
                           placeholder="테스트 내용"
                         />
-                        {d.test_result_text && (
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            점수: {d.test_result_text} {d.test_result === 'pass' ? '· 통과' : d.test_result === 'fail' ? '· 불통과' : ''}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Input
+                            value={perStudentTestScore[d.id] ?? (d.test_result_text || '')}
+                            onChange={e => setPerStudentTestScore(prev => ({ ...prev, [d.id]: e.target.value }))}
+                            className="h-7 text-xs flex-1 min-w-0"
+                            placeholder="점수/결과 (예: 35/40)"
+                          />
+                          {(['pass', 'fail', 'none'] as const).map(rv => {
+                            const cur = perStudentTestResult[d.id] ?? ((d.test_result === 'pass' || d.test_result === 'fail') ? d.test_result : 'none');
+                            return (
+                              <Button
+                                key={rv}
+                                type="button"
+                                size="sm"
+                                variant={cur === rv ? 'default' : 'outline'}
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => setPerStudentTestResult(prev => ({ ...prev, [d.id]: rv }))}
+                              >
+                                {rv === 'pass' ? '통과' : rv === 'fail' ? '불통과' : '미입력'}
+                              </Button>
+                            );
+                          })}
+                        </div>
                       </StudentBlock>
                     ))}
                   </PerStudentContainer>
