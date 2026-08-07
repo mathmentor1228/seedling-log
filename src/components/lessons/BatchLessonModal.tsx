@@ -1741,11 +1741,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                           className="h-8 text-sm"
                           placeholder="테스트 내용"
                         />
-                        {d.test_result_text && (
-                          <div className="text-[10px] text-muted-foreground mt-1">
-                            점수: {d.test_result_text} {d.test_result === 'pass' ? '· 통과' : d.test_result === 'fail' ? '· 불통과' : ''}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Input
+                            value={perStudentTestScore[d.id] ?? (d.test_result_text || '')}
+                            onChange={e => setPerStudentTestScore(prev => ({ ...prev, [d.id]: e.target.value }))}
+                            className="h-7 text-xs flex-1 min-w-0"
+                            placeholder="점수/결과 (예: 35/40)"
+                          />
+                          {(['pass', 'fail', 'none'] as const).map(rv => {
+                            const cur = perStudentTestResult[d.id] ?? ((d.test_result === 'pass' || d.test_result === 'fail') ? d.test_result : 'none');
+                            return (
+                              <Button
+                                key={rv}
+                                type="button"
+                                size="sm"
+                                variant={cur === rv ? 'default' : 'outline'}
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => setPerStudentTestResult(prev => ({ ...prev, [d.id]: rv }))}
+                              >
+                                {rv === 'pass' ? '통과' : rv === 'fail' ? '불통과' : '미입력'}
+                              </Button>
+                            );
+                          })}
+                        </div>
                       </StudentBlock>
                     ))}
                   </PerStudentContainer>
