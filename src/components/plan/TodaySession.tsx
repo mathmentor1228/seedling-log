@@ -2122,6 +2122,12 @@ export function TodaySession() {
                           setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
                         }}>◐ 모두 일부만</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
+                          title="이 목표에 이번 수업으로 기록된 내용을 모두 취소합니다"
+                          onClick={() => clearGoalState(goal.id)}>
+                          <Undo2 className="w-3.5 h-3.5 mr-1" />기록 취소
+                        </Button>
+
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600" title="이 목표는 다루지 않고 넘어갑니다 (진도 위치는 다음으로 이동)"
                           onClick={() => setGoalState(goal.id, 'skip')}>⤼ 전체 건너뜀</Button>
                       </div>
