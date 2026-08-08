@@ -1175,7 +1175,8 @@ export function TodaySession() {
             // PLAN-REPORT-BRIDGE-V1: 주간리포트 AI가 읽는 서술 근거 채우기
             learning_issues_note: mergedNote,
             ...(note.trim() ? { notes: note.trim() } : {}),
-            ...(understanding != null ? { understanding_score: understanding } : {}),
+            // ABSENT-NO-UNDERSTANDING-V1: 결석이면 이해도는 비운다
+            ...(isAbsent ? { understanding_score: null } : (understanding != null ? { understanding_score: understanding } : {})),
             ...(quiz && quizTarget ? (() => {
               // PLAN-LESSON-SYNC-V1: 본수업일지 화면은 test_name/test_content를 읽으므로
               // 통일 규칙(LessonRecordForm과 동일)대로 세 필드에 같은 값을 채운다.
