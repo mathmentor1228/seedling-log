@@ -1520,8 +1520,16 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 <PerStudentToggle checked={usePerStudentScore} onChange={setUsePerStudentScore} />
                 {usePerStudentScore ? (
                   <PerStudentContainer>
-                    {selectedDraftsList.map(d => (
+                    {selectedDraftsList.map(d => {
+                      // ABSENT-NO-UNDERSTANDING-V1: 결석 학생은 이해도 입력 차단
+                      const absent = isAbsentStatus(
+                        activeFields.has('attendance_status') ? attendanceStatus : d.attendance_status
+                      );
+                      return (
                       <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        {absent ? (
+                          <span className="text-[11px] text-muted-foreground">결석 — 이해도 입력 불가</span>
+                        ) : (
                         <div className="flex gap-1.5">
                           {[1, 2, 3, 4, 5].map(s => (
                             <Button
@@ -1535,8 +1543,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                             </Button>
                           ))}
                         </div>
+                        )}
                       </StudentBlock>
-                    ))}
+                      );
+                    })}
                   </PerStudentContainer>
                 ) : (
                   <div className="flex gap-1.5">
