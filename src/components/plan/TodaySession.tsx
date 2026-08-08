@@ -660,6 +660,63 @@ export function TodaySession() {
     }
   }
 
+  // PLAN-UNDO-PROGRESS-V1: 잘못 기입한 진도 취소 — 이번 수업(session)에 기록된 것만 되돌린다
+  async function clearGoalState(goalId: string, onlyStudentIds?: string[]) {
+    if (!sessionId) return;
+    const targetIds = onlyStudentIds ?? students.map(s => s.id);
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('goal_id', goalId)
+        .eq('session_id', sessionId)
+        .in('student_id', targetIds);
+      if (error) throw error;
+      setPerStudent(prev => {
+        const next = { ...prev };
+        const cur = { ...(next[goalId] || {}) };
+        targetIds.forEach(sid => { delete cur[sid]; });
+        next[goalId] = cur;
+        return next;
+      });
+      if (!onlyStudentIds) {
+        setGoalStates(p => { const n = { ...p }; delete n[goalId]; return n; });
+      }
+      setVerifiedLocal(prev => {
+        const n = { ...prev };
+        targetIds.forEach(sid => { delete n[`${goalId}::${sid}`]; });
+        return n;
+      });
+      const drop = new Set(targetIds.map(sid => `${sid}::${goalId}`));
+      setProgress(prev => prev.filter(p => !drop.has(`${p.student_id}::${p.goal_id}`)));
+      toast.success(`기록 취소 — ${targetIds.length}명, 이 목표는 미기록 상태로 되돌렸습니다`);
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+  // 이번 수업에 기록한 진도 전체 취소
+  async function clearAllProgressToday() {
+    if (!sessionId) return;
+    if (!confirm('이번 수업에 기록한 진도를 모두 취소할까요? (지난 수업 기록은 유지됩니다)')) return;
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('session_id', sessionId);
+      if (error) throw error;
+      setPerStudent({});
+      setGoalStates({});
+      setVerifiedLocal({});
+      setReachedDrafts({});
+      setProgress(pastProgress);
+      toast.success('이번 수업 진도 기록을 모두 취소했습니다');
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+
   // ── PAGE-BASED PROGRESS V1 ── 총 도달 페이지 하나로 여러 goal 자동 판단
   function extractPageRange(pages: string | null): { start: number; end: number } | null {
     if (!pages) return null;
