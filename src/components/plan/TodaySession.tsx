@@ -2193,9 +2193,13 @@ export function TodaySession() {
               })}
             </>
           )}
+          <Button variant="outline" className="w-full text-destructive" onClick={clearAllProgressToday}>
+            <Undo2 className="w-4 h-4 mr-1" />이번 수업 진도 기록 전체 취소
+          </Button>
           <Button className="w-full" onClick={() => setStep(3)}>
             {isTestDay ? '복습 끝' : '진도 기록 끝'} — 마무리 <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
+
         </div>
       )}
 
