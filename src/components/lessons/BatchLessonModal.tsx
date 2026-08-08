@@ -128,7 +128,7 @@ function mapResultToStatus(v: string): string {
   }
 }
 
-const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const ABSENCE_STATUSES = ['결석', '인정결석', '무단결석', '보충불가'];
 const isAbsentStatus = (att: string[] | null | undefined): boolean =>
   Array.isArray(att) && att.some(s => ABSENCE_STATUSES.includes(s));
 
