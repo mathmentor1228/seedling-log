@@ -79,6 +79,8 @@ export function UnifiedLessonRow({
   onChange,
 }: UnifiedLessonRowProps) {
   const needsIndividualProgress = !inCommonGroup && !hideIndividualProgress;
+  // ABSENT-NO-UNDERSTANDING-V1: 결석 처리된 학생은 이해도 입력 불가
+  const isAbsent = s.attendanceStatuses.some((a) => ['결석', '인정결석', '무단결석', '보충불가'].includes(a));
 
   return (
     <div
@@ -120,6 +122,11 @@ export function UnifiedLessonRow({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium text-muted-foreground w-10 shrink-0">이해도</span>
+          {isAbsent ? (
+            <div className="flex-1 h-8 rounded-md border border-dashed border-border flex items-center justify-center text-[11px] text-muted-foreground">
+              결석 — 이해도 입력 불가
+            </div>
+          ) : (
           <div className="flex gap-1 flex-1">
             {[1, 2, 3, 4, 5].map((n) => {
               const active = s.understanding === n;
@@ -137,6 +144,7 @@ export function UnifiedLessonRow({
               );
             })}
           </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium text-muted-foreground w-10 shrink-0">숙제</span>

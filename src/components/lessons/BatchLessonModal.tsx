@@ -128,7 +128,7 @@ function mapResultToStatus(v: string): string {
   }
 }
 
-const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const ABSENCE_STATUSES = ['결석', '인정결석', '무단결석', '보충불가'];
 const isAbsentStatus = (att: string[] | null | undefined): boolean =>
   Array.isArray(att) && att.some(s => ABSENCE_STATUSES.includes(s));
 
@@ -1520,8 +1520,18 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 <PerStudentToggle checked={usePerStudentScore} onChange={setUsePerStudentScore} />
                 {usePerStudentScore ? (
                   <PerStudentContainer>
-                    {selectedDraftsList.map(d => (
+                    {selectedDraftsList.map(d => {
+                      // ABSENT-NO-UNDERSTANDING-V1: 결석 학생은 이해도 입력 차단
+                      const absent = isAbsentStatus(
+                        activeFields.has('attendance_status')
+                          ? (usePerStudentAttendance ? (perStudentAttendance[d.id] ?? attendanceStatus) : attendanceStatus)
+                          : d.attendance_status
+                      );
+                      return (
                       <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        {absent ? (
+                          <span className="text-[11px] text-muted-foreground">결석 — 이해도 입력 불가</span>
+                        ) : (
                         <div className="flex gap-1.5">
                           {[1, 2, 3, 4, 5].map(s => (
                             <Button
@@ -1535,8 +1545,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                             </Button>
                           ))}
                         </div>
+                        )}
                       </StudentBlock>
-                    ))}
+                      );
+                    })}
                   </PerStudentContainer>
                 ) : (
                   <div className="flex gap-1.5">

@@ -415,7 +415,10 @@ function QuickLessonEntryContent() {
 
         const payload: any = {
           lesson_range: range,
-          understanding_score: s.understanding,
+          // ABSENT-NO-UNDERSTANDING-V1: 결석 처리된 학생은 이해도를 저장하지 않는다
+          understanding_score: s.attendanceStatuses.some(a => ['결석', '인정결석', '무단결석', '보충불가'].includes(a))
+            ? null
+            : s.understanding,
           homework_status: s.homework,
           notes: mergedNotes || null,
           next_lesson_goal: hw,

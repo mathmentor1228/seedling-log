@@ -271,7 +271,7 @@ function getUserCurriculumDefaults(userId?: string | null): { version: string; c
 }
 
 // SHARED-FORM-V3: Helper to check if understanding_score should be disabled
-const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const ABSENCE_STATUSES = ['결석', '인정결석', '무단결석', '보충불가'];
 const DISABLE_SCORE_LESSON_TYPES = ['테스트방문', '휴강'];
 function shouldDisableUnderstandingScore(lessonTypes: string[], attendanceStatus: string[]): boolean {
   // Disable for test-only visits and holidays
