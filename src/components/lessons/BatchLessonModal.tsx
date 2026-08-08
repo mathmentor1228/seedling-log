@@ -1523,7 +1523,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                     {selectedDraftsList.map(d => {
                       // ABSENT-NO-UNDERSTANDING-V1: 결석 학생은 이해도 입력 차단
                       const absent = isAbsentStatus(
-                        activeFields.has('attendance_status') ? attendanceStatus : d.attendance_status
+                        activeFields.has('attendance_status')
+                          ? (usePerStudentAttendance ? (perStudentAttendance[d.id] ?? attendanceStatus) : attendanceStatus)
+                          : d.attendance_status
                       );
                       return (
                       <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
