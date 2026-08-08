@@ -1115,9 +1115,26 @@ export function TodaySession() {
           const isAbsent = absent.has(s.id);
           const summary = summarizeStudentToday(s.id);
           const hwStatus = isAbsent ? 'none_assigned' : (hwByStudent.get(s.id) || 'none_assigned');
+          // PLAN-LESSON-RANGE-V2: 수업내용 = 수업과정(설계 제목) + 그날 배운 챕터명(+페이지)
+          const courseTitle = (design.title || '').trim();
+          const plannedFallback = (() => {
+            if (todayGoals.length === 0) return '';
+            const f = todayGoals[0].goal;
+            const l = todayGoals[todayGoals.length - 1].goal;
+            const titlePart = todayGoals.length === 1
+              ? `${f.order_index}. ${f.title}`
+              : `${f.order_index}. ${f.title} ~ ${l.order_index}. ${l.title}`;
+            const sp = extractPageRange(f.pages)?.start;
+            const ep = extractPageRange(l.pages)?.end;
+            return `${titlePart}${sp != null && ep != null ? ` · p.${sp}~p.${ep}` : ''}`;
+          })();
+          const chapterPart = summary.range || plannedFallback;
           const range = isAbsent
             ? '결석'
-            : (summary.range || (design.title ? `${design.title} 진행` : '수업 진행'));
+            : (chapterPart
+              ? (courseTitle ? `${courseTitle} · ${chapterPart}` : chapterPart)
+              : (courseTitle ? `${courseTitle} 진행` : '수업 진행'));
+
 
           const quiz = quizSaved[s.id];
           const quizUnderstanding = quiz ? Math.max(1, Math.min(5, Math.round(quiz.score / 20))) : null;
