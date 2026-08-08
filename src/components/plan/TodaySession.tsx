@@ -2172,7 +2172,15 @@ export function TodaySession() {
                                 <Button size="sm" variant={ss?.state === 'defer' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'defer', undefined, [s.id])}>미룸</Button>
                                 <Button size="sm" variant={ss?.state === 'skip' ? 'default' : 'ghost'} className="h-7 text-xs px-2 text-slate-600" title="이 학생은 이 목표를 건너뜁니다"
                                   onClick={() => setGoalState(goal.id, 'skip', undefined, [s.id])}>⤼ 건너뜀</Button>
+                                {ss && (
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-destructive"
+                                    title="이 학생의 이 목표 기록을 취소합니다"
+                                    onClick={() => clearGoalState(goal.id, [s.id])}>
+                                    <Undo2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
                               </div>
+
                             </div>
                           );
                         })}
