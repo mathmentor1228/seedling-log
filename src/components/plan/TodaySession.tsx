@@ -1968,7 +1968,13 @@ export function TodaySession() {
                                 <Button size="sm" className="h-7 text-xs px-2" onClick={() => submitReached(s.id, reachedDrafts[s.id] || '')}>
                                   기록
                                 </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-destructive"
+                                  title="이 학생이 이번 수업에 기록한 진도를 취소합니다"
+                                  onClick={() => clearStudentProgressToday(s.id)}>
+                                  <Undo2 className="w-3.5 h-3.5 mr-1" />취소
+                                </Button>
                               </div>
+
                             </div>
                           );
                         })}
