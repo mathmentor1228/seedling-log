@@ -79,6 +79,8 @@ export function UnifiedLessonRow({
   onChange,
 }: UnifiedLessonRowProps) {
   const needsIndividualProgress = !inCommonGroup && !hideIndividualProgress;
+  // ABSENT-NO-UNDERSTANDING-V1: 결석 처리된 학생은 이해도 입력 불가
+  const isAbsent = s.attendanceStatuses.some((a) => ['결석', '인정결석', '무단결석', '보충불가'].includes(a));
 
   return (
     <div
