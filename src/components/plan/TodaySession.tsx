@@ -660,6 +660,101 @@ export function TodaySession() {
     }
   }
 
+  // PLAN-UNDO-PROGRESS-V1: 잘못 기입한 진도 취소 — 이번 수업(session)에 기록된 것만 되돌린다
+  async function clearGoalState(goalId: string, onlyStudentIds?: string[]) {
+    if (!sessionId) return;
+    const targetIds = onlyStudentIds ?? students.map(s => s.id);
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('goal_id', goalId)
+        .eq('session_id', sessionId)
+        .in('student_id', targetIds);
+      if (error) throw error;
+      setPerStudent(prev => {
+        const next = { ...prev };
+        const cur = { ...(next[goalId] || {}) };
+        targetIds.forEach(sid => { delete cur[sid]; });
+        next[goalId] = cur;
+        return next;
+      });
+      if (!onlyStudentIds) {
+        setGoalStates(p => { const n = { ...p }; delete n[goalId]; return n; });
+      }
+      setVerifiedLocal(prev => {
+        const n = { ...prev };
+        targetIds.forEach(sid => { delete n[`${goalId}::${sid}`]; });
+        return n;
+      });
+      const drop = new Set(targetIds.map(sid => `${sid}::${goalId}`));
+      setProgress(prev => prev.filter(p => !drop.has(`${p.student_id}::${p.goal_id}`)));
+      toast.success(`기록 취소 — ${targetIds.length}명, 이 목표는 미기록 상태로 되돌렸습니다`);
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+  // 이번 수업에 기록한 진도 전체 취소
+  async function clearAllProgressToday() {
+    if (!sessionId) return;
+    if (!confirm('이번 수업에 기록한 진도를 모두 취소할까요? (지난 수업 기록은 유지됩니다)')) return;
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('session_id', sessionId);
+      if (error) throw error;
+      setPerStudent({});
+      setGoalStates({});
+      setVerifiedLocal({});
+      setReachedDrafts({});
+      setProgress(pastProgress);
+      toast.success('이번 수업 진도 기록을 모두 취소했습니다');
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+  // 학생 1명의 이번 수업 진도 기록 취소
+  async function clearStudentProgressToday(studentId: string) {
+    if (!sessionId) return;
+    const name = students.find(s => s.id === studentId)?.name || '학생';
+    if (!confirm(`${name} — 이번 수업에 기록한 진도를 취소할까요?`)) return;
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('session_id', sessionId)
+        .eq('student_id', studentId);
+      if (error) throw error;
+      setPerStudent(prev => {
+        const next: typeof prev = {};
+        Object.entries(prev).forEach(([gid, m]) => {
+          const cur = { ...(m as any) };
+          delete cur[studentId];
+          next[gid] = cur;
+        });
+        return next;
+      });
+      setVerifiedLocal(prev => {
+        const n = { ...prev };
+        Object.keys(n).forEach(k => { if (k.endsWith(`::${studentId}`)) delete n[k]; });
+        return n;
+      });
+      setReachedDrafts(p => ({ ...p, [studentId]: '' }));
+      setProgress(prev => [
+        ...prev.filter(p => p.student_id !== studentId),
+        ...pastProgress.filter(p => p.student_id === studentId),
+      ]);
+      toast.success(`${name} — 이번 수업 진도 기록을 취소했습니다`);
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+
+
   // ── PAGE-BASED PROGRESS V1 ── 총 도달 페이지 하나로 여러 goal 자동 판단
   function extractPageRange(pages: string | null): { start: number; end: number } | null {
     if (!pages) return null;
@@ -1911,7 +2006,13 @@ export function TodaySession() {
                                 <Button size="sm" className="h-7 text-xs px-2" onClick={() => submitReached(s.id, reachedDrafts[s.id] || '')}>
                                   기록
                                 </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-destructive"
+                                  title="이 학생이 이번 수업에 기록한 진도를 취소합니다"
+                                  onClick={() => clearStudentProgressToday(s.id)}>
+                                  <Undo2 className="w-3.5 h-3.5 mr-1" />취소
+                                </Button>
                               </div>
+
                             </div>
                           );
                         })}
@@ -2021,6 +2122,12 @@ export function TodaySession() {
                           setGoalState(goal.id, 'partial', v.startsWith('p') ? v : `p.${v}`);
                         }}>◐ 모두 일부만</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setGoalState(goal.id, 'defer')}>→ 전체 미루기</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive"
+                          title="이 목표에 이번 수업으로 기록된 내용을 모두 취소합니다"
+                          onClick={() => clearGoalState(goal.id)}>
+                          <Undo2 className="w-3.5 h-3.5 mr-1" />기록 취소
+                        </Button>
+
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-600" title="이 목표는 다루지 않고 넘어갑니다 (진도 위치는 다음으로 이동)"
                           onClick={() => setGoalState(goal.id, 'skip')}>⤼ 전체 건너뜀</Button>
                       </div>
@@ -2065,7 +2172,15 @@ export function TodaySession() {
                                 <Button size="sm" variant={ss?.state === 'defer' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setGoalState(goal.id, 'defer', undefined, [s.id])}>미룸</Button>
                                 <Button size="sm" variant={ss?.state === 'skip' ? 'default' : 'ghost'} className="h-7 text-xs px-2 text-slate-600" title="이 학생은 이 목표를 건너뜁니다"
                                   onClick={() => setGoalState(goal.id, 'skip', undefined, [s.id])}>⤼ 건너뜀</Button>
+                                {ss && (
+                                  <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-destructive"
+                                    title="이 학생의 이 목표 기록을 취소합니다"
+                                    onClick={() => clearGoalState(goal.id, [s.id])}>
+                                    <Undo2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
                               </div>
+
                             </div>
                           );
                         })}
@@ -2078,9 +2193,13 @@ export function TodaySession() {
               })}
             </>
           )}
+          <Button variant="outline" className="w-full text-destructive" onClick={clearAllProgressToday}>
+            <Undo2 className="w-4 h-4 mr-1" />이번 수업 진도 기록 전체 취소
+          </Button>
           <Button className="w-full" onClick={() => setStep(3)}>
             {isTestDay ? '복습 끝' : '진도 기록 끝'} — 마무리 <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
+
         </div>
       )}
 
