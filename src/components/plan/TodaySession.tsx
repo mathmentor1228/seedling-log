@@ -716,6 +716,44 @@ export function TodaySession() {
     }
   }
 
+  // 학생 1명의 이번 수업 진도 기록 취소
+  async function clearStudentProgressToday(studentId: string) {
+    if (!sessionId) return;
+    const name = students.find(s => s.id === studentId)?.name || '학생';
+    if (!confirm(`${name} — 이번 수업에 기록한 진도를 취소할까요?`)) return;
+    try {
+      const { error } = await db.from('plan_goal_progress')
+        .delete()
+        .eq('design_id', designId)
+        .eq('session_id', sessionId)
+        .eq('student_id', studentId);
+      if (error) throw error;
+      setPerStudent(prev => {
+        const next: typeof prev = {};
+        Object.entries(prev).forEach(([gid, m]) => {
+          const cur = { ...(m as any) };
+          delete cur[studentId];
+          next[gid] = cur;
+        });
+        return next;
+      });
+      setVerifiedLocal(prev => {
+        const n = { ...prev };
+        Object.keys(n).forEach(k => { if (k.endsWith(`::${studentId}`)) delete n[k]; });
+        return n;
+      });
+      setReachedDrafts(p => ({ ...p, [studentId]: '' }));
+      setProgress(prev => [
+        ...prev.filter(p => p.student_id !== studentId),
+        ...pastProgress.filter(p => p.student_id === studentId),
+      ]);
+      toast.success(`${name} — 이번 수업 진도 기록을 취소했습니다`);
+    } catch (e: any) {
+      toast.error(`취소 실패: ${e.message || e}`);
+    }
+  }
+
+
 
   // ── PAGE-BASED PROGRESS V1 ── 총 도달 페이지 하나로 여러 goal 자동 판단
   function extractPageRange(pages: string | null): { start: number; end: number } | null {
