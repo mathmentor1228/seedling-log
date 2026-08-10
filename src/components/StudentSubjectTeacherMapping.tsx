@@ -235,8 +235,9 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
         })}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        학습과정(수강 중인 과목)만 표시됩니다. 선생님이 1명뿐인 과목은 자동 지정, 수학은 직접 선택해야 합니다.
+        학습과정(수강 중인 과목)만 표시됩니다. 선생님이 1명뿐인 과목은 자동 지정, 수학·영어는 직접 선택해야 합니다.
       </p>
+
     </div>
   );
 }
