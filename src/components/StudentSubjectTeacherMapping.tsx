@@ -46,16 +46,20 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
   async function fetchData() {
     setLoading(true);
     try {
-      // 전체 허용 이름 목록 (SUBJECT_TEACHERS의 union) 으로 profiles 직접 조회
-      // → user_roles RLS 통과 여부와 무관하게 담당 후보를 안정적으로 확보
-      const allowedNames = Array.from(new Set(Object.values(SUBJECT_TEACHERS).flat()));
+      // ENGLISH-TEACHER-FIX-V2: 이름 공백/표기 차이로 후보가 누락되지 않도록
+      // 활성 프로필 전체를 받아 트림 비교로 필터링한다.
+      const allowedNames = Array.from(
+        new Set(Object.values(SUBJECT_TEACHERS).flat().map((n) => n.trim()))
+      );
       const { data: profilesData } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
-        .in('full_name', allowedNames)
+        .select('id, full_name, email, is_active')
         .order('full_name');
-      const teacherProfiles = (profilesData || []) as Teacher[];
+      const teacherProfiles = ((profilesData || []) as any[])
+        .filter((p) => p.is_active !== false)
+        .filter((p) => allowedNames.includes((p.full_name || '').trim())) as Teacher[];
       setTeachers(teacherProfiles);
+
 
 
       // Enrolled subjects from student_courses → course_policies
@@ -231,8 +235,9 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
         })}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        학습과정(수강 중인 과목)만 표시됩니다. 선생님이 1명뿐인 과목은 자동 지정, 수학은 직접 선택해야 합니다.
+        학습과정(수강 중인 과목)만 표시됩니다. 선생님이 1명뿐인 과목은 자동 지정, 수학·영어는 직접 선택해야 합니다.
       </p>
+
     </div>
   );
 }
