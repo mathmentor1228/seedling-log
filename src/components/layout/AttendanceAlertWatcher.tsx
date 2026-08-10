@@ -144,7 +144,7 @@ export function AttendanceAlertWatcher() {
 
     const { data: assigned } = await supabase
       .from('room_assignments')
-      .select('student_ids, student_names, room, slot_start, teacher_id')
+      .select('student_ids, student_names, room, slot_start, teacher_id, is_fixed')
       .in('room', ROOM_IDS)
       .or(
         `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,assigned_date.eq.${today})`
@@ -187,6 +187,43 @@ export function AttendanceAlertWatcher() {
       }
     });
 
+    // ATT-ALERT-TIMETABLE-CHECK-V1: 고정(room_assignments.is_fixed) 배정은 오래된 명단이 남아
+    // 오늘 수업이 없는 학생까지 알림에 뜨는 문제가 있었다. 현 시간표(class_schedules) 기준으로
+    // 해당 시간대에 실제 수업이 있는 학생만 알림 대상으로 삼는다.
+    const todayDow = now.getDay();
+    const { data: todaySchedules } = await supabase
+      .from('class_schedules')
+      .select('class_id, start_time, end_time')
+      .eq('day_of_week', todayDow)
+      .eq('is_active', true);
+    const classIdsToday = [...new Set((todaySchedules ?? []).map((s: any) => s.class_id))];
+    const scheduleWindowsByStudent = new Map<string, { start: number; end: number }[]>();
+    if (classIdsToday.length > 0) {
+      const { data: classStudents } = await supabase
+        .from('class_students')
+        .select('class_id, student_id')
+        .in('class_id', classIdsToday);
+      const windowsByClass = new Map<string, { start: number; end: number }[]>();
+      (todaySchedules ?? []).forEach((s: any) => {
+        const st = parseSlotToMinutes(String(s.start_time).slice(0, 5));
+        const en = parseSlotToMinutes(String(s.end_time).slice(0, 5));
+        if (st == null || en == null) return;
+        const arr = windowsByClass.get(s.class_id) ?? [];
+        arr.push({ start: st, end: en });
+        windowsByClass.set(s.class_id, arr);
+      });
+      (classStudents ?? []).forEach((cs: any) => {
+        const wins = windowsByClass.get(cs.class_id) ?? [];
+        if (wins.length === 0) return;
+        const arr = scheduleWindowsByStudent.get(cs.student_id) ?? [];
+        scheduleWindowsByStudent.set(cs.student_id, arr.concat(wins));
+      });
+    }
+    const hasClassAt = (studentId: string, slotMin: number) =>
+      (scheduleWindowsByStudent.get(studentId) ?? []).some(
+        (w) => slotMin >= w.start - 30 && slotMin < w.end
+      );
+
     const overdue: OverdueEntry[] = [];
     const seen = new Set<string>();
     const teacherIdsToLookup = new Set<string>();
@@ -205,6 +242,9 @@ export function AttendanceAlertWatcher() {
       ids.forEach((id) => {
         if (!activeStudentIds.has(id)) return;
         if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
+        // 고정 배정은 현 시간표에 실제 수업이 있는 학생만 알림
+        if (a.is_fixed && !hasClassAt(id, slotMin)) return;
+
         if (absentIds.has(id)) return;
         if (checkedIn.has(`${id}_${a.room}`)) return;
         const key = `${id}_${a.room}_${slot}`;
