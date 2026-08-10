@@ -144,7 +144,7 @@ export function AttendanceAlertWatcher() {
 
     const { data: assigned } = await supabase
       .from('room_assignments')
-      .select('student_ids, student_names, room, slot_start, teacher_id')
+      .select('student_ids, student_names, room, slot_start, teacher_id, is_fixed')
       .in('room', ROOM_IDS)
       .or(
         `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,assigned_date.eq.${today})`
