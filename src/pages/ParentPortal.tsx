@@ -149,12 +149,11 @@ export default function ParentPortal() {
                   {data.unpaid_textbooks.reduce((s, t) => s + t.total_amount, 0).toLocaleString()}원
                 </span>
               </div>
-              {data.account_info && (
-                <div className="mt-2 p-2.5 rounded-lg bg-white/80 dark:bg-background/50 border border-yellow-200">
-                  <p className="text-xs text-muted-foreground mb-0.5">입금 계좌</p>
-                  <p className="text-sm font-bold text-foreground">{data.account_info}</p>
-                </div>
-              )}
+              <TextbookAccountInfo
+                accountInfo={data.account_info}
+                amount={data.unpaid_textbooks.reduce((s, t) => s + t.total_amount, 0)}
+                studentName={student.name}
+              />
             </CardContent>
           </Card>
         )}
