@@ -958,13 +958,19 @@ export function TodaySession() {
   } {
     const donePartial: { g: PlanGoal; state: 'done' | 'partial'; upto?: string }[] = [];
     let lastIdx = -1;
-    for (let i = todayStartIdx; i < trackGoals.length; i++) {
+    // PLAN-PER-STUDENT-RANGE-V1: 학생마다 시작 위치가 다르다 — 그룹 시작이 아니라 그 학생 위치에서 스캔.
+    const scanStart = Math.max(0, Math.min(studentStartIdx(sid), Math.max(todayStartIdx, 0)));
+    // 이 학생에게 개별 기록이 하나라도 있으면 그룹(bulk) 상태를 상속하지 않는다.
+    // (상속하면 학생별로 다르게 입력한 진도가 모두 같은 값으로 저장되는 버그)
+    const hasOwnRecord = trackGoals.some(g =>
+      !!perStudent[g.id]?.[sid] ||
+      progress.some(r => r.goal_id === g.id && r.student_id === sid &&
+        ['advanced', 'partial', 'skipped', 'verified_ok', 'verified_weak'].includes(r.status)));
+    for (let i = scanStart; i < trackGoals.length; i++) {
       const g = trackGoals[i];
       const local = perStudent[g.id]?.[sid];
       const p = progress.find(r => r.goal_id === g.id && r.student_id === sid);
-      // PLAN-LESSON-SYNC-V2: 개별 학생 기록이 없으면 그룹(bulk) 기록을 상속받아
-      // 중간 합류한 학생·개별 체크가 누락된 학생도 수업일지에 진도 반영.
-      const groupState = goalStates[g.id];
+      const groupState = hasOwnRecord ? undefined : goalStates[g.id];
       const groupUpto = groupState?.upto || '';
       const state = local?.state
         ?? (p ? (['advanced', 'verified_ok', 'verified_weak'].includes(p.status) ? 'done'
@@ -975,9 +981,13 @@ export function TodaySession() {
       else if (state === 'partial') {
         donePartial.push({ g, state: 'partial', upto: local?.upto || p?.partial_upto || groupUpto || '' });
         lastIdx = i; break;
+      } else if (local?.state === 'skip' || p?.status === 'skipped') {
+        // 건너뛴 목표는 범위에 넣지 않고 계속 스캔
+        lastIdx = i; continue;
       } else break;
     }
-    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[todayStartIdx]?.title || null, hadProgress: false, lastIdx: -1 };
+    if (donePartial.length === 0) return { range: '', nextGoalTitle: trackGoals[Math.max(scanStart, 0)]?.title || null, hadProgress: false, lastIdx: -1 };
+
     const first = donePartial[0].g;
     const last = donePartial[donePartial.length - 1];
     const startPage = extractPageRange(first.pages)?.start;
