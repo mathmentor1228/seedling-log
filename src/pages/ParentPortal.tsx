@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp, Sparkles } from 'lucide-react';
 import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
 import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
+import { TextbookAccountInfo } from '@/components/parent/TextbookAccountInfo';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
