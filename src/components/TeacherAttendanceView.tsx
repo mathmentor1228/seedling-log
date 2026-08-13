@@ -382,6 +382,33 @@ export function TeacherAttendanceView() {
           .filter((s): s is StudentAttendance => s !== null)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       });
+
+      // ATT-DEDUP-V1: 같은 시간대(시작시간)에 학생이 두 개 이상의 슬롯에 중복 노출되지 않도록 제거.
+      // 인원이 많은(정규) 슬롯을 우선 유지하고, 이후 슬롯에서는 해당 학생을 제외한다.
+      const slotsByTime = new Map<string, string[]>();
+      slots.forEach(slot => {
+        const arr = slotsByTime.get(slot.startTime) || [];
+        arr.push(slot.id);
+        slotsByTime.set(slot.startTime, arr);
+      });
+      slotsByTime.forEach(slotIds => {
+        if (slotIds.length < 2) return;
+        const ordered = [...slotIds].sort((a, b) => (map[b]?.length || 0) - (map[a]?.length || 0));
+        const seen = new Set<string>();
+        ordered.forEach(sid => {
+          map[sid] = (map[sid] || []).filter(st => {
+            if (seen.has(st.id)) return false;
+            seen.add(st.id);
+            return true;
+          });
+        });
+      });
+      // 슬롯 내부 중복도 제거
+      Object.keys(map).forEach(sid => {
+        const seen = new Set<string>();
+        map[sid] = map[sid].filter(st => (seen.has(st.id) ? false : (seen.add(st.id), true)));
+      });
+
       // Realtime emits several overlapping fetches during bulk attendance.
       // Discard stale responses so an older partial snapshot cannot win.
       if (fetchSequence === studentFetchSequence.current) {
