@@ -60,6 +60,7 @@ export function SystemAnnouncementBar() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('warning');
+  const [visibility, setVisibility] = useState<'internal' | 'public'>('internal');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchItems = useCallback(async () => {
@@ -123,6 +124,7 @@ export function SystemAnnouncementBar() {
         title: title.trim(),
         message: message.trim(),
         severity,
+        visibility,
         is_active: true,
         created_by: user.id,
       });
@@ -131,6 +133,7 @@ export function SystemAnnouncementBar() {
       setTitle('');
       setMessage('');
       setSeverity('warning');
+      setVisibility('internal');
       setComposeOpen(false);
     } catch (e: any) {
       console.error(e);
@@ -177,6 +180,8 @@ export function SystemAnnouncementBar() {
           setMessage={setMessage}
           severity={severity}
           setSeverity={setSeverity}
+          visibility={visibility}
+          setVisibility={setVisibility}
           submitting={submitting}
           onSubmit={handleCreate}
         />
@@ -246,6 +251,8 @@ export function SystemAnnouncementBar() {
         setMessage={setMessage}
         severity={severity}
         setSeverity={setSeverity}
+        visibility={visibility}
+        setVisibility={setVisibility}
         submitting={submitting}
         onSubmit={handleCreate}
       />
@@ -262,6 +269,8 @@ interface ComposeDialogProps {
   setMessage: (v: string) => void;
   severity: 'info' | 'warning' | 'critical';
   setSeverity: (v: 'info' | 'warning' | 'critical') => void;
+  visibility: 'internal' | 'public';
+  setVisibility: (v: 'internal' | 'public') => void;
   submitting: boolean;
   onSubmit: () => void;
 }
@@ -269,7 +278,7 @@ interface ComposeDialogProps {
 function ComposeDialog({
   open, onOpenChange,
   title, setTitle, message, setMessage,
-  severity, setSeverity, submitting, onSubmit,
+  severity, setSeverity, visibility, setVisibility, submitting, onSubmit,
 }: ComposeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -308,6 +317,18 @@ function ComposeDialog({
                 <SelectItem value="info">정보 (파랑)</SelectItem>
                 <SelectItem value="warning">중요 (빨강 반짝)</SelectItem>
                 <SelectItem value="critical">긴급 (강한 빨강 반짝)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">노출 범위</Label>
+            <Select value={visibility} onValueChange={(v) => setVisibility(v as 'internal' | 'public')}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal">원장·선생님·조교만</SelectItem>
+                <SelectItem value="public">학부모·학생 포털에도</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -6,6 +6,7 @@ import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, Bo
 import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
 import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
 import { TextbookAccountInfo } from '@/components/parent/TextbookAccountInfo';
+import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
@@ -112,6 +113,7 @@ export default function ParentPortal() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/[0.03] to-background">
+      <PublicAnnouncementBar />
       <header className="bg-card/80 backdrop-blur-xl border-b border-border px-4 py-3.5 sticky top-0 z-10">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">

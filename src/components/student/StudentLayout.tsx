@@ -23,8 +23,9 @@
    DropdownMenuSeparator,
    DropdownMenuTrigger,
  } from '@/components/ui/dropdown-menu';
- import { cn } from '@/lib/utils';
- import { BrandFooter } from '@/components/layout/BrandFooter';
+import { cn } from '@/lib/utils';
+import { BrandFooter } from '@/components/layout/BrandFooter';
+import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
  
  interface StudentLayoutProps {
    children: ReactNode;
@@ -102,9 +103,12 @@ const NAV_ITEMS = [
    };
  
    return (
-     <div className="min-h-screen bg-background flex flex-col">
-       {/* Header */}
-       <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Public Announcements */}
+      <PublicAnnouncementBar />
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border">
          <div className="flex items-center justify-between px-4 h-14">
            <Link to="/student" className="flex items-center gap-2.5">
              <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center shadow-sm">
