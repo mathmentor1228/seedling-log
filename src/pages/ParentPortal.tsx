@@ -6,6 +6,7 @@ import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, Bo
 import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
 import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
 import { TextbookAccountInfo } from '@/components/parent/TextbookAccountInfo';
+import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
