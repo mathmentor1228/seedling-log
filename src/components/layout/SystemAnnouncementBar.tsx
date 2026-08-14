@@ -251,6 +251,8 @@ export function SystemAnnouncementBar() {
         setMessage={setMessage}
         severity={severity}
         setSeverity={setSeverity}
+        visibility={visibility}
+        setVisibility={setVisibility}
         submitting={submitting}
         onSubmit={handleCreate}
       />
