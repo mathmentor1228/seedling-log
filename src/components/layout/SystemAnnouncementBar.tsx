@@ -124,6 +124,7 @@ export function SystemAnnouncementBar() {
         title: title.trim(),
         message: message.trim(),
         severity,
+        visibility,
         is_active: true,
         created_by: user.id,
       });
@@ -132,6 +133,7 @@ export function SystemAnnouncementBar() {
       setTitle('');
       setMessage('');
       setSeverity('warning');
+      setVisibility('internal');
       setComposeOpen(false);
     } catch (e: any) {
       console.error(e);
