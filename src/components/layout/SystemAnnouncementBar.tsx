@@ -265,6 +265,8 @@ interface ComposeDialogProps {
   setMessage: (v: string) => void;
   severity: 'info' | 'warning' | 'critical';
   setSeverity: (v: 'info' | 'warning' | 'critical') => void;
+  visibility: 'internal' | 'public';
+  setVisibility: (v: 'internal' | 'public') => void;
   submitting: boolean;
   onSubmit: () => void;
 }
@@ -272,7 +274,7 @@ interface ComposeDialogProps {
 function ComposeDialog({
   open, onOpenChange,
   title, setTitle, message, setMessage,
-  severity, setSeverity, submitting, onSubmit,
+  severity, setSeverity, visibility, setVisibility, submitting, onSubmit,
 }: ComposeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
