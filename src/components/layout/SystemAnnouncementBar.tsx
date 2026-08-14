@@ -320,6 +320,18 @@ function ComposeDialog({
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label className="text-xs">노출 범위</Label>
+            <Select value={visibility} onValueChange={(v) => setVisibility(v as 'internal' | 'public')}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal">원장·선생님·조교만</SelectItem>
+                <SelectItem value="public">학부모·학생 포털에도</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>취소</Button>
