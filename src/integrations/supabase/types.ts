@@ -6115,6 +6115,7 @@ export type Database = {
           severity: string
           title: string
           updated_at: string
+          visibility: string
         }
         Insert: {
           created_at?: string
@@ -6126,6 +6127,7 @@ export type Database = {
           severity?: string
           title: string
           updated_at?: string
+          visibility?: string
         }
         Update: {
           created_at?: string
@@ -6137,6 +6139,7 @@ export type Database = {
           severity?: string
           title?: string
           updated_at?: string
+          visibility?: string
         }
         Relationships: []
       }
