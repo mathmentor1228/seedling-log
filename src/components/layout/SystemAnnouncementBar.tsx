@@ -60,6 +60,7 @@ export function SystemAnnouncementBar() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('warning');
+  const [visibility, setVisibility] = useState<'internal' | 'public'>('internal');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchItems = useCallback(async () => {
