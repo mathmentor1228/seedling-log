@@ -2153,6 +2153,9 @@ export type Database = {
           reason: string
           repaired_at: string
           repaired_by: string | null
+          revert_reason: string | null
+          reverted: boolean
+          reverted_at: string | null
         }
         Insert: {
           homework_id: string
@@ -2162,6 +2165,9 @@ export type Database = {
           reason: string
           repaired_at?: string
           repaired_by?: string | null
+          revert_reason?: string | null
+          reverted?: boolean
+          reverted_at?: string | null
         }
         Update: {
           homework_id?: string
@@ -2171,6 +2177,9 @@ export type Database = {
           reason?: string
           repaired_at?: string
           repaired_by?: string | null
+          revert_reason?: string | null
+          reverted?: boolean
+          reverted_at?: string | null
         }
         Relationships: []
       }
