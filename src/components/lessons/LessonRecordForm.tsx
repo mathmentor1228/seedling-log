@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { reconcileLessonHomework, HOMEWORK_LOAD_COLUMNS } from '@/lib/homeworkReconcile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -395,7 +396,8 @@ export function LessonRecordForm({
   // MULTI-HW-ASSIGN-V1: Multiple homework items support
   // HW-DAILY-OPT-IN-V1: is_daily=false by default → homework_type='regular' (one-off, due next lesson).
   // Daily recurring homework is only created when the teacher explicitly toggles 데일리체크 on.
-  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string; is_daily?: boolean }[]>([{ content: '', is_daily: false }]);
+  // HW-RECONCILE-V1: keep existing homework row id so saves update in place instead of delete+reinsert
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ id?: string; content: string; is_daily?: boolean }[]>([{ content: '', is_daily: false }]);
   // Legacy alias for compatibility
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
   
@@ -951,10 +953,14 @@ export function LessonRecordForm({
           // MULTI-HW-ASSIGN-V1: Load all existing homework for this record
           const { data: existingHwList } = await supabase
             .from('homework_assignments')
-            .select('content')
+            .select(HOMEWORK_LOAD_COLUMNS)
             .eq('lesson_record_id', record.id);
           if (existingHwList && existingHwList.length > 0) {
-            setNewHomeworkItems(existingHwList.map(hw => ({ content: hw.content || '' })));
+            setNewHomeworkItems(existingHwList.map((hw: any) => ({
+              id: hw.id,
+              content: hw.content || '',
+              is_daily: hw.homework_type === 'daily',
+            })));
           }
         }
       } else if (initialContext && canManage) {
@@ -1417,20 +1423,18 @@ export function LessonRecordForm({
       // MULTI-HW-ASSIGN-V1: Save multiple homework items
       const validItems = newHomeworkItems.filter(item => item.content.trim());
       if (validItems.length > 0 && finalDraftId) {
-        // Delete existing homework for this record, then re-insert all
-        await supabase.from('homework_assignments').delete().eq('lesson_record_id', finalDraftId);
-        for (const item of validItems) {
-          await supabase.from('homework_assignments').insert({
-            student_id: formData.student_id,
-            subject: formData.subject as SubjectType,
-            lesson_record_id: finalDraftId,
-            assigned_date: formData.lesson_date,
-            content: item.content.trim(),
-            // HW-DAILY-OPT-IN-V1: default to 'regular' unless teacher opted in
+        // HW-RECONCILE-V1: update existing rows in place, insert only new ones
+        await reconcileLessonHomework({
+          lessonRecordId: finalDraftId,
+          studentId: formData.student_id,
+          subject: formData.subject,
+          assignedDate: formData.lesson_date,
+          items: validItems.map(item => ({
+            id: item.id,
+            content: item.content,
             homework_type: item.is_daily ? 'daily' : 'regular',
-            created_by: user?.id || null,
-          });
-        }
+          })),
+        });
       }
 
       toast({ title: '임시저장 완료' });
@@ -1501,20 +1505,18 @@ export function LessonRecordForm({
       // MULTI-HW-ASSIGN-V1: Save multiple homework items
       const validItems = newHomeworkItems.filter(item => item.content.trim());
       if (validItems.length > 0 && finalRecordId) {
-        // Delete existing homework for this record, then re-insert all
-        await supabase.from('homework_assignments').delete().eq('lesson_record_id', finalRecordId);
-        for (const item of validItems) {
-          await supabase.from('homework_assignments').insert({
-            student_id: formData.student_id,
-            subject: formData.subject as SubjectType,
-            lesson_record_id: finalRecordId,
-            assigned_date: formData.lesson_date,
-            content: item.content.trim(),
-            // HW-DAILY-OPT-IN-V1: default to 'regular' unless teacher opted in
+        // HW-RECONCILE-V1: update existing rows in place, insert only new ones
+        await reconcileLessonHomework({
+          lessonRecordId: finalRecordId,
+          studentId: formData.student_id,
+          subject: formData.subject,
+          assignedDate: formData.lesson_date,
+          items: validItems.map(item => ({
+            id: item.id,
+            content: item.content,
             homework_type: item.is_daily ? 'daily' : 'regular',
-            created_by: user?.id || null,
-          });
-        }
+          })),
+        });
       }
 
       toast({ title: '제출 완료' });
