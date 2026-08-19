@@ -355,17 +355,16 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
     function resolveUrl(path: string): Promise<string | null> {
 
-      if (path.startsWith('exam-papers/') || path.startsWith('exam-pages/')) {
+      if (path.startsWith('exam-papers/') || path.startsWith('exam-pages/') || path.startsWith('unified/')) {
 
-        const { data } = supabase.storage.from('exam-files').getPublicUrl(path);
-
-        return Promise.resolve(data.publicUrl ?? null);
+        return getCachedSignedUrl('exam-files', path, 600);
 
       }
 
       return getCachedSignedUrl('exam-analysis', path, 3600);
 
     }
+
 
     if (originalPath) {
       setOriginalPdfUrl(await resolveUrl(originalPath));
