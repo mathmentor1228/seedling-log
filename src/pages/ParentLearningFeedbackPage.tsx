@@ -76,7 +76,11 @@ export default function ParentLearningFeedbackPage() {
       ]);
       setRows((data as any) || []);
       setActiveStudents((studentData as any) || []);
+      const responded = new Set(((data as any) || []).map((r: any) => r.student_id));
+      setSelected(new Set(((studentData as any) || []).filter((s: any) => !responded.has(s.id)).map((s: any) => s.id as string)));
+      setInitialized(true);
       setLoading(false);
+
     })();
   }, []);
 
