@@ -203,8 +203,9 @@ export function UnifiedUploadHub({ knownSchools, onComplete }: Props) {
           contentType: file.type, upsert: false,
         });
         if (!upErr) {
-          const { data: pub } = supabase.storage.from('exam-files').getPublicUrl(path);
-          fileUrl = pub.publicUrl;
+          // 비공개 버킷: 공개 URL 대신 저장 경로를 보관하고 열람 시 서명 URL을 발급한다
+          fileUrl = path;
+
           await supabase.from('school_files').insert({
             school_name: finalSchool,
             file_type: result.doc_type,
