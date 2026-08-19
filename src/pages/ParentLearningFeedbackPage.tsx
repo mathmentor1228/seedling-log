@@ -3,8 +3,11 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Copy } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { toast } from '@/hooks/use-toast';
+import { buildSurveyKakaoMessage, fetchParentToken, surveyUrl } from '@/lib/parentSurveyMessage';
 
 const DELIVERY_LABELS: Record<string, string> = {
   next_day_short: '다음 날 짧은 안내',
@@ -33,21 +36,46 @@ interface Row {
   students?: { name: string; school_level: string | null; grade_year: number | null } | null;
 }
 
+interface ActiveStudent { id: string; name: string; school_level: string | null; grade_year: number | null; }
+
 export default function ParentLearningFeedbackPage() {
   const { role } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
+  const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('parent_learning_feedback')
-        .select('*, students(name, school_level, grade_year)')
-        .order('submitted_at', { ascending: false });
+      const [{ data }, { data: studentData }] = await Promise.all([
+        supabase
+          .from('parent_learning_feedback')
+          .select('*, students(name, school_level, grade_year)')
+          .order('submitted_at', { ascending: false }),
+        supabase
+          .from('students')
+          .select('id, name, school_level, grade_year')
+          .in('enrollment_status', ['재학', '재등원'])
+          .order('name'),
+      ]);
       setRows((data as any) || []);
+      setActiveStudents((studentData as any) || []);
       setLoading(false);
     })();
   }, []);
+
+  const copyGuide = async (studentId: string) => {
+    setCopyingId(studentId);
+    try {
+      const token = await fetchParentToken(studentId);
+      await navigator.clipboard.writeText(buildSurveyKakaoMessage(surveyUrl(token)));
+      toast({ title: '카카오톡 안내문 복사됨', description: '카카오톡에 붙여넣기하세요!' });
+    } catch (e: any) {
+      toast({ title: '오류', description: e.message, variant: 'destructive' });
+    } finally {
+      setCopyingId(null);
+    }
+  };
 
   if (role !== 'admin') {
     return (
@@ -57,6 +85,10 @@ export default function ParentLearningFeedbackPage() {
     );
   }
 
+  const respondedIds = new Set(rows.map((r) => r.student_id));
+  const activeTotal = activeStudents.length;
+  const respondedCount = activeStudents.filter((s) => respondedIds.has(s.id)).length;
+  const pendingStudents = activeStudents.filter((s) => !respondedIds.has(s.id));
   const total = rows.length;
   const publicConsent = rows.filter((r) => r.public_web_consent).length;
   const learningConsent = rows.filter((r) => r.learning_management_consent).length;
@@ -80,6 +112,46 @@ export default function ParentLearningFeedbackPage() {
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
         ) : (
           <>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: '활성 학생 수', value: activeTotal },
+                { label: '응답 완료', value: respondedCount },
+                { label: '미응답', value: pendingStudents.length },
+              ].map((s) => (
+                <Card key={s.label}>
+                  <CardContent className="pt-5 pb-4 text-center">
+                    <p className="text-2xl font-bold">{s.value}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">미응답 학생 ({pendingStudents.length}명)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {pendingStudents.length === 0 && (
+                  <p className="text-sm text-muted-foreground">모든 활성 학생이 응답했습니다.</p>
+                )}
+                {pendingStudents.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 border-b border-border/60 pb-2 last:border-0">
+                    <span className="text-sm">
+                      {s.name}
+                      {s.school_level && s.grade_year ? (
+                        <span className="text-xs text-muted-foreground"> ({s.school_level}{s.grade_year})</span>
+                      ) : null}
+                    </span>
+                    <Button size="sm" variant="outline" disabled={copyingId === s.id} onClick={() => copyGuide(s.id)}>
+                      {copyingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
+                      안내문 복사
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: '총 응답 수', value: total },
