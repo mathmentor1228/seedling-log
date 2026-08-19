@@ -157,6 +157,10 @@ export default function ParentLearningFeedbackPage() {
   const activeTotal = activeStudents.length;
   const respondedCount = activeStudents.filter((s) => respondedIds.has(s.id)).length;
   const pendingStudents = activeStudents.filter((s) => !respondedIds.has(s.id));
+  const selectedIds = activeStudents.filter((s) => selected.has(s.id)).map((s) => s.id);
+  const selectedNoPhone = activeStudents.filter((s) => selected.has(s.id) && !s.parent_phone).length;
+  const selectedResponded = activeStudents.filter((s) => selected.has(s.id) && respondedIds.has(s.id)).length;
+
   const total = rows.length;
   const publicConsent = rows.filter((r) => r.public_web_consent).length;
   const learningConsent = rows.filter((r) => r.learning_management_consent).length;
