@@ -8305,6 +8305,16 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      reconcile_lesson_homework: {
+        Args: {
+          _assigned_date: string
+          _items: Json
+          _lesson_record_id: string
+          _student_id: string
+          _subject: Database["public"]["Enums"]["subject_type"]
+        }
+        Returns: Json
+      }
       remove_student_from_schedules: {
         Args: { _student_id: string }
         Returns: undefined
