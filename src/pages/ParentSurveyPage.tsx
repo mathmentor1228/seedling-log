@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, AlertTriangle, GraduationCap, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, AlertTriangle, GraduationCap, CheckCircle2, Clock, SlidersHorizontal, Bell, MessageCircle } from 'lucide-react';
 import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
 import { toast } from '@/hooks/use-toast';
 
