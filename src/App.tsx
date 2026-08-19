@@ -22,6 +22,7 @@ const IntensiveApplicationsPage = lazy(() => import("./pages/IntensiveApplicatio
 const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const PayInfo = lazy(() => import("./pages/PayInfo"));
 const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
+const ParentSurveyPage = lazy(() => import("./pages/ParentSurveyPage"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
 );
@@ -45,6 +46,7 @@ const AdminBriefingPage = lazy(() => import("./pages/AdminBriefingPage"));
 const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
 const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
+const ParentLearningFeedbackPage = lazy(() => import("./pages/ParentLearningFeedbackPage"));
 const TuitionPage = lazy(() => import("./pages/TuitionPage"));
 const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
@@ -111,6 +113,7 @@ const App = () => (
           <Route path="/report/view" element={<PublicReport />} />
           <Route path="/summer-intensive" element={<IntensiveApplyPage />} />
           <Route path="/parent" element={<ParentPortal />} />
+          <Route path="/parent/survey" element={<ParentSurveyPage />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
           <Route path="/pay-info" element={<PayInfo />} />
           <Route path="/trial" element={<TrialSignup />} />
@@ -189,6 +192,7 @@ const App = () => (
                 <Route path="/admin/report" element={<AdminReportPage />} />
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
                 <Route path="/admin/office" element={<AdminOfficePage />} />
+                <Route path="/admin/parent-learning-feedback" element={<ParentLearningFeedbackPage />} />
                 <Route path="/admin/tuition" element={<TuitionPage />} />
                 <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />

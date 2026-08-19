@@ -178,6 +178,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
         { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
         { label: '특강 신청 현황', href: '/admin/intensive-applications', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
+        { label: '학부모 설문', href: '/admin/parent-learning-feedback', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
       ],
     },
     { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, allowedRoles: ['admin'] },
