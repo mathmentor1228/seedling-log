@@ -258,11 +258,11 @@ export default function ParentLearningFeedbackPage() {
                           {noPhone && <Badge variant="destructive" className="text-[10px]">연락처 없음</Badge>}
                         </label>
                         <div className="flex items-center gap-1.5">
-                          <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(surveyUrl(''))
-                            .then(() => fetchParentToken(s.id))
+                          <Button size="sm" variant="ghost" onClick={() => fetchParentToken(s.id)
                             .then((t) => navigator.clipboard.writeText(surveyUrl(t)))
                             .then(() => toast({ title: '설문 링크 복사됨' }))
                             .catch((e) => toast({ title: '오류', description: e.message, variant: 'destructive' }))}>
+
                             링크 복사
                           </Button>
                           <Button size="sm" variant="outline" disabled={copyingId === s.id} onClick={() => copyGuide(s.id)}>
