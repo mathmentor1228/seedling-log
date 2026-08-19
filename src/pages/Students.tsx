@@ -1,3 +1,4 @@
+import { buildSurveyKakaoMessage } from '@/lib/parentSurveyMessage';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -472,7 +473,7 @@ export default function Students() {
     }
   };
 
-  const generateParentLink = async (studentId: string, mode: 'portal' | 'survey' = 'portal') => {
+  const generateParentLink = async (studentId: string, mode: 'portal' | 'survey' | 'survey_message' = 'portal') => {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parent-portal?action=generate`,
@@ -490,11 +491,17 @@ export default function Students() {
         throw new Error(result.error || '링크 생성 실패');
       }
       const publishedOrigin = 'https://seedling-log.lovable.app';
-      const parentUrl = mode === 'survey'
-        ? `${publishedOrigin}/parent/survey?token=${result.token}`
-        : `${publishedOrigin}/parent?token=${result.token}`;
-      await navigator.clipboard.writeText(parentUrl);
-      toast({ title: mode === 'survey' ? '설문 링크 복사됨' : '학부모 링크 복사됨', description: '카카오톡에 붙여넣기하세요!' });
+      const parentUrl = mode === 'portal'
+        ? `${publishedOrigin}/parent?token=${result.token}`
+        : `${publishedOrigin}/parent/survey?token=${result.token}`;
+      const clipboardText = mode === 'survey_message'
+        ? buildSurveyKakaoMessage(parentUrl)
+        : parentUrl;
+      await navigator.clipboard.writeText(clipboardText);
+      toast({
+        title: mode === 'survey_message' ? '카카오톡 안내문 복사됨' : mode === 'survey' ? '설문 링크 복사됨' : '학부모 링크 복사됨',
+        description: '카카오톡에 붙여넣기하세요!',
+      });
     } catch (err: any) {
       toast({ title: '오류', description: err.message, variant: 'destructive' });
     }
@@ -1102,6 +1109,7 @@ export default function Students() {
         onDelete={() => detailStudent && handleDelete(detailStudent.id)}
         onCopyParentLink={() => detailStudent && generateParentLink(detailStudent.id)}
         onCopySurveyLink={() => detailStudent && generateParentLink(detailStudent.id, 'survey')}
+        onCopySurveyMessage={() => detailStudent && generateParentLink(detailStudent.id, 'survey_message')}
       />
 
       {isAdmin(role) && (

@@ -56,11 +56,12 @@ interface Props {
   onDelete: () => void;
   onCopyParentLink: () => void;
   onCopySurveyLink?: () => void;
+  onCopySurveyMessage?: () => void;
 }
 
 export function StudentDetailDrawer({
   student, students, flag, defaultTab, flashSection, role,
-  onClose, onNavigate, onEdit, onDelete, onCopyParentLink, onCopySurveyLink,
+  onClose, onNavigate, onEdit, onDelete, onCopyParentLink, onCopySurveyLink, onCopySurveyMessage,
 }: Props) {
   const infoRef = useRef<HTMLDivElement>(null);
   const coursesRef = useRef<HTMLDivElement>(null);
@@ -236,6 +237,17 @@ export function StudentDetailDrawer({
                     >
                       <Link2 className="w-3.5 h-3.5 mr-2" />
                       설문 링크 복사
+                    </Button>
+                  )}
+                  {onCopySurveyMessage && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={onCopySurveyMessage}
+                    >
+                      <Link2 className="w-3.5 h-3.5 mr-2" />
+                      카카오톡 안내문 복사
                     </Button>
                   )}
                 </>

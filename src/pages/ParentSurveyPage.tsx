@@ -234,9 +234,12 @@ export default function ParentSurveyPage() {
         {/* Intro */}
         <Card className="border-primary/30 bg-primary/[0.04]">
           <CardContent className="pt-5 pb-5">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Clock className="w-4 h-4 text-primary" />
-              <p className="text-sm font-bold text-foreground">1분 설문</p>
+              <p className="text-sm font-bold text-foreground">우리 아이 수업기록 받는 방식 선택하기</p>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                약 1분 · 한 번만 선택하면 됩니다
+              </span>
             </div>
             <div className="space-y-3 text-sm leading-relaxed">
               <p className="text-foreground">
@@ -245,7 +248,16 @@ export default function ParentSurveyPage() {
               <div className="rounded-xl bg-background/60 p-3 text-xs text-muted-foreground">
                 학원 공지와 꼭 필요한 안내는 기존처럼 카카오톡으로 보내드립니다. 아래 선택은 우리 아이의 개별 수업기록을 받아보는 방식입니다.
               </div>
-              <p className="text-muted-foreground">답변은 약 1분, 긴 의견은 선택입니다.</p>
+              <div className="rounded-xl border border-primary/25 bg-card/70 p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-foreground">응답하지 않으시면 이렇게 유지돼요</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  학원 공지와 꼭 필요한 안내는 응답 여부와 관계없이 기존처럼 카카오톡으로 보내드립니다. 다만 아이의 개별 수업기록은 카카오톡으로 정기 전송되지 않고, 지금처럼 학부모 웹페이지에서 직접 확인하시는 방식으로 유지됩니다.
+                </p>
+                <p className="text-xs text-primary font-medium">
+                  아래에서 한 번만 선택해 주시면, 원하시는 방식으로 언제든 바꿔드릴 수 있어요.
+                </p>
+              </div>
+              <p className="text-muted-foreground">답변은 약 1분, 긴 의견은 선택입니다. 아래 카드에서 실제로 어떤 메시지를 받게 되는지 미리 보실 수 있어요.</p>
             </div>
           </CardContent>
         </Card>
@@ -253,6 +265,7 @@ export default function ParentSurveyPage() {
         {hasExisting && !done && (
           <p className="text-xs text-muted-foreground px-1">이전에 남겨주신 응답을 불러왔어요. 바꾸신 뒤 다시 저장해주세요.</p>
         )}
+
 
         {/* Main choice */}
         <Card>
@@ -434,9 +447,11 @@ export default function ParentSurveyPage() {
             </div>
 
             <div className="text-xs text-muted-foreground leading-relaxed space-y-1">
-              <p>동의하지 않으셔도 수강과 학습관리에 어떤 불이익도 없습니다.</p>
+              <p>이 항목은 위의 수업기록 전달 선택과 완전히 분리된 자율 동의입니다. 선택하지 않으시거나 설문에 응답하지 않으시면 홍보 활용에는 동의하지 않은 것으로 처리됩니다.</p>
+              <p>동의하지 않으셔도 수강·학습관리·수업기록 전달에 어떤 영향도 없습니다.</p>
               <p>공개 기간은 게시 후 1년 또는 철회 시까지이며, 철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.</p>
             </div>
+
           </CardContent>
         </Card>
 
