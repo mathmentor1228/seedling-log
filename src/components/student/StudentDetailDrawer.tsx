@@ -55,11 +55,12 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onCopyParentLink: () => void;
+  onCopySurveyLink?: () => void;
 }
 
 export function StudentDetailDrawer({
   student, students, flag, defaultTab, flashSection, role,
-  onClose, onNavigate, onEdit, onDelete, onCopyParentLink,
+  onClose, onNavigate, onEdit, onDelete, onCopyParentLink, onCopySurveyLink,
 }: Props) {
   const infoRef = useRef<HTMLDivElement>(null);
   const coursesRef = useRef<HTMLDivElement>(null);
@@ -216,15 +217,28 @@ export function StudentDetailDrawer({
                 </div>
               </div>
               {isAdmin(role) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-3"
-                  onClick={onCopyParentLink}
-                >
-                  <Link2 className="w-3.5 h-3.5 mr-2" />
-                  학부모 포털 링크 복사
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-3"
+                    onClick={onCopyParentLink}
+                  >
+                    <Link2 className="w-3.5 h-3.5 mr-2" />
+                    학부모 포털 링크 복사
+                  </Button>
+                  {onCopySurveyLink && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={onCopySurveyLink}
+                    >
+                      <Link2 className="w-3.5 h-3.5 mr-2" />
+                      설문 링크 복사
+                    </Button>
+                  )}
+                </>
               )}
             </Section>
 
