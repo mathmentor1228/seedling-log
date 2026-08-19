@@ -216,15 +216,28 @@ export function StudentDetailDrawer({
                 </div>
               </div>
               {isAdmin(role) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-3"
-                  onClick={onCopyParentLink}
-                >
-                  <Link2 className="w-3.5 h-3.5 mr-2" />
-                  학부모 포털 링크 복사
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-3"
+                    onClick={onCopyParentLink}
+                  >
+                    <Link2 className="w-3.5 h-3.5 mr-2" />
+                    학부모 포털 링크 복사
+                  </Button>
+                  {onCopySurveyLink && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={onCopySurveyLink}
+                    >
+                      <Link2 className="w-3.5 h-3.5 mr-2" />
+                      설문 링크 복사
+                    </Button>
+                  )}
+                </>
               )}
             </Section>
 
