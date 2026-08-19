@@ -95,6 +95,98 @@ Deno.serve(async (req) => {
 
     const studentId = student.id;
 
+    // PARENT-SURVEY-V1: parent learning info survey (GET load / POST upsert)
+    if (action === "survey") {
+      const jsonRes = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+
+      const studentLite = {
+        name: student.name,
+        school: student.school,
+        school_level: student.school_level,
+        grade_year: student.grade_year,
+      };
+
+      if (req.method === "GET") {
+        const { data: existing } = await supabase
+          .from("parent_learning_feedback")
+          .select("*")
+          .eq("student_id", studentId)
+          .maybeSingle();
+        return jsonRes({ student: studentLite, feedback: existing ?? null });
+      }
+
+      if (req.method === "POST") {
+        let body: any;
+        try {
+          body = await req.json();
+        } catch {
+          return jsonRes({ error: "잘못된 요청입니다." }, 400);
+        }
+
+        const DELIVERY = ["next_day_short", "weekly_summary", "portal_on_demand", "important_only", "academy_recommended"];
+        const DAILY = ["progress", "homework", "test_result", "attitude", "difficulty_response"];
+        const WEEKLY = ["three_lines", "subject_detail", "on_consultation", "not_needed"];
+        const NOTIFY = ["none", "next_day", "weekly", "important_only"];
+
+        const oneOf = (v: unknown, allowed: string[]) =>
+          typeof v === "string" && allowed.includes(v) ? v : null;
+        const manyOf = (v: unknown, allowed: string[]) =>
+          Array.isArray(v) ? Array.from(new Set(v.filter((x) => typeof x === "string" && allowed.includes(x)))) : [];
+        const text = (v: unknown, max: number) => {
+          if (typeof v !== "string") return null;
+          const t = v.trim();
+          if (!t) return null;
+          return t.slice(0, max);
+        };
+
+        const delivery_preference = oneOf(body.delivery_preference, DELIVERY);
+        if (!delivery_preference) return jsonRes({ error: "수업내역 전달 방식을 선택해주세요." }, 400);
+        if (body.survey_notice_confirmed !== true) return jsonRes({ error: "설문 정보 안내 확인이 필요합니다." }, 400);
+        if (body.learning_management_consent !== true) return jsonRes({ error: "학습관리 동의가 필요합니다." }, 400);
+        if (body.legal_representative_confirmed !== true) return jsonRes({ error: "법정대리인(보호자) 확인이 필요합니다." }, 400);
+
+        const payload = {
+          student_id: studentId,
+          delivery_preference,
+          daily_topics: manyOf(body.daily_topics, DAILY),
+          weekly_detail_preference: oneOf(body.weekly_detail_preference, WEEKLY),
+          portal_feedback: text(body.portal_feedback, 2000),
+          learning_interests: Array.isArray(body.learning_interests)
+            ? body.learning_interests.filter((x: unknown) => typeof x === "string").map((x: string) => x.trim().slice(0, 100)).filter(Boolean).slice(0, 20)
+            : [],
+          satisfaction_areas: Array.isArray(body.satisfaction_areas)
+            ? body.satisfaction_areas.filter((x: unknown) => typeof x === "string").map((x: string) => x.trim().slice(0, 100)).filter(Boolean).slice(0, 20)
+            : [],
+          improvement_feedback: text(body.improvement_feedback, 2000),
+          parent_message: text(body.parent_message, 2000),
+          survey_notice_confirmed: true,
+          learning_management_consent: true,
+          legal_representative_confirmed: true,
+          notification_preference: oneOf(body.notification_preference, NOTIFY),
+          public_web_consent: body.public_web_consent === true,
+          consent_version: "v1",
+          guardian_name: text(body.guardian_name, 50),
+          guardian_relationship: text(body.guardian_relationship, 50),
+          submitted_at: new Date().toISOString(),
+        };
+
+        const { data: saved, error: saveError } = await supabase
+          .from("parent_learning_feedback")
+          .upsert(payload, { onConflict: "student_id" })
+          .select()
+          .single();
+
+        if (saveError) return jsonRes({ error: saveError.message }, 500);
+        return jsonRes({ student: studentLite, feedback: saved });
+      }
+
+      return jsonRes({ error: "지원하지 않는 요청입니다." }, 405);
+    }
+
     // Log parent portal visit (fire and forget)
     supabase
       .from("parent_portal_visits")
