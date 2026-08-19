@@ -43,7 +43,9 @@ interface Row {
   students?: { name: string; school_level: string | null; grade_year: number | null } | null;
 }
 
-interface ActiveStudent { id: string; name: string; school_level: string | null; grade_year: number | null; }
+interface ActiveStudent { id: string; name: string; school_level: string | null; grade_year: number | null; parent_phone: string | null; }
+
+interface SendResult { student_id: string; student_name: string; ok?: boolean; reason?: string; }
 
 export default function ParentLearningFeedbackPage() {
   const { role } = useAuth();
@@ -51,6 +53,13 @@ export default function ParentLearningFeedbackPage() {
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [preview, setPreview] = useState<any | null>(null);
+  const [sendResults, setSendResults] = useState<{ sent: number; failed: number; skipped: number; results: SendResult[]; test_mode?: boolean } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -61,7 +70,7 @@ export default function ParentLearningFeedbackPage() {
           .order('submitted_at', { ascending: false }),
         supabase
           .from('students')
-          .select('id, name, school_level, grade_year')
+          .select('id, name, school_level, grade_year, parent_phone')
           .in('enrollment_status', ['재학', '재등원'])
           .order('name'),
       ]);
@@ -83,6 +92,54 @@ export default function ParentLearningFeedbackPage() {
       setCopyingId(null);
     }
   };
+
+  const invokeSend = async (payload: { student_ids: string[]; dry_run?: boolean; test_phone?: string }) => {
+    const { data, error } = await supabase.functions.invoke('send-parent-survey', { body: payload });
+    if (error) throw new Error(error.message);
+    if (data?.error === 'not_configured') {
+      throw new Error(`솔라피 템플릿 등록 및 환경변수 설정 필요 — 누락: ${(data.missing || []).join(', ')}`);
+    }
+    if (data?.error) throw new Error(String(data.error));
+    return data;
+  };
+
+  const runPreview = async (ids: string[]) => {
+    setBusy(true); setSendResults(null);
+    try {
+      const data = await invokeSend({ student_ids: ids, dry_run: true });
+      setPreview(data);
+      if ((data.missing || []).length > 0) {
+        toast({ title: '설정 미완료', description: `솔라피 템플릿 등록 및 환경변수 설정 필요 — 누락: ${data.missing.join(', ')}`, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: '미리보기 실패', description: e.message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  };
+
+  const runTestSend = async (ids: string[]) => {
+    if (!testPhone.trim()) { toast({ title: '테스트 번호를 입력하세요', variant: 'destructive' }); return; }
+    if (ids.length !== 1) { toast({ title: '테스트 발송은 학생 1명만 선택하세요', variant: 'destructive' }); return; }
+    setBusy(true);
+    try {
+      const data = await invokeSend({ student_ids: ids, test_phone: testPhone.trim() });
+      setSendResults(data);
+      toast({ title: '테스트 발송 완료', description: '운영 발송 로그에는 기록되지 않았습니다.' });
+    } catch (e: any) {
+      toast({ title: '테스트 발송 실패', description: e.message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  };
+
+  const runBulkSend = async (ids: string[]) => {
+    setBusy(true); setConfirmOpen(false);
+    try {
+      const data = await invokeSend({ student_ids: ids });
+      setSendResults(data);
+      toast({ title: '알림톡 발송 완료', description: `성공 ${data.sent}건 / 실패 ${data.failed}건` });
+    } catch (e: any) {
+      toast({ title: '발송 실패', description: e.message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  };
+
 
   if (role !== 'admin') {
     return (
