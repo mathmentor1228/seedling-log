@@ -179,15 +179,42 @@ export default function ParentSurveyPage() {
         {/* Intro */}
         <Card className="border-primary/30 bg-primary/[0.04]">
           <CardContent className="pt-5 pb-5">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-3">
               <Clock className="w-4 h-4 text-primary" />
               <p className="text-sm font-bold text-foreground">1분 설문</p>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {student?.name} 학생의 학습 소식을 어떻게 전해드리면 좋을지 알려주세요.
-              <br />
-              <span className="text-foreground font-medium">필수는 전달 방식과 동의 확인뿐</span>이에요. 나머지는 편하실 때만 남겨주셔도 됩니다.
-            </p>
+            <div className="space-y-2 text-sm text-muted-foreground leading-relaxed mb-4">
+              <p>
+                {student?.name} 학생의 수업 소식, 필요한 만큼 편하게 받아보실 수 있도록 방식을 정하려 합니다.
+              </p>
+              <p>
+                응답해 주신 방식에 맞춰 수업 다음 날 안내·주간 요약·웹페이지 확인 중 전달 방식을 정리합니다.
+              </p>
+              <p>답변은 약 1분, 긴 의견은 선택입니다.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex items-start gap-2.5 rounded-xl bg-background/60 p-3">
+                <SlidersHorizontal className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">내가 원하는 만큼만 받기</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">매일·주간·필요할 때만</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl bg-background/60 p-3">
+                <Bell className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">중요한 변화는 놓치지 않기</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">필요한 일만 따로 안내</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl bg-background/60 p-3">
+                <MessageCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">의견을 안내 방식에 반영하기</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">부담 없이 남겨주세요</p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
