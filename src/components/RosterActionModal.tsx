@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
+import { reconcileLessonHomework, HOMEWORK_LOAD_COLUMNS } from '@/lib/homeworkReconcile';
 import {
   Dialog,
   DialogContent,
@@ -167,7 +168,8 @@ export function RosterActionModal({
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
   const [isSavingCheckNote, setIsSavingCheckNote] = useState(false);
   // MULTI-HW-ASSIGN-V1: Multiple homework items
-  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  // HW-RECONCILE-V1: keep existing homework row id so saves update in place instead of delete+reinsert
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ id?: string; content: string }[]>([{ content: '' }]);
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
   const [testFormData, setTestFormData] = useState({
     test_name: '', // Unified: saves to test_name, test_content, test_title
@@ -312,7 +314,7 @@ export function RosterActionModal({
           }
           
           if (homework && homework.length > 0) {
-            setNewHomeworkItems(homework.map(hw => ({ content: hw.content || '' })));
+            setNewHomeworkItems(homework.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
           }
         }
       }
@@ -694,17 +696,14 @@ export function RosterActionModal({
         }
       }
       
-      // Delete existing then insert all
-      await supabase.from('homework_assignments').delete().eq('lesson_record_id', recordId);
-      for (const item of validItems) {
-        await supabase.from('homework_assignments').insert({
-          student_id: context.student_id,
-          subject: context.subject as SubjectType,
-          lesson_record_id: recordId,
-          assigned_date: context.date,
-          content: item.content.trim(),
-        });
-      }
+      // HW-RECONCILE-V1: update existing rows in place, insert only new ones
+      await reconcileLessonHomework({
+        lessonRecordId: recordId,
+        studentId: context.student_id,
+        subject: context.subject,
+        assignedDate: context.date,
+        items: validItems.map(item => ({ id: item.id, content: item.content })),
+      });
       
       toast({
         title: '저장 완료',
