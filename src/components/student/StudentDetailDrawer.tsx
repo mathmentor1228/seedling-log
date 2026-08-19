@@ -55,11 +55,12 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onCopyParentLink: () => void;
+  onCopySurveyLink?: () => void;
 }
 
 export function StudentDetailDrawer({
   student, students, flag, defaultTab, flashSection, role,
-  onClose, onNavigate, onEdit, onDelete, onCopyParentLink,
+  onClose, onNavigate, onEdit, onDelete, onCopyParentLink, onCopySurveyLink,
 }: Props) {
   const infoRef = useRef<HTMLDivElement>(null);
   const coursesRef = useRef<HTMLDivElement>(null);
