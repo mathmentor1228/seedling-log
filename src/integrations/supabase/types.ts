@@ -8098,6 +8098,7 @@ export type Database = {
       }
     }
     Functions: {
+      can_view_team_note: { Args: { _note_id: string }; Returns: boolean }
       check_math_question_daily_limit: {
         Args: { _date?: string; _student_id: string }
         Returns: boolean
