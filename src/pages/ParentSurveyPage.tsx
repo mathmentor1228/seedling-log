@@ -41,7 +41,7 @@ export default function ParentSurveyPage() {
   const [noticeConfirmed, setNoticeConfirmed] = useState(false);
   const [learningConsent, setLearningConsent] = useState(false);
   const [legalConfirmed, setLegalConfirmed] = useState(false);
-  const [publicWebConsent, setPublicWebConsent] = useState(false);
+  const [promoConsent, setPromoConsent] = useState<'agree' | 'disagree' | null>(null);
 
   const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parent-portal?action=survey&token=${encodeURIComponent(token || '')}`;
 
@@ -128,7 +128,7 @@ export default function ParentSurveyPage() {
           setParentMessage(f.parent_message || '');
           setGuardianName(f.guardian_name || '');
           setGuardianRelationship(f.guardian_relationship || '');
-          setPublicWebConsent(!!f.public_web_consent);
+          setPromoConsent(f.public_web_consent ? 'agree' : null);
         }
       } catch {
         setError('설문을 불러오는 중 오류가 발생했습니다.');
@@ -170,7 +170,7 @@ export default function ParentSurveyPage() {
           learning_management_consent: learningConsent,
           legal_representative_confirmed: legalConfirmed,
           notification_preference: null,
-          public_web_consent: publicWebConsent,
+          public_web_consent: promoConsent === 'agree',
         }),
       });
       const result = await res.json();
@@ -385,23 +385,60 @@ export default function ParentSurveyPage() {
           </CardContent>
         </Card>
 
-        {/* Public consent — optional, collapsed */}
-        <Accordion type="multiple" className="space-y-3">
-          <AccordionItem value="public" className="border border-border rounded-xl px-4 bg-card">
-            <AccordionTrigger className="text-sm font-semibold hover:no-underline">외부 공개 동의 (완전히 선택)</AccordionTrigger>
-            <AccordionContent className="pb-4 space-y-3">
+        {/* Promo consent — visible, independent card */}
+        <Card className="border-amber-300/50 bg-amber-50/40 dark:bg-amber-950/20">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm font-bold">아이의 학습 성과 홍보 활용 동의 (선택)</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              더멘토학원의 실제 개별관리 과정과 학생들의 성장을 소개하기 위해, 학습 과정과 성과를 홈페이지·블로그·인스타그램·온라인/인쇄 홍보물에 활용할 수 있도록 동의를 요청드립니다.
+            </p>
+
+            <div className="rounded-xl border border-border bg-background/70 p-3 space-y-2">
+              <p className="text-xs font-semibold text-foreground">공개 가능 범위</p>
+              <ul className="text-xs text-muted-foreground space-y-1 leading-relaxed list-disc pl-4">
+                <li>이름 일부만 공개 (최대 2글자 기준, 전체 이름 비공개)</li>
+                <li>학교·학년·과목</li>
+                <li>점수 변화, 성취 결과, 학습 과정의 요약</li>
+              </ul>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                홈페이지 등에 <span className="font-medium text-foreground">이름 일부 마스킹, 학년·과목, 학습 과정 요약</span>만 소개하는 데 대한 동의예요.
-                전체 이름·연락처·세부 성적·상담 내용·사진은 공개하지 않습니다. 동의하지 않으셔도 수강과 학습관리에 어떤 불이익도 없습니다.
-                철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.
+                전체 이름·연락처·상담 내용·상세 성적표·사진은 이 동의로 공개하지 않습니다. 사진은 별도 동의 없이는 사용하지 않습니다.
               </p>
-              <div className="flex gap-2">
-                <Checkbox id="c4" checked={publicWebConsent} onCheckedChange={(v) => setPublicWebConsent(v === true)} className="mt-0.5" />
-                <Label htmlFor="c4" className="text-xs font-normal leading-relaxed">외부 공개에 동의합니다 (선택)</Label>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">홍보 활용 예시</p>
+              <p className="text-sm text-foreground leading-relaxed">
+                중2 김○ 학생 / 수학 62점 → 88점 / 오답 점검과 주간 테스트를 꾸준히 진행했습니다.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={promoConsent === 'agree' ? 'default' : 'outline'}
+                className="w-full"
+                onClick={() => setPromoConsent('agree')}
+              >
+                동의함
+              </Button>
+              <Button
+                type="button"
+                variant={promoConsent === 'disagree' ? 'secondary' : 'outline'}
+                className="w-full"
+                onClick={() => setPromoConsent('disagree')}
+              >
+                동의하지 않음
+              </Button>
+            </div>
+
+            <div className="text-xs text-muted-foreground leading-relaxed space-y-1">
+              <p>동의하지 않으셔도 수강과 학습관리에 어떤 불이익도 없습니다.</p>
+              <p>공개 기간은 게시 후 1년 또는 철회 시까지이며, 철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.</p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Button className="w-full" size="lg" onClick={submit} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
