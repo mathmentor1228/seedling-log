@@ -2144,6 +2144,36 @@ export type Database = {
           },
         ]
       }
+      homework_link_repair_log: {
+        Row: {
+          homework_id: string
+          id: string
+          new_lesson_record_id: string
+          previous_lesson_record_id: string | null
+          reason: string
+          repaired_at: string
+          repaired_by: string | null
+        }
+        Insert: {
+          homework_id: string
+          id?: string
+          new_lesson_record_id: string
+          previous_lesson_record_id?: string | null
+          reason: string
+          repaired_at?: string
+          repaired_by?: string | null
+        }
+        Update: {
+          homework_id?: string
+          id?: string
+          new_lesson_record_id?: string
+          previous_lesson_record_id?: string | null
+          reason?: string
+          repaired_at?: string
+          repaired_by?: string | null
+        }
+        Relationships: []
+      }
       homework_submissions: {
         Row: {
           created_at: string
