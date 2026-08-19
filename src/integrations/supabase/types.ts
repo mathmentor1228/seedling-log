@@ -3056,6 +3056,83 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_learning_feedback: {
+        Row: {
+          consent_version: string
+          daily_topics: string[]
+          delivery_preference: string | null
+          guardian_name: string | null
+          guardian_relationship: string | null
+          id: string
+          improvement_feedback: string | null
+          learning_interests: string[]
+          learning_management_consent: boolean
+          legal_representative_confirmed: boolean
+          notification_preference: string | null
+          parent_message: string | null
+          portal_feedback: string | null
+          public_web_consent: boolean
+          satisfaction_areas: string[]
+          student_id: string
+          submitted_at: string
+          survey_notice_confirmed: boolean
+          updated_at: string
+          weekly_detail_preference: string | null
+        }
+        Insert: {
+          consent_version?: string
+          daily_topics?: string[]
+          delivery_preference?: string | null
+          guardian_name?: string | null
+          guardian_relationship?: string | null
+          id?: string
+          improvement_feedback?: string | null
+          learning_interests?: string[]
+          learning_management_consent?: boolean
+          legal_representative_confirmed?: boolean
+          notification_preference?: string | null
+          parent_message?: string | null
+          portal_feedback?: string | null
+          public_web_consent?: boolean
+          satisfaction_areas?: string[]
+          student_id: string
+          submitted_at?: string
+          survey_notice_confirmed?: boolean
+          updated_at?: string
+          weekly_detail_preference?: string | null
+        }
+        Update: {
+          consent_version?: string
+          daily_topics?: string[]
+          delivery_preference?: string | null
+          guardian_name?: string | null
+          guardian_relationship?: string | null
+          id?: string
+          improvement_feedback?: string | null
+          learning_interests?: string[]
+          learning_management_consent?: boolean
+          legal_representative_confirmed?: boolean
+          notification_preference?: string | null
+          parent_message?: string | null
+          portal_feedback?: string | null
+          public_web_consent?: boolean
+          satisfaction_areas?: string[]
+          student_id?: string
+          submitted_at?: string
+          survey_notice_confirmed?: boolean
+          updated_at?: string
+          weekly_detail_preference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_learning_feedback_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parent_notifications: {
         Row: {
           id: string
