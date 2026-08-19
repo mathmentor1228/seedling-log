@@ -3200,6 +3200,44 @@ export type Database = {
           },
         ]
       }
+      parent_survey_sends: {
+        Row: {
+          error_message: string | null
+          id: string
+          provider_message_id: string | null
+          sent_at: string
+          sent_by: string | null
+          status: string
+          student_id: string
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          student_id: string
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_survey_sends_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pattern_alerts: {
         Row: {
           created_date: string
