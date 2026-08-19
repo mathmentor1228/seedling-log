@@ -4,10 +4,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Copy } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Loader2, Copy, Send, Eye, FlaskConical } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/hooks/use-toast';
 import { buildSurveyKakaoMessage, fetchParentToken, surveyUrl } from '@/lib/parentSurveyMessage';
+
 
 const DELIVERY_LABELS: Record<string, string> = {
   next_day_short: '다음 날 짧은 안내',
