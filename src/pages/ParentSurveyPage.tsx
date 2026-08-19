@@ -7,35 +7,28 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Loader2, AlertTriangle, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Loader2, AlertTriangle, GraduationCap, CheckCircle2, Clock } from 'lucide-react';
 import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
 import { toast } from '@/hooks/use-toast';
 
 const DELIVERY_OPTIONS = [
-  { value: 'next_day_short', label: '수업 다음 날 짧은 안내' },
-  { value: 'weekly_summary', label: '매주 1회 요약' },
-  { value: 'portal_on_demand', label: '필요할 때 웹페이지에서 확인' },
-  { value: 'important_only', label: '중요한 이슈만' },
-  { value: 'academy_recommended', label: '학원 권장 방식' },
+  { value: 'next_day_short', label: '수업 다음 날 한 줄로' },
+  { value: 'weekly_summary', label: '매주 한 번 요약으로' },
+  { value: 'portal_on_demand', label: '필요할 때 웹페이지에서' },
+  { value: 'important_only', label: '중요한 일만 알려주세요' },
 ];
 const DAILY_OPTIONS = [
   { value: 'progress', label: '수업 진도' },
   { value: 'homework', label: '숙제·다음 수업 준비' },
-  { value: 'test_result', label: '테스트·평가 결과' },
+  { value: 'test_result', label: '테스트 결과' },
   { value: 'attitude', label: '수업 태도·특이사항' },
-  { value: 'difficulty_response', label: '학습 어려움과 학원 대응' },
+  { value: 'difficulty_response', label: '어려워한 부분과 학원 대응' },
 ];
 const WEEKLY_OPTIONS = [
-  { value: 'three_lines', label: '핵심 3줄' },
-  { value: 'subject_detail', label: '과목별 상세' },
-  { value: 'on_consultation', label: '상담 필요 시 상세' },
-  { value: 'not_needed', label: '원하지 않음' },
-];
-const NOTIFY_OPTIONS = [
-  { value: 'none', label: '수신 안 함' },
-  { value: 'next_day', label: '다음 날 안내' },
-  { value: 'weekly', label: '주간 요약' },
-  { value: 'important_only', label: '중요 이슈만' },
+  { value: 'three_lines', label: '핵심 3줄이면 충분해요' },
+  { value: 'subject_detail', label: '과목별로 자세히' },
+  { value: 'on_consultation', label: '상담이 필요할 때만 자세히' },
 ];
 
 interface StudentLite { name: string; school: string | null; school_level: string | null; grade_year: number | null; }
@@ -53,17 +46,12 @@ export default function ParentSurveyPage() {
   const [deliveryPreference, setDeliveryPreference] = useState('');
   const [dailyTopics, setDailyTopics] = useState<string[]>([]);
   const [weeklyDetail, setWeeklyDetail] = useState('');
-  const [portalFeedback, setPortalFeedback] = useState('');
-  const [learningInterests, setLearningInterests] = useState('');
-  const [satisfactionAreas, setSatisfactionAreas] = useState('');
-  const [improvementFeedback, setImprovementFeedback] = useState('');
   const [parentMessage, setParentMessage] = useState('');
   const [guardianName, setGuardianName] = useState('');
   const [guardianRelationship, setGuardianRelationship] = useState('');
   const [noticeConfirmed, setNoticeConfirmed] = useState(false);
   const [learningConsent, setLearningConsent] = useState(false);
   const [legalConfirmed, setLegalConfirmed] = useState(false);
-  const [notificationPreference, setNotificationPreference] = useState('');
   const [publicWebConsent, setPublicWebConsent] = useState(false);
 
   const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parent-portal?action=survey&token=${encodeURIComponent(token || '')}`;
@@ -79,17 +67,12 @@ export default function ParentSurveyPage() {
         const f = result.feedback;
         if (f) {
           setHasExisting(true);
-          setDeliveryPreference(f.delivery_preference || '');
+          setDeliveryPreference(DELIVERY_OPTIONS.some((o) => o.value === f.delivery_preference) ? f.delivery_preference : '');
           setDailyTopics(f.daily_topics || []);
-          setWeeklyDetail(f.weekly_detail_preference || '');
-          setPortalFeedback(f.portal_feedback || '');
-          setLearningInterests((f.learning_interests || []).join(', '));
-          setSatisfactionAreas((f.satisfaction_areas || []).join(', '));
-          setImprovementFeedback(f.improvement_feedback || '');
+          setWeeklyDetail(WEEKLY_OPTIONS.some((o) => o.value === f.weekly_detail_preference) ? f.weekly_detail_preference : '');
           setParentMessage(f.parent_message || '');
           setGuardianName(f.guardian_name || '');
           setGuardianRelationship(f.guardian_relationship || '');
-          setNotificationPreference(f.notification_preference || '');
           setPublicWebConsent(!!f.public_web_consent);
         }
       } catch {
@@ -102,12 +85,14 @@ export default function ParentSurveyPage() {
   const toggleDaily = (v: string) =>
     setDailyTopics((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
 
-  const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 20);
-
   const submit = async () => {
-    if (!deliveryPreference) { toast({ title: '수업내역 전달 방식을 선택해주세요.', variant: 'destructive' }); return; }
+    if (!deliveryPreference) { toast({ title: '수업내역을 어떻게 받아보실지 하나만 골라주세요.', variant: 'destructive' }); return; }
+    if (!guardianName.trim() || !guardianRelationship.trim()) {
+      toast({ title: '보호자 성함과 학생과의 관계를 적어주세요.', variant: 'destructive' });
+      return;
+    }
     if (!noticeConfirmed || !learningConsent || !legalConfirmed) {
-      toast({ title: '필수 확인·동의 항목을 모두 체크해주세요.', variant: 'destructive' });
+      toast({ title: '필수 동의 3가지를 확인해주세요.', variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -117,19 +102,19 @@ export default function ParentSurveyPage() {
         headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           delivery_preference: deliveryPreference,
-          daily_topics: dailyTopics,
-          weekly_detail_preference: weeklyDetail || null,
-          portal_feedback: portalFeedback,
-          learning_interests: splitList(learningInterests),
-          satisfaction_areas: splitList(satisfactionAreas),
-          improvement_feedback: improvementFeedback,
+          daily_topics: deliveryPreference === 'next_day_short' ? dailyTopics : [],
+          weekly_detail_preference: deliveryPreference === 'weekly_summary' ? (weeklyDetail || null) : null,
+          portal_feedback: '',
+          learning_interests: [],
+          satisfaction_areas: [],
+          improvement_feedback: '',
           parent_message: parentMessage,
           guardian_name: guardianName,
           guardian_relationship: guardianRelationship,
           survey_notice_confirmed: noticeConfirmed,
           learning_management_consent: learningConsent,
           legal_representative_confirmed: legalConfirmed,
-          notification_preference: notificationPreference || null,
+          notification_preference: null,
           public_web_consent: publicWebConsent,
         }),
       });
@@ -173,114 +158,108 @@ export default function ParentSurveyPage() {
               {student?.name}
               {student?.school_level && student?.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}
             </p>
-            <p className="text-[11px] text-muted-foreground">학습정보 전달 설문</p>
+            <p className="text-[11px] text-muted-foreground">1분 설문</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto p-4 space-y-5">
+      <main className="max-w-lg mx-auto p-4 space-y-4">
         {done && (
           <Card className="border-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30">
             <CardContent className="pt-5 pb-5 flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               <div>
-                <p className="text-sm font-semibold text-foreground">설문이 저장되었습니다. 감사합니다!</p>
-                <p className="text-xs text-muted-foreground">같은 링크로 다시 들어오시면 언제든 수정하실 수 있습니다.</p>
+                <p className="text-sm font-semibold text-foreground">보내주셔서 고맙습니다!</p>
+                <p className="text-xs text-muted-foreground">같은 링크로 언제든 다시 수정하실 수 있어요.</p>
               </div>
             </CardContent>
           </Card>
         )}
 
+        {/* Intro */}
+        <Card className="border-primary/30 bg-primary/[0.04]">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Clock className="w-4 h-4 text-primary" />
+              <p className="text-sm font-bold text-foreground">1분 설문</p>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {student?.name} 학생의 학습 소식을 어떻게 전해드리면 좋을지 알려주세요.
+              <br />
+              <span className="text-foreground font-medium">필수는 전달 방식과 동의 확인뿐</span>이에요. 나머지는 편하실 때만 남겨주셔도 됩니다.
+            </p>
+          </CardContent>
+        </Card>
+
         {hasExisting && !done && (
-          <p className="text-xs text-muted-foreground px-1">이전에 제출하신 응답을 불러왔습니다. 수정 후 다시 제출해주세요.</p>
+          <p className="text-xs text-muted-foreground px-1">이전에 남겨주신 응답을 불러왔어요. 바꾸신 뒤 다시 저장해주세요.</p>
         )}
 
         {/* Q1 */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">1. 수업내역은 어떻게 받아보시는 게 좋으신가요? <span className="text-destructive">*</span></CardTitle>
+            <CardTitle className="text-sm font-bold">수업 소식, 어떻게 받아보시는 게 편하세요? <span className="text-destructive">*</span></CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <RadioGroup value={deliveryPreference} onValueChange={setDeliveryPreference} className="space-y-2">
               {DELIVERY_OPTIONS.map((o) => (
-                <div key={o.value} className="flex items-center gap-2">
+                <Label
+                  key={o.value}
+                  htmlFor={`d-${o.value}`}
+                  className="flex items-center gap-2.5 rounded-xl border border-border px-3 py-2.5 text-sm font-normal cursor-pointer hover:bg-muted/50 transition-colors"
+                >
                   <RadioGroupItem value={o.value} id={`d-${o.value}`} />
-                  <Label htmlFor={`d-${o.value}`} className="text-sm font-normal">{o.label}</Label>
-                </div>
+                  {o.label}
+                </Label>
               ))}
             </RadioGroup>
           </CardContent>
         </Card>
 
-        {/* Q2 */}
-        <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">2. 다음 날 안내에 담기면 좋은 내용 (복수 선택)</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-2">
-            {DAILY_OPTIONS.map((o) => (
-              <div key={o.value} className="flex items-center gap-2">
-                <Checkbox id={`t-${o.value}`} checked={dailyTopics.includes(o.value)} onCheckedChange={() => toggleDaily(o.value)} />
-                <Label htmlFor={`t-${o.value}`} className="text-sm font-normal">{o.label}</Label>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Q3 */}
-        <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">3. 주간 요약 분량</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <RadioGroup value={weeklyDetail} onValueChange={setWeeklyDetail} className="space-y-2">
-              {WEEKLY_OPTIONS.map((o) => (
+        {/* Conditional: daily topics */}
+        {deliveryPreference === 'next_day_short' && (
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-bold">다음 날 안내에 담기면 좋은 내용 <span className="text-xs font-normal text-muted-foreground">(선택·복수)</span></CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {DAILY_OPTIONS.map((o) => (
                 <div key={o.value} className="flex items-center gap-2">
-                  <RadioGroupItem value={o.value} id={`w-${o.value}`} />
-                  <Label htmlFor={`w-${o.value}`} className="text-sm font-normal">{o.label}</Label>
+                  <Checkbox id={`t-${o.value}`} checked={dailyTopics.includes(o.value)} onCheckedChange={() => toggleDaily(o.value)} />
+                  <Label htmlFor={`t-${o.value}`} className="text-sm font-normal">{o.label}</Label>
                 </div>
               ))}
-            </RadioGroup>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Q4 */}
-        <Card>
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">4. 자유 의견</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">학부모 웹페이지 이용 시 불편했던 점</Label>
-              <Textarea value={portalFeedback} onChange={(e) => setPortalFeedback(e.target.value)} maxLength={2000} rows={3} className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">학습에서 관심 있는 부분 (쉼표로 구분)</Label>
-              <Input value={learningInterests} onChange={(e) => setLearningInterests(e.target.value)} placeholder="예: 내신 대비, 학습 습관" className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">현재 만족하시는 점 (쉼표로 구분)</Label>
-              <Input value={satisfactionAreas} onChange={(e) => setSatisfactionAreas(e.target.value)} placeholder="예: 꼼꼼한 피드백" className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">개선되었으면 하는 점</Label>
-              <Textarea value={improvementFeedback} onChange={(e) => setImprovementFeedback(e.target.value)} maxLength={2000} rows={3} className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">원장·담당 선생님께 하고 싶은 말씀</Label>
-              <Textarea value={parentMessage} onChange={(e) => setParentMessage(e.target.value)} maxLength={2000} rows={3} className="mt-1" />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Conditional: weekly detail */}
+        {deliveryPreference === 'weekly_summary' && (
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-bold">주간 요약 분량 <span className="text-xs font-normal text-muted-foreground">(선택)</span></CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <RadioGroup value={weeklyDetail} onValueChange={setWeeklyDetail} className="space-y-2">
+                {WEEKLY_OPTIONS.map((o) => (
+                  <div key={o.value} className="flex items-center gap-2">
+                    <RadioGroupItem value={o.value} id={`w-${o.value}`} />
+                    <Label htmlFor={`w-${o.value}`} className="text-sm font-normal">{o.label}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Guardian */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">보호자 정보</CardTitle>
+            <CardTitle className="text-sm font-bold">보호자 정보 <span className="text-destructive">*</span></CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">보호자 성함</Label>
+              <Label className="text-xs text-muted-foreground">성함</Label>
               <Input value={guardianName} onChange={(e) => setGuardianName(e.target.value)} maxLength={50} className="mt-1" />
             </div>
             <div>
@@ -290,53 +269,62 @@ export default function ParentSurveyPage() {
           </CardContent>
         </Card>
 
+        {/* Optional extras */}
+        <Accordion type="multiple" className="space-y-3">
+          <AccordionItem value="more" className="border border-border rounded-xl px-4 bg-card">
+            <AccordionTrigger className="text-sm font-semibold hover:no-underline">더 남기실 의견이 있나요? (선택)</AccordionTrigger>
+            <AccordionContent className="pb-4">
+              <Textarea
+                value={parentMessage}
+                onChange={(e) => setParentMessage(e.target.value)}
+                maxLength={2000}
+                rows={4}
+                placeholder="편하게 한두 줄만 남겨주셔도 큰 도움이 됩니다."
+              />
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="public" className="border border-border rounded-xl px-4 bg-card">
+            <AccordionTrigger className="text-sm font-semibold hover:no-underline">외부 공개 동의 (완전히 선택)</AccordionTrigger>
+            <AccordionContent className="pb-4 space-y-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                홈페이지 등에 <span className="font-medium text-foreground">이름 일부 마스킹, 학년·과목, 학습 과정 요약</span>만 소개하는 데 대한 동의예요.
+                전체 이름·연락처·세부 성적·상담 내용·사진은 공개하지 않습니다. 동의하지 않으셔도 수강과 학습관리에 어떤 불이익도 없습니다.
+                철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.
+              </p>
+              <div className="flex gap-2">
+                <Checkbox id="c4" checked={publicWebConsent} onCheckedChange={(v) => setPublicWebConsent(v === true)} className="mt-0.5" />
+                <Label htmlFor="c4" className="text-xs font-normal leading-relaxed">외부 공개에 동의합니다 (선택)</Label>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         {/* Consents */}
         <Card>
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-bold">동의 및 확인</CardTitle>
+            <CardTitle className="text-sm font-bold">꼭 확인해주세요 <span className="text-destructive">*</span></CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-4">
+          <CardContent className="px-4 pb-4 space-y-3">
             <div className="flex gap-2">
               <Checkbox id="c1" checked={noticeConfirmed} onCheckedChange={(v) => setNoticeConfirmed(v === true)} className="mt-0.5" />
               <Label htmlFor="c1" className="text-xs font-normal leading-relaxed">
                 <span className="font-semibold">[필수] 설문 정보 안내 확인</span><br />
-                본 설문 응답은 서비스 개선 및 상담 참고 목적으로만 사용되며, 수집일로부터 1년간 보관 후 파기됩니다.
+                응답은 서비스 개선과 상담 참고에만 쓰이고, 1년 뒤 파기됩니다.
               </Label>
             </div>
             <div className="flex gap-2">
               <Checkbox id="c2" checked={learningConsent} onCheckedChange={(v) => setLearningConsent(v === true)} className="mt-0.5" />
               <Label htmlFor="c2" className="text-xs font-normal leading-relaxed">
                 <span className="font-semibold">[필수] 학습관리 동의</span><br />
-                수업·출결·숙제·평가 관리 및 학부모 웹페이지·선택하신 알림 제공을 위해 학습 정보를 처리하는 데 동의합니다. 수강 종료 후 5년간 보관 후 파기됩니다.
+                수업·출결·숙제·평가 관리와 학부모 웹페이지 제공을 위해 학습 정보를 처리하는 데 동의합니다. 수강 종료 후 5년 뒤 파기됩니다.
               </Label>
             </div>
             <div className="flex gap-2">
               <Checkbox id="c3" checked={legalConfirmed} onCheckedChange={(v) => setLegalConfirmed(v === true)} className="mt-0.5" />
               <Label htmlFor="c3" className="text-xs font-normal leading-relaxed">
                 <span className="font-semibold">[필수] 법정대리인 확인</span><br />
-                본인은 해당 학생의 법정대리인 또는 동의 권한이 있는 보호자임을 확인합니다.
-              </Label>
-            </div>
-
-            <div className="pt-1">
-              <Label className="text-xs font-semibold">[선택] 알림 수신 방식</Label>
-              <RadioGroup value={notificationPreference} onValueChange={setNotificationPreference} className="mt-2 space-y-2">
-                {NOTIFY_OPTIONS.map((o) => (
-                  <div key={o.value} className="flex items-center gap-2">
-                    <RadioGroupItem value={o.value} id={`n-${o.value}`} />
-                    <Label htmlFor={`n-${o.value}`} className="text-sm font-normal">{o.label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div className="flex gap-2 pt-1 border-t border-border pt-3">
-              <Checkbox id="c4" checked={publicWebConsent} onCheckedChange={(v) => setPublicWebConsent(v === true)} className="mt-0.5" />
-              <Label htmlFor="c4" className="text-xs font-normal leading-relaxed">
-                <span className="font-semibold">[선택] 외부 공개 동의</span><br />
-                홈페이지 등 공개 웹에 이름 일부 마스킹 표기, 학년·과목, 학습 과정·성과 요약만 공개하는 데 동의합니다.
-                전체 이름, 연락처, 세부 성적표, 상담 내용, 사진은 공개하지 않습니다. 게시 후 1년 또는 동의 철회 시까지 유지되며,
-                철회는 더멘토학원 카카오톡 채널로 요청하실 수 있습니다. 본 동의를 거부하셔도 수강 및 학습관리에는 어떠한 불이익도 없습니다.
+                해당 학생의 보호자임을 확인합니다.
               </Label>
             </div>
           </CardContent>
@@ -344,7 +332,7 @@ export default function ParentSurveyPage() {
 
         <Button className="w-full" size="lg" onClick={submit} disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          {hasExisting ? '응답 수정하기' : '설문 제출하기'}
+          1분 설문 저장하기
         </Button>
         <div className="h-6" />
       </main>
