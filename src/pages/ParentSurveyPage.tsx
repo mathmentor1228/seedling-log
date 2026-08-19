@@ -447,9 +447,11 @@ export default function ParentSurveyPage() {
             </div>
 
             <div className="text-xs text-muted-foreground leading-relaxed space-y-1">
-              <p>동의하지 않으셔도 수강과 학습관리에 어떤 불이익도 없습니다.</p>
+              <p>이 항목은 위의 수업기록 전달 선택과 완전히 분리된 자율 동의입니다. 선택하지 않으시거나 설문에 응답하지 않으시면 홍보 활용에는 동의하지 않은 것으로 처리됩니다.</p>
+              <p>동의하지 않으셔도 수강·학습관리·수업기록 전달에 어떤 영향도 없습니다.</p>
               <p>공개 기간은 게시 후 1년 또는 철회 시까지이며, 철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.</p>
             </div>
+
           </CardContent>
         </Card>
 
