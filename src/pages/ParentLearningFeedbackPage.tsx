@@ -197,28 +197,136 @@ export default function ParentLearningFeedbackPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">미응답 학생 ({pendingStudents.length}명)</CardTitle>
+                <CardTitle className="text-sm">설문 알림톡 발송 대상 ({selectedIds.length}명 선택)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  기본 선택은 미응답 학생입니다. 발송은 설문 참여 요청일 뿐, 홍보 활용 동의와는 무관합니다.
+                </p>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {pendingStudents.length === 0 && (
-                  <p className="text-sm text-muted-foreground">모든 활성 학생이 응답했습니다.</p>
-                )}
-                {pendingStudents.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between gap-2 border-b border-border/60 pb-2 last:border-0">
-                    <span className="text-sm">
-                      {s.name}
-                      {s.school_level && s.grade_year ? (
-                        <span className="text-xs text-muted-foreground"> ({s.school_level}{s.grade_year})</span>
-                      ) : null}
-                    </span>
-                    <Button size="sm" variant="outline" disabled={copyingId === s.id} onClick={() => copyGuide(s.id)}>
-                      {copyingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
-                      안내문 복사
-                    </Button>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(activeStudents.map((s) => s.id)))}>전체 선택</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelected(new Set(pendingStudents.map((s) => s.id)))}>미응답만</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>선택 해제</Button>
+                  <Button size="sm" variant="outline" disabled={busy || selectedIds.length === 0} onClick={() => runPreview(selectedIds)}>
+                    <Eye className="w-3.5 h-3.5 mr-1.5" />선택 대상 미리보기
+                  </Button>
+                  <Button size="sm" disabled={busy || selectedIds.length === 0} onClick={() => setConfirmOpen(true)}>
+                    <Send className="w-3.5 h-3.5 mr-1.5" />알림톡 일괄발송
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    placeholder="테스트 수신 번호 (예: 01012345678)"
+                    className="h-8 w-56 text-sm"
+                  />
+                  <Button size="sm" variant="outline" disabled={busy || selectedIds.length !== 1} onClick={() => runTestSend(selectedIds)}>
+                    <FlaskConical className="w-3.5 h-3.5 mr-1.5" />테스트 발송 (학생 1명 선택)
+                  </Button>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                  {activeStudents.map((s) => {
+                    const responded = respondedIds.has(s.id);
+                    const noPhone = !s.parent_phone;
+                    return (
+                      <div key={s.id} className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5 last:border-0">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={selected.has(s.id)}
+                            onCheckedChange={(v) => {
+                              setSelected((prev) => {
+                                const next = new Set(prev);
+                                if (v) next.add(s.id); else next.delete(s.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span>
+                            {s.name}
+                            {s.school_level && s.grade_year ? (
+                              <span className="text-xs text-muted-foreground"> ({s.school_level}{s.grade_year})</span>
+                            ) : null}
+                          </span>
+                          {responded && <Badge variant="secondary" className="text-[10px]">응답완료</Badge>}
+                          {noPhone && <Badge variant="destructive" className="text-[10px]">연락처 없음</Badge>}
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(surveyUrl(''))
+                            .then(() => fetchParentToken(s.id))
+                            .then((t) => navigator.clipboard.writeText(surveyUrl(t)))
+                            .then(() => toast({ title: '설문 링크 복사됨' }))
+                            .catch((e) => toast({ title: '오류', description: e.message, variant: 'destructive' }))}>
+                            링크 복사
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={copyingId === s.id} onClick={() => copyGuide(s.id)}>
+                            {copyingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
+                            안내문 복사
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {preview && (
+                  <div className="rounded-md border border-border p-3 space-y-2">
+                    <p className="text-sm font-medium">미리보기 (실제 발송 없음) — 대상 {preview.target_count}명 / 제외 {preview.excluded_count}명</p>
+                    {(preview.missing || []).length > 0 && (
+                      <p className="text-xs text-destructive">솔라피 템플릿 등록 및 환경변수 설정 필요 — 누락: {preview.missing.join(', ')}</p>
+                    )}
+                    <div className="max-h-56 overflow-y-auto space-y-1 text-xs">
+                      {(preview.previews || []).map((p: any) => (
+                        <div key={p.student_id} className="border-b border-border/50 pb-1">
+                          <span className="font-medium">{p.student_name}</span> · {p.phone_masked}
+                          <div className="text-muted-foreground break-all">{p.link}</div>
+                        </div>
+                      ))}
+                      {(preview.results || []).map((r: any, i: number) => (
+                        <div key={i} className="text-destructive">{r.student_name}: {r.reason}</div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {sendResults && (
+                  <div className="rounded-md border border-border p-3 space-y-1 text-sm">
+                    <p className="font-medium">
+                      발송 결과 — 성공 {sendResults.sent} / 실패 {sendResults.failed} / 제외 {sendResults.skipped}
+                      {sendResults.test_mode ? ' (테스트 발송, 로그 미기록)' : ''}
+                    </p>
+                    <div className="max-h-56 overflow-y-auto text-xs space-y-0.5">
+                      {sendResults.results.filter((r) => !r.ok).map((r, i) => (
+                        <div key={i} className="text-destructive">{r.student_name}: {r.reason}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>알림톡 일괄발송 확인</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-1 text-sm">
+                      <div>대상 학생: {selectedIds.length}명</div>
+                      <div>연락처 없음(제외 예정): {selectedNoPhone}명</div>
+                      <div>이미 응답한 학생 포함: {selectedResponded}명</div>
+                      <div className="text-destructive">실제 알림톡이 발송되며 발송 비용이 발생합니다.</div>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => runBulkSend(selectedIds)}>확인하고 발송</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
 
             <div className="grid grid-cols-3 gap-3">
               {[
