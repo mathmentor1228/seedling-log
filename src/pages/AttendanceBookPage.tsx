@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { supabase } from '@/integrations/supabase/client';
+import { getPrimaryAttendanceStatus, getAttendanceLabel, isPresent as isPresentStatus, isAbsent as isAbsentStatus, isLate as isLateStatus } from '@/lib/attendance';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,19 +32,20 @@ interface SlotRow {
   students: { id: string; name: string; status: string | null }[];
 }
 
-const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
-  '정상등원': { label: '등원', tone: 'text-emerald-600' },
-  '지각': { label: '지각', tone: 'text-amber-600' },
-  '인정결석': { label: '인정결석', tone: 'text-muted-foreground' },
-  '무단결석': { label: '무단결석', tone: 'text-destructive' },
-  '결석': { label: '결석', tone: 'text-destructive' },
-  '미등원': { label: '미등원', tone: 'text-muted-foreground' },
+const STATUS_TONE: Record<string, string> = {
+  '정상등원': 'text-emerald-600',
+  '지각': 'text-amber-600',
+  '조퇴': 'text-amber-600',
+  '인정결석': 'text-muted-foreground',
+  '무단결석': 'text-destructive',
+  '보충불가': 'text-destructive',
+  'legacy_absent': 'text-destructive',
 };
 
-const getPrimaryStatus = (attendanceStatus: string[] | null | undefined) => {
-  const arr = attendanceStatus || [];
-  return arr.find((s) => s !== '정상등원') || arr[0] || null;
-};
+// ATTENDANCE-NORMALIZE-V1: 레거시 값('출석'/'결석'/'미등원')은 조회 시 정규화해 판정한다.
+const getPrimaryStatus = (attendanceStatus: string[] | null | undefined) =>
+  getPrimaryAttendanceStatus(attendanceStatus);
+
 
 const inferTimeFromClassName = (className: string) => {
   const match = className.match(/(\d{1,2})(?::(\d{2}))?/);
@@ -241,10 +243,9 @@ function AttendanceBookContent() {
         let students = s.students;
         if (statusFilter !== 'all') {
           students = students.filter((st) => {
-            const isAbsent = !!st.status && (st.status.includes('결석') || st.status === '미등원');
-            if (statusFilter === 'absent') return isAbsent;
-            if (statusFilter === 'late') return st.status === '지각';
-            if (statusFilter === 'present') return st.status === '정상등원';
+            if (statusFilter === 'absent') return isAbsentStatus(st.status);
+            if (statusFilter === 'late') return isLateStatus(st.status);
+            if (statusFilter === 'present') return isPresentStatus(st.status) && !isLateStatus(st.status);
             if (statusFilter === 'empty') return !st.status;
             return true;
           });
@@ -263,9 +264,9 @@ function AttendanceBookContent() {
     filteredSlots.forEach((s) => {
       s.students.forEach((st) => {
         total++;
-        if (st.status === '정상등원') present++;
-        else if (st.status === '지각') { present++; late++; }
-        else if (st.status && (st.status.includes('결석') || st.status === '미등원')) absent++;
+        if (isLateStatus(st.status)) { present++; late++; }
+        else if (isPresentStatus(st.status)) present++;
+        else if (isAbsentStatus(st.status)) absent++;
         else empty++;
       });
     });
@@ -444,8 +445,8 @@ function AttendanceBookContent() {
       ) : (
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {filteredSlots.map((s) => {
-            const present = s.students.filter((st) => st.status === '정상등원' || st.status === '지각').length;
-            const absent = s.students.filter((st) => st.status && (st.status.includes('결석') || st.status === '미등원')).length;
+            const present = s.students.filter((st) => isPresentStatus(st.status)).length;
+            const absent = s.students.filter((st) => isAbsentStatus(st.status)).length;
             const empty = s.students.filter((st) => !st.status).length;
             const total = s.students.length;
             const pct = total > 0 ? Math.round((present / total) * 100) : 0;
@@ -494,10 +495,10 @@ function AttendanceBookContent() {
                 {s.students.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {s.students.map((st) => {
-                      const isPresent = st.status === '정상등원';
-                      const isLate = st.status === '지각';
-                      const isAbsent = st.status && (st.status.includes('결석') || st.status === '미등원');
-                      const info = st.status ? STATUS_LABEL[st.status] : null;
+                      const isLate = isLateStatus(st.status);
+                      const isPresent = isPresentStatus(st.status) && !isLate;
+                      const isAbsent = isAbsentStatus(st.status);
+                      const info = st.status ? { label: getAttendanceLabel(st.status), tone: STATUS_TONE[st.status] ?? '' } : null;
                       return (
                         <span
                           key={st.id}

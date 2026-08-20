@@ -50,6 +50,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Camera } from 'lucide-react';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
+import { normalizeAttendanceStatuses, getAttendanceIssues } from '@/lib/attendance';
 
 interface Teacher {
   id: string;
@@ -119,12 +120,13 @@ function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
   if (!attendanceStatus || attendanceStatus.length === 0) return null;
   
   // Check for various non-normal statuses
-  const hasAbsent = attendanceStatus.includes('무단결석') || attendanceStatus.includes('인정결석');
-  const hasNoShow = attendanceStatus.includes('보충불가') || attendanceStatus.includes('미등원');
-  const hasLateOrEarly = attendanceStatus.includes('지각') || attendanceStatus.includes('조퇴');
+  const normalized = normalizeAttendanceStatuses(attendanceStatus);
+  const hasAbsent = normalized.some(s => s === '무단결석' || s === '인정결석' || s === 'legacy_absent');
+  const hasNoShow = normalized.includes('보충불가');
+  const hasLateOrEarly = normalized.includes('지각') || normalized.includes('조퇴');
   
   // Filter out '정상등원' and '등원' for display
-  const displayStatus = attendanceStatus.filter(s => s !== '정상등원' && s !== '등원');
+  const displayStatus = getAttendanceIssues(attendanceStatus);
   
   // If only normal status, show neutral badge
   if (displayStatus.length === 0) {

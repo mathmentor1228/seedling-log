@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { toStorageAttendanceStatuses } from '@/lib/attendance';
 import { reconcileLessonHomework, HOMEWORK_LOAD_COLUMNS } from '@/lib/homeworkReconcile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1253,7 +1254,7 @@ export function LessonRecordForm({
   function buildPayload(includeTestFields: boolean = false) {
     const subject = formData.subject as SubjectType;
     const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
-    const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
+    const attendance_status = toStorageAttendanceStatuses(formData.attendance_status);
 
     // LESSON-EDIT-MODE-V1: Preserve original teacher_id in edit mode unless explicitly new record
     const teacherId = originalTeacherId || user!.id;

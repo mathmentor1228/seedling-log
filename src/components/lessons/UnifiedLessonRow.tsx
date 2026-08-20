@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BookOpen } from 'lucide-react';
+import { isAbsent as isAbsentStatus } from '@/lib/attendance';
 
 export const HW_OPTIONS = [
   { v: 'completed', label: '완료', cls: 'bg-emerald-500 text-white border-emerald-500', dim: 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-900' },
@@ -80,7 +81,7 @@ export function UnifiedLessonRow({
 }: UnifiedLessonRowProps) {
   const needsIndividualProgress = !inCommonGroup && !hideIndividualProgress;
   // ABSENT-NO-UNDERSTANDING-V1: 결석 처리된 학생은 이해도 입력 불가
-  const isAbsent = s.attendanceStatuses.some((a) => ['결석', '인정결석', '무단결석', '보충불가'].includes(a));
+  const isAbsent = isAbsentStatus(s.attendanceStatuses);
 
   return (
     <div

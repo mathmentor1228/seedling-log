@@ -7,6 +7,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format, parseISO, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { getAttendanceIssues } from '@/lib/attendance';
 import {
   BookOpen, TestTube, Clock, Stethoscope, AlertCircle, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
@@ -165,7 +166,7 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
   // Attendance detail this month
   const attendanceExceptions = thisMonthLessons.filter((l: any) =>
     l.attendance_status && Array.isArray(l.attendance_status) &&
-    l.attendance_status.some((s: string) => ['지각', '조퇴', '결석', '무단결석', '인정결석'].includes(s))
+    getAttendanceIssues(l.attendance_status).length > 0
   );
 
   return (
