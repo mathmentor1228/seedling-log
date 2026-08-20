@@ -763,9 +763,13 @@ Deno.serve(async (req) => {
           
           // Also store error in weekly_reports.debug_info for visibility in UI
           // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
+          // WEEKLY-REPORT-BATCH-V1: 타임아웃 학생은 오류로만 집계하고 행을 만들지 않는다.
+          const isTimeout = errMsg.includes('AI_CALL_TIMEOUT');
           try {
             const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            if (!existingMap.has(student.id)) {
+            if (isTimeout) {
+              console.warn('[generate-weekly-reports] Skipped row creation (AI_CALL_TIMEOUT)');
+            } else if (!existingMap.has(student.id)) {
               await supabase
                 .from('weekly_reports')
                 .insert({
@@ -788,6 +792,7 @@ Deno.serve(async (req) => {
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
           }
+
 
           
           errorCount++;
