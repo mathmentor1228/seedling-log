@@ -618,12 +618,13 @@ Deno.serve(async (req) => {
           console.error(`[ERROR_DETAIL] ${student.name}: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`);
           
           // Also store error in weekly_reports.debug_info for visibility in UI
+          // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
           try {
             const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            await supabase
-              .from('weekly_reports')
-              .upsert(
-                {
+            if (!existingMap.has(student.id)) {
+              await supabase
+                .from('weekly_reports')
+                .insert({
                   student_id: student.id,
                   week_start: weekStart,
                   week_end: weekEnd,
@@ -636,12 +637,14 @@ Deno.serve(async (req) => {
                   debug_info: errorDebugStr,
                   report_quality_tag: 'RED',
                   parent_visible: false,
-                },
-                { onConflict: 'student_id,week_start' }
-              );
+                });
+            } else {
+              console.warn('[generate-weekly-reports] Skipped error-row overwrite (existing report)');
+            }
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
           }
+
           
           errorCount++;
         }
