@@ -343,9 +343,12 @@ export default function Reports() {
           body: {
             manual: true,
             direct_save: true,
+            // WEEKLY-REPORT-REPAIR-V1: 재생성 허용 시에만 기존 초안 덮어쓰기(공개본은 서버에서 보호)
+            force: allowRegenerate,
             week_start: weekRange.start,
             week_end: weekRange.end,
             student_ids: batch,
+
           },
         });
 
