@@ -147,6 +147,10 @@ Deno.serve(async (req) => {
   let force = false;
   let targetWeek: 'last' | 'current' = 'last';
   let targetWeekDate: string | null = null;
+  // WEEKLY-REPORT-BATCH-V1: 작은 배치·재개 지원 (1~20, 기본 20)
+  let batchSize = 20;
+  const AI_CALL_TIMEOUT_MS = 45_000;
+
 
   // WEEKLY-REPORT-SAFEPATH-V2: legacy RPC 자동 선택 차단
   let legacyAllowed = false;
