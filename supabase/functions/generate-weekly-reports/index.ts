@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
         .from('weekly_reports')
-        .select('student_id, parent_visible, parent_sent_at, report_quality_tag')
+        .select('id, student_id, parent_visible, parent_sent_at, report_quality_tag')
         .eq('week_start', weekStart)
         .in('student_id', studentsToGenerate.map((s) => s.id));
       const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.student_id, r]));
@@ -300,6 +300,7 @@ Deno.serve(async (req) => {
           JSON.stringify({
             status: 'dry_run',
             success: true,
+            execution_mode: 'safe_per_student',
             weekStart,
             weekEnd,
             dryRun: true,
@@ -312,6 +313,7 @@ Deno.serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
 
       studentsToGenerate = targets;
       console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
