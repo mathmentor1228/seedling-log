@@ -950,6 +950,8 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           validationFallbackCount,
+          activeCount: totalBeforeTeacherExclusion,
+          teacherExcludedCount,
           // WEEKLY-REPORT-BATCH-V1: 배치·재개 정보
           batch_size: batchSize,
           processed_this_batch: studentsToGenerate.length,
