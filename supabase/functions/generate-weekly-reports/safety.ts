@@ -128,4 +128,87 @@ export const CONTENT_SAFETY_RULES = [
   '구체적인 미래 실행 계획, 약속, 보장 표현 금지. 대신 "유의 깊게 살필 부분", "조금 더 지켜볼 부분"처럼 관찰 방향만 서술.',
   '성격·태도·의도 단정, 학생 간 비교, 항상/절대/완벽 등 절대어, 불안을 유발하는 표현 금지.',
   '제출 완료된 수업 기록이 없으면 긍정·부정 평가를 만들지 말고 데이터 부족과 관찰 필요를 명시할 것.',
+  // WEEKLY-REPORT-TONE-V3
+  '문단 구조는 "확인된 기록 → 부담 없는 해석 → 유의 깊게 살필 지점" 순서를 지킬 것.',
+  '직접적인 평가·질책·낙인 대신 관찰 범위를 제한한 완곡 표현을 쓸 것. 예: "기록상 일부 시기에", "조금 더 지켜볼 필요가 있습니다", "안정적으로 이어지는지 살펴볼 부분입니다".',
+  '완곡하게 쓰되 확인된 기록보다 좋게 포장하거나 어려운 지점을 숨기지 말 것.',
+  // WEEKLY-REPORT-GROUNDEDNESS-V1
+  '수업일지·연결 숙제·시험 결과 원문에 명시되지 않은 행동, 표정, 몸짓, 도구, 교실 장면, 감정, 대화, 동기를 절대 만들어 내지 말 것.',
+  '"연필을 굴리며", "고개를 끄덕였다", "눈빛이 달라졌다", "친구와 웃었다", "끝까지 붙잡고 있었다" 같은 서사적 장면 묘사 금지.',
+  '문장을 예쁘게 만들기 위한 감각 묘사나 소설식 디테일 금지. 원문에 있는 사실만 요약·정리할 것.',
 ];
+
+// ============================================================
+// WEEKLY-REPORT-GROUNDEDNESS-V1
+// 원문(수업일지/숙제/시험 기록)에 없는 구체 장면·행동·감정·동기 서술 차단
+// ============================================================
+
+const norm = (s: string) => (s || '').replace(/\s+/g, '');
+
+// 각 항목: 문안에서 탐지할 정규식 + 원문에 있어야 인정되는 근거 토큰들
+const SCENE_MARKERS: Array<{ re: RegExp; evidence: string[] }> = [
+  { re: /연필|샤프|볼펜|지우개|필기구/, evidence: ['연필', '샤프', '볼펜', '지우개', '필기구'] },
+  { re: /책상|의자|칠판|교실\s*(안|뒤|앞)|자리에\s*앉/, evidence: ['책상', '의자', '칠판', '교실', '자리에앉'] },
+  { re: /고개를\s*(끄덕|갸웃|숙)/, evidence: ['고개'] },
+  { re: /눈빛|눈을\s*(반짝|크게)|시선을/, evidence: ['눈빛', '눈을', '시선'] },
+  { re: /표정|미간|얼굴이\s*(밝|굳)/, evidence: ['표정', '미간', '얼굴'] },
+  { re: /웃(었|으며|음|는\s*모습)|미소|울먹|눈물|한숨/, evidence: ['웃', '미소', '울먹', '눈물', '한숨'] },
+  { re: /손을\s*들|손가락|어깨|몸을\s*(기울|앞으로)|자세를\s*고쳐/, evidence: ['손을들', '손가락', '어깨', '몸을', '자세'] },
+  { re: /중얼|속삭|말을\s*건네|대화를\s*나누|친구와|짝꿍|옆자리/, evidence: ['중얼', '속삭', '말을건네', '대화', '친구', '짝꿍', '옆자리'] },
+  { re: /뿌듯|설레|신나|기뻐|즐거워|짜증|초조|긴장한\s*모습|불안해하/, evidence: ['뿌듯', '설레', '신나', '기뻐', '즐거', '짜증', '초조', '긴장', '불안'] },
+  { re: /끝까지\s*붙잡|끝까지\s*놓지\s*않|한참을\s*들여다|골똘히|물끄러미/, evidence: ['끝까지', '한참', '골똘', '물끄러미'] },
+  { re: /(하고\s*싶어\s*했|하기\s*싫어했|스스로\s*원해|의욕적으로|마음을\s*먹)/, evidence: ['하고싶', '싫어', '원해', '의욕', '마음'] },
+];
+
+function sentencesOf(text: string): string[] {
+  return (text || '')
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+export function scanGroundedness(
+  text: string,
+  evidence: string
+): { pass: boolean; ungroundedSentences: string[]; markers: string[] } {
+  const ev = norm(evidence);
+  const ungrounded: string[] = [];
+  const markers = new Set<string>();
+
+  for (const sentence of sentencesOf(text)) {
+    for (const m of SCENE_MARKERS) {
+      if (!m.re.test(sentence)) continue;
+      const supported = m.evidence.some((k) => ev.includes(k));
+      if (!supported) {
+        ungrounded.push(sentence);
+        markers.add(m.re.source.slice(0, 24));
+        break;
+      }
+    }
+  }
+
+  return { pass: ungrounded.length === 0, ungroundedSentences: ungrounded, markers: [...markers] };
+}
+
+// 지원되지 않는 장면 문장을 제거한 중립 관찰 문안 반환.
+// 남은 본문이 너무 짧으면 null → 호출부에서 중립 템플릿 fallback.
+export function stripUngroundedSentences(
+  text: string,
+  evidence: string,
+  minLength = 60
+): string | null {
+  const { pass, ungroundedSentences } = scanGroundedness(text, evidence);
+  if (pass) return text;
+  const drop = new Set(ungroundedSentences);
+  const kept = (text || '')
+    .split('\n')
+    .map((line) =>
+      sentencesOf(line)
+        .filter((s) => !drop.has(s))
+        .join(' ')
+    )
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return norm(kept).length >= minLength ? kept : null;
+}
