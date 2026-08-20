@@ -513,12 +513,18 @@ Deno.serve(async (req) => {
               return acc;
             }, 0);
 
-            const { data: hwAssignments } = await supabase
-              .from('homework_assignments')
-              .select('result, check_status, assigned_date, checked_at')
-              .eq('student_id', student.id)
-              .lte('assigned_date', weekEnd)
-              .eq('check_status', 'checked');
+            // WEEKLY-REPORT-REPAIR-V1: 해당 주 제출 일지에 lesson_record_id로 연결된 숙제만 집계.
+            // 미연결(regular 고아) 숙제는 주간리포트 통계에 섞지 않는다.
+            const weekLessonIds = (lessons || []).map((l) => l.id);
+            const { data: hwAssignments } = weekLessonIds.length > 0
+              ? await supabase
+                  .from('homework_assignments')
+                  .select('result, check_status, assigned_date, checked_at, lesson_record_id')
+                  .eq('student_id', student.id)
+                  .in('lesson_record_id', weekLessonIds)
+                  .eq('check_status', 'checked')
+              : { data: [] as any[] };
+
             for (const a of hwAssignments || []) {
               const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
               const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
