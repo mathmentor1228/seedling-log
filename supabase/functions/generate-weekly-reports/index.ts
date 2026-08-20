@@ -134,7 +134,11 @@ Deno.serve(async (req) => {
   let customWeekStart: string | null = null;
   let customWeekEnd: string | null = null;
   let useDirectSave = false;
-  
+  // WEEKLY-REPORT-REPAIR-V1
+  let dryRun = false;
+  let force = false;
+  let targetWeek: 'last' | 'current' = 'last';
+
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
@@ -143,9 +147,13 @@ Deno.serve(async (req) => {
     customWeekStart = body.week_start || null;
     customWeekEnd = body.week_end || null;
     useDirectSave = body.direct_save === true;
+    dryRun = body.dry_run === true;
+    force = body.force === true;
+    if (body.target_week === 'current') targetWeek = 'current';
   } catch {
     // Ignore JSON parse errors
   }
+
 
   const scope = studentIds && studentIds.length > 0 ? 'selected' : 'all';
   const schedulerSource = isManual ? 'manual' : 'pg_cron';
