@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { toStorageAttendanceStatuses } from '@/lib/attendance';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -91,6 +92,9 @@ export function TodaySession() {
   // 기본값: 그룹 수업 → 스킵, 1:1(individual) → 보충. 결석 체크 시 학생별 원탭 변경.
   type AbsentHandling = 'skip' | 'makeup' | 'defer';
   const [absentHandling, setAbsentHandling] = useState<Record<string, AbsentHandling>>({});
+  // ATTENDANCE-NORMALIZE-V1: 결석은 인정/무단으로만 저장한다(레거시 '결석' 금지). 기본 인정결석.
+  type AbsentKind = '인정결석' | '무단결석';
+  const [absentKind, setAbsentKind] = useState<Record<string, AbsentKind>>({});
   const [quizScores, setQuizScores] = useState<Record<string, string>>({});
   const [quizSaved, setQuizSaved] = useState<Record<string, { score: number; passed: boolean; label: string }>>({});
   // PLAN-QUIZ-CONTENT-V1: 시험 내용(선택) — 비우면 quizTarget 목표명으로 기록
@@ -1140,7 +1144,7 @@ export function TodaySession() {
           })();
           const chapterPart = summary.range || plannedFallback;
           const range = isAbsent
-            ? '결석'
+            ? (absentKind[s.id] ?? '인정결석')
             : (chapterPart
               ? (courseTitle ? `${courseTitle} · ${chapterPart}` : chapterPart)
               : (courseTitle ? `${courseTitle} 진행` : '수업 진행'));
@@ -1181,7 +1185,9 @@ export function TodaySession() {
             lesson_range: range,
             homework_status: hwStatus,
             next_lesson_goal: summary.nextGoalTitle || null,
-            attendance_status: isAbsent ? ['결석'] : ['정상등원'],
+            attendance_status: toStorageAttendanceStatuses(
+              isAbsent ? [absentKind[s.id] ?? '인정결석'] : ['정상등원']
+            ),
             // PLAN-REPORT-BRIDGE-V1: 주간리포트 AI가 읽는 서술 근거 채우기
             learning_issues_note: mergedNote,
             ...(note.trim() ? { notes: note.trim() } : {}),
@@ -1576,6 +1582,18 @@ export function TodaySession() {
                               ${cur === o.k ? o.cls : 'border-border text-muted-foreground hover:bg-muted/50'}`}
                             onClick={() => setAbsentHandling(p => ({ ...p, [s.id]: o.k }))}>
                             {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        {(['인정결석', '무단결석'] as const).map(k => (
+                          <button key={k}
+                            className={`text-[11px] font-bold rounded-full border px-2.5 py-0.5 transition
+                              ${(absentKind[s.id] ?? '인정결석') === k
+                                ? (k === '인정결석' ? 'border-muted-foreground/40 bg-muted text-foreground' : 'border-red-400 bg-red-50 text-red-700')
+                                : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+                            onClick={() => setAbsentKind(p => ({ ...p, [s.id]: k }))}>
+                            {k}
                           </button>
                         ))}
                       </div>
