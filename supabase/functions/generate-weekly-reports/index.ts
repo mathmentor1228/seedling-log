@@ -140,6 +140,9 @@ Deno.serve(async (req) => {
   let targetWeek: 'last' | 'current' = 'last';
   let targetWeekDate: string | null = null;
 
+  // WEEKLY-REPORT-SAFEPATH-V2: legacy RPC 자동 선택 차단
+  let legacyAllowed = false;
+
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
@@ -154,12 +157,25 @@ Deno.serve(async (req) => {
     else if (typeof body.target_week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.target_week)) {
       targetWeekDate = body.target_week;
     }
-    // WEEKLY-REPORT-REPAIR-V1: dry-run은 어떤 경로에서도 DB write가 없어야 하므로
-    // 항상 읽기 전용 계산 경로(direct_save 분기의 dry-run 반환)로 강제한다.
-    if (dryRun) useDirectSave = true;
+    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force)가 하나라도
+    // 명시되면 legacy_rpc 경로를 절대 선택하지 않고 안전 per-student 경로만 사용한다.
+    const usesNewApi =
+      body.target_week !== undefined || body.dry_run !== undefined || body.force !== undefined;
+    if (usesNewApi || dryRun) useDirectSave = true;
+
+    // legacy RPC는 명시적 mode='legacy_rpc' + 관리자 확인 플래그가 모두 있고,
+    // 새 API 파라미터가 전혀 없을 때만 허용한다.
+    legacyAllowed =
+      !usesNewApi &&
+      body.mode === 'legacy_rpc' &&
+      body.confirm_legacy_rpc === true;
   } catch {
     // Ignore JSON parse errors
   }
+
+  // 기본(파라미터 없는 스케줄/수동 호출)도 안전 경로로 강제
+  if (!legacyAllowed) useDirectSave = true;
+
 
 
 
@@ -262,7 +278,7 @@ Deno.serve(async (req) => {
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
         .from('weekly_reports')
-        .select('student_id, parent_visible, parent_sent_at, report_quality_tag')
+        .select('id, student_id, parent_visible, parent_sent_at, report_quality_tag')
         .eq('week_start', weekStart)
         .in('student_id', studentsToGenerate.map((s) => s.id));
       const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.student_id, r]));
@@ -284,6 +300,7 @@ Deno.serve(async (req) => {
           JSON.stringify({
             status: 'dry_run',
             success: true,
+            execution_mode: 'safe_per_student',
             weekStart,
             weekEnd,
             dryRun: true,
@@ -296,6 +313,7 @@ Deno.serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
 
       studentsToGenerate = targets;
       console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
@@ -565,32 +583,32 @@ Deno.serve(async (req) => {
           const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
           const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
-          // Upsert with quality tag
+          // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
+          // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
           currentStage = 'save_report';
-          const { error: upsertError } = await supabase
-            .from('weekly_reports')
-            .upsert(
-              {
-                student_id: student.id,
-                week_start: weekStart,
-                week_end: weekEnd,
-                total_lessons: lessonCount,
-                avg_understanding: avgUnderstanding,
-                homework_completion_rate: homeworkCompletionRate,
-                common_issues: commonIssues,
-                risk_level: riskLevel,
-                summary: draftStatusToSave,
-                parent_message: finalParentMessageToSave,
-                student_message: finalStudentMessageToSave,
-                generated_at: new Date().toISOString(),
-                debug_info: debugInfoStr,
-                report_quality_tag: qualityTag,
-                parent_visible: false,
-              },
-              {
-                onConflict: 'student_id,week_start',
-              }
-            );
+          const payload = {
+            student_id: student.id,
+            week_start: weekStart,
+            week_end: weekEnd,
+            total_lessons: lessonCount,
+            avg_understanding: avgUnderstanding,
+            homework_completion_rate: homeworkCompletionRate,
+            common_issues: commonIssues,
+            risk_level: riskLevel,
+            summary: draftStatusToSave,
+            parent_message: finalParentMessageToSave,
+            student_message: finalStudentMessageToSave,
+            generated_at: new Date().toISOString(),
+            debug_info: debugInfoStr,
+            report_quality_tag: qualityTag,
+            parent_visible: false,
+          };
+
+          const existingRow = existingMap.get(student.id);
+          const { error: upsertError } = existingRow?.id
+            ? await supabase.from('weekly_reports').update(payload).eq('id', existingRow.id)
+            : await supabase.from('weekly_reports').insert(payload);
+
 
           if (upsertError) {
             console.error(`[generate-weekly-reports] Upsert error for ${student.name}:`, upsertError);
@@ -698,6 +716,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           status: errorCount === 0 ? 'success' : 'partial',
+          execution_mode: 'safe_per_student',
+
           success: errorCount === 0,
           weekStart,
           weekEnd,
@@ -728,9 +748,20 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // LEGACY MODE: Use DB RPC (for scheduled runs)
+    // LEGACY MODE: DB RPC — 명시적 mode='legacy_rpc' + confirm_legacy_rpc=true 전용
     // ============================================================
-    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Using LEGACY DB RPC mode`);
+    if (!legacyAllowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          execution_mode: 'blocked_legacy_rpc',
+          error: 'LEGACY_RPC_DISABLED: legacy RPC path is not selectable automatically.',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Using LEGACY DB RPC mode (explicitly confirmed)`);
+
 
     const rpcParams: Record<string, unknown> = {
       _week_start: weekStart,
@@ -777,6 +808,7 @@ Deno.serve(async (req) => {
         success: true,
         weekStart,
         weekEnd,
+        execution_mode: 'legacy_rpc',
         message: 'Weekly reports generated successfully (legacy mode)',
         schedulerSource,
         scope,
