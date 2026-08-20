@@ -737,16 +737,15 @@ Deno.serve(async (req) => {
               safetyFallback = true;
               safetyViolations = [...safetyViolations, 'UNGROUNDED_SCENE'];
               validationFallbackCount++;
-              qualityTag = 'RED';
-              draftStatusToSave = 'needs_input';
+              qualityTag = 'YELLOW';
+              draftStatusToSave = 'ready';
 
               const header = formatParentHeader(student.name, weekStart, weekEnd);
-              const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=UNGROUNDED_SCENE`;
 
               if (strippedParent && scanSafety(strippedParent, { hasLessonData }).pass) {
-                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${strippedParent}`;
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${strippedParent}`;
               } else {
-                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
               }
               finalStudentMessageToSave =
                 strippedStudent && scanSafety(strippedStudent, { hasLessonData }).pass
@@ -754,7 +753,7 @@ Deno.serve(async (req) => {
                   : neutralStudentTemplate(hasLessonData);
 
               console.warn(
-                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK ${student.name}: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
+                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
               );
             }
           }
