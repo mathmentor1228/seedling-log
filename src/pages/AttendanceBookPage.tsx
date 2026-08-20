@@ -31,19 +31,20 @@ interface SlotRow {
   students: { id: string; name: string; status: string | null }[];
 }
 
-const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
-  '정상등원': { label: '등원', tone: 'text-emerald-600' },
-  '지각': { label: '지각', tone: 'text-amber-600' },
-  '인정결석': { label: '인정결석', tone: 'text-muted-foreground' },
-  '무단결석': { label: '무단결석', tone: 'text-destructive' },
-  '결석': { label: '결석', tone: 'text-destructive' },
-  '미등원': { label: '미등원', tone: 'text-muted-foreground' },
+const STATUS_TONE: Record<string, string> = {
+  '정상등원': 'text-emerald-600',
+  '지각': 'text-amber-600',
+  '조퇴': 'text-amber-600',
+  '인정결석': 'text-muted-foreground',
+  '무단결석': 'text-destructive',
+  '보충불가': 'text-destructive',
+  'legacy_absent': 'text-destructive',
 };
 
-const getPrimaryStatus = (attendanceStatus: string[] | null | undefined) => {
-  const arr = attendanceStatus || [];
-  return arr.find((s) => s !== '정상등원') || arr[0] || null;
-};
+// ATTENDANCE-NORMALIZE-V1: 레거시 값('출석'/'결석'/'미등원')은 조회 시 정규화해 판정한다.
+const getPrimaryStatus = (attendanceStatus: string[] | null | undefined) =>
+  getPrimaryAttendanceStatus(attendanceStatus);
+
 
 const inferTimeFromClassName = (className: string) => {
   const match = className.match(/(\d{1,2})(?::(\d{2}))?/);
