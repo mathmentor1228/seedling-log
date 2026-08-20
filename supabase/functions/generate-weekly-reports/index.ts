@@ -585,17 +585,24 @@ Deno.serve(async (req) => {
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
-          // WEEKLY-REPORT-SAFETY-V1: 저장 전 서버측 문안 검증 (외부 노출 텍스트 전체)
+          // WEEKLY-REPORT-SAFETY-V2: 저장 전 서버측 문안 검증.
+          // 실제 저장될 최종 학부모/학생 문안(교사 코멘트 부록 포함) + subject_breakdown 전체를 동일 validator로 검사.
           const hasLessonData = lessonCount > 0;
+          const stripMarkers = (t: string) =>
+            (t || '')
+              .split('\n')
+              .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
+              .join('\n');
           const externalText = [
-            aiReportData?.parent_message || '',
-            aiReportData?.student_message || '',
+            stripMarkers(finalParentMessageToSave || aiReportData?.parent_message || ''),
+            stripMarkers(finalStudentMessageToSave || aiReportData?.student_message || ''),
             typeof aiReportData?.subject_breakdown === 'string'
               ? aiReportData.subject_breakdown
               : aiReportData?.subject_breakdown
                 ? JSON.stringify(aiReportData.subject_breakdown)
                 : '',
           ].join('\n\n');
+
 
           const safety = aiReportData
             ? scanSafety(externalText, { hasLessonData })
