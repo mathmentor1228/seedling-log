@@ -816,8 +816,35 @@ Deno.serve(async (req) => {
             riskLevel = null;
           }
 
-          const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
-          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} validation_fallback=${safetyFallback} safety_violations=${safetyViolations.join(';') || 'none'} | ${dataDebugStr}`;
+          // WEEKLY-REPORT-FALLBACK-V4: 내부 진단은 로그로만 남기고 저장 필드에 노출하지 않는다.
+          console.log(
+            `[generate-weekly-reports] INTERNAL save: validator=${validatorStatus} tag=${qualityTag} fallback=${safetyFallback} violations=${safetyViolations.join(';') || 'none'} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`
+          );
+
+          // WEEKLY-REPORT-FALLBACK-V4: 최종 저장 게이트 — 비NULL + 전 항목 통과 보장
+          {
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const parentBodyFinal = (finalParentMessageToSave || '')
+              .split('\n')
+              .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
+              .join('\n')
+              .trim();
+            const parentOk =
+              parentBodyFinal.length > 0 && scanSafety(parentBodyFinal, { hasLessonData }).pass;
+            if (!parentOk) {
+              finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+              qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
+            }
+            const studentBodyFinal = (finalStudentMessageToSave || '').trim();
+            const studentOk =
+              studentBodyFinal.length > 0 && scanSafety(studentBodyFinal, { hasLessonData }).pass;
+            if (!studentOk) {
+              finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+              qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
+            }
+            if (qualityTag === 'RED') qualityTag = 'YELLOW';
+            if (draftStatusToSave === 'needs_input') draftStatusToSave = 'ready';
+          }
 
           // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
           // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
@@ -835,7 +862,7 @@ Deno.serve(async (req) => {
             parent_message: finalParentMessageToSave,
             student_message: finalStudentMessageToSave,
             generated_at: new Date().toISOString(),
-            debug_info: debugInfoStr,
+            debug_info: null,
             report_quality_tag: qualityTag,
             parent_visible: false,
           };
