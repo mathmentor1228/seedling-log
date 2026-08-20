@@ -377,9 +377,10 @@ Deno.serve(async (req) => {
           currentStage = 'fetch_records';
 
           // Invoke AI report generator
+          // WEEKLY-REPORT-BATCH-V1: 학생별 AI 호출 타임아웃 → 함수 전체 타임아웃 방지
           const invokeAiReport = async (strictNarrative: boolean) => {
             currentStage = 'llm_call';
-            return await supabase.functions.invoke('generate-ai-report', {
+            const call = supabase.functions.invoke('generate-ai-report', {
               body: {
                 student_id: student.id,
                 student_name: student.name,
@@ -392,9 +393,21 @@ Deno.serve(async (req) => {
                 forbid_future_promises: true,
                 observation_only: true,
               },
-
             });
+            let timer: number | undefined;
+            const timeout = new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('AI_CALL_TIMEOUT')),
+                AI_CALL_TIMEOUT_MS
+              ) as unknown as number;
+            });
+            try {
+              return await Promise.race([call, timeout]);
+            } finally {
+              if (timer !== undefined) clearTimeout(timer);
+            }
           };
+
 
           let aiReportData: any = null;
           let aiAttempts = 0;
