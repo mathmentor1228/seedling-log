@@ -316,6 +316,11 @@ Deno.serve(async (req) => {
         return true;
       });
 
+      // WEEKLY-REPORT-BATCH-V1: 안정적인 정렬(id 오름차순) 후 batch_size만큼만 처리 → 재호출로 재개
+      targets.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const batchTargets = targets.slice(0, batchSize);
+      const remainingCount = Math.max(0, targets.length - batchTargets.length);
+
       if (dryRun) {
         return new Response(
           JSON.stringify({
@@ -326,7 +331,17 @@ Deno.serve(async (req) => {
             weekEnd,
             dryRun: true,
             candidateCount: studentsToGenerate.length,
-            wouldGenerate: targets.length,
+            activeCount: studentsToGenerate.length,
+            pendingCount: targets.length,
+            wouldGenerate: batchTargets.length,
+            wouldProcess: batchTargets.length,
+            processed_this_batch: 0,
+            created: 0,
+            skipped: skippedExisting + skippedProtected,
+            errors: 0,
+            batch_size: batchSize,
+            remaining_count: remainingCount,
+            next_batch_needed: remainingCount > 0,
             skippedExisting,
             skippedProtected,
             force,
@@ -336,8 +351,9 @@ Deno.serve(async (req) => {
       }
 
 
-      studentsToGenerate = targets;
-      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
+      studentsToGenerate = batchTargets;
+      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length}/${targets.length} students (batchSize=${batchSize} skipExisting=${skippedExisting} protected=${skippedProtected})`);
+
 
 
       let successCount = 0;
