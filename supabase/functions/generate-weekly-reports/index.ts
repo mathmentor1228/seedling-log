@@ -182,7 +182,15 @@ Deno.serve(async (req) => {
     if (customWeekStart && customWeekEnd) {
       weekStart = customWeekStart;
       weekEnd = customWeekEnd;
+    } else if (targetWeekDate) {
+      // WEEKLY-REPORT-REPAIR-V1: target_week='YYYY-MM-DD'(KST 월요일) → 월~토
+      const base = new Date(`${targetWeekDate}T00:00:00Z`);
+      const sat = new Date(base);
+      sat.setUTCDate(sat.getUTCDate() + 5);
+      weekStart = base.toISOString().split('T')[0];
+      weekEnd = sat.toISOString().split('T')[0];
     } else {
+
       const now = new Date();
       const kstOffset = 9 * 60 * 60 * 1000;
       const kstNow = new Date(now.getTime() + kstOffset);
