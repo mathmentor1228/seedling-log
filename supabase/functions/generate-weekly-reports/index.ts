@@ -562,18 +562,17 @@ Deno.serve(async (req) => {
           const subjectCount = new Set(includedLessons.map((l: any) => l.subject)).size;
 
           if (!aiReportData || validatorStatus === 'fail') {
-            // Retry exhausted or validator failed -> mark RED + store placeholder
+            // WEEKLY-REPORT-FALLBACK-V4: 사용자 노출 표식 없이 중립 문안만 저장한다.
             validatorStatus = 'fail';
-            riskLevelFromAi = 'high';
-            draftStatusToSave = 'needs_input';
-            qualityTag = 'RED';
-            
+            riskLevelFromAi = null;
+            draftStatusToSave = 'ready';
+            qualityTag = 'YELLOW';
+
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validator=fail retries=${aiAttempts}`;
-            
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${header}\n\n${debugLine}\n\n${RED_PARENT_PLACEHOLDER}`;
-            finalStudentMessageToSave = null;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, lessonCount > 0)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(lessonCount > 0);
           } else {
+
             riskLevelFromAi = aiReportData?.risk_level || 'low';
             draftStatusToSave = aiReportData?.draft_status || 'ready';
             
@@ -636,10 +635,10 @@ Deno.serve(async (req) => {
               ? ' weekly_summary=MISSING'
               : ` weekly_summary=${totalComments} integrated=${integratedCount} appended=${summaryBlocks.length}`;
 
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`;
-            
+            console.log(`[generate-weekly-reports] INTERNAL tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`);
+
             // parent_message from generate-ai-report already includes the header, so don't add it again
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}${summaryAppendix}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${aiReportData.parent_message}${summaryAppendix}`;
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
@@ -671,23 +670,21 @@ Deno.serve(async (req) => {
             safetyViolations = safety.violations as string[];
             validationFallbackCount++;
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=${safetyViolations.join(';')}`;
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
             finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
-            qualityTag = 'RED';
-            draftStatusToSave = 'needs_input';
-            console.warn(`[generate-weekly-reports] SAFETY_FALLBACK ${student.name}: ${safetyViolations.join(';')}`);
+            qualityTag = 'YELLOW';
+            draftStatusToSave = 'ready';
+            console.warn(`[generate-weekly-reports] SAFETY_FALLBACK: ${safetyViolations.join(';')}`);
           } else if (aiReportData && !hasLessonData) {
             // 제출완료 수업기록 0건 → 평가 문안 대신 데이터 부족/관찰 필요 문안
             safetyFallback = true;
             safetyViolations = ['NO_LESSON_DATA'];
             validationFallbackCount++;
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=NO_LESSON_DATA`;
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, false)}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, false)}`;
             finalStudentMessageToSave = neutralStudentTemplate(false);
-            qualityTag = 'RED';
-            draftStatusToSave = 'needs_input';
+            qualityTag = 'YELLOW';
+            draftStatusToSave = 'ready';
           }
 
           // WEEKLY-REPORT-GROUNDEDNESS-V1: 저장 전 근거 대조.
@@ -740,16 +737,15 @@ Deno.serve(async (req) => {
               safetyFallback = true;
               safetyViolations = [...safetyViolations, 'UNGROUNDED_SCENE'];
               validationFallbackCount++;
-              qualityTag = 'RED';
-              draftStatusToSave = 'needs_input';
+              qualityTag = 'YELLOW';
+              draftStatusToSave = 'ready';
 
               const header = formatParentHeader(student.name, weekStart, weekEnd);
-              const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=UNGROUNDED_SCENE`;
 
               if (strippedParent && scanSafety(strippedParent, { hasLessonData }).pass) {
-                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${strippedParent}`;
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${strippedParent}`;
               } else {
-                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
               }
               finalStudentMessageToSave =
                 strippedStudent && scanSafety(strippedStudent, { hasLessonData }).pass
@@ -757,7 +753,7 @@ Deno.serve(async (req) => {
                   : neutralStudentTemplate(hasLessonData);
 
               console.warn(
-                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK ${student.name}: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
+                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
               );
             }
           }
@@ -820,8 +816,35 @@ Deno.serve(async (req) => {
             riskLevel = null;
           }
 
-          const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
-          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} validation_fallback=${safetyFallback} safety_violations=${safetyViolations.join(';') || 'none'} | ${dataDebugStr}`;
+          // WEEKLY-REPORT-FALLBACK-V4: 내부 진단은 로그로만 남기고 저장 필드에 노출하지 않는다.
+          console.log(
+            `[generate-weekly-reports] INTERNAL save: validator=${validatorStatus} tag=${qualityTag} fallback=${safetyFallback} violations=${safetyViolations.join(';') || 'none'} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`
+          );
+
+          // WEEKLY-REPORT-FALLBACK-V4: 최종 저장 게이트 — 비NULL + 전 항목 통과 보장
+          {
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const parentBodyFinal = (finalParentMessageToSave || '')
+              .split('\n')
+              .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
+              .join('\n')
+              .trim();
+            const parentOk =
+              parentBodyFinal.length > 0 && scanSafety(parentBodyFinal, { hasLessonData }).pass;
+            if (!parentOk) {
+              finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+              qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
+            }
+            const studentBodyFinal = (finalStudentMessageToSave || '').trim();
+            const studentOk =
+              studentBodyFinal.length > 0 && scanSafety(studentBodyFinal, { hasLessonData }).pass;
+            if (!studentOk) {
+              finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+              qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
+            }
+            if (qualityTag === 'RED') qualityTag = 'YELLOW';
+            if (draftStatusToSave === 'needs_input') draftStatusToSave = 'ready';
+          }
 
           // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
           // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
@@ -839,7 +862,7 @@ Deno.serve(async (req) => {
             parent_message: finalParentMessageToSave,
             student_message: finalStudentMessageToSave,
             generated_at: new Date().toISOString(),
-            debug_info: debugInfoStr,
+            debug_info: null,
             report_quality_tag: qualityTag,
             parent_visible: false,
           };
@@ -891,37 +914,9 @@ Deno.serve(async (req) => {
           errors.push(`${student.name}: ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal}`);
           console.error(`[ERROR_DETAIL] ${student.name}: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`);
           
-          // Also store error in weekly_reports.debug_info for visibility in UI
-          // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
-          // WEEKLY-REPORT-BATCH-V1: 타임아웃 학생은 오류로만 집계하고 행을 만들지 않는다.
-          const isTimeout = errMsg.includes('AI_CALL_TIMEOUT');
-          try {
-            const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            if (isTimeout) {
-              console.warn('[generate-weekly-reports] Skipped row creation (AI_CALL_TIMEOUT)');
-            } else if (!existingMap.has(student.id)) {
-              await supabase
-                .from('weekly_reports')
-                .insert({
-                  student_id: student.id,
-                  week_start: weekStart,
-                  week_end: weekEnd,
-                  total_lessons: 0,
-                  risk_level: 'high',
-                  summary: 'error',
-                  parent_message: null,
-                  student_message: null,
-                  generated_at: new Date().toISOString(),
-                  debug_info: errorDebugStr,
-                  report_quality_tag: 'RED',
-                  parent_visible: false,
-                });
-            } else {
-              console.warn('[generate-weekly-reports] Skipped error-row overwrite (existing report)');
-            }
-          } catch (saveErr) {
-            console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
-          }
+          // WEEKLY-REPORT-FALLBACK-V4: 오류 학생은 리포트 행을 만들지 않는다.
+          // (NULL 문안 / RED / debug 표식 행 저장 금지 — 진단은 로그와 weekly_jobs_log로만 남긴다.)
+          console.warn('[generate-weekly-reports] Skipped row creation (error path)');
 
 
           

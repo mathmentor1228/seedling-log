@@ -215,3 +215,39 @@ Deno.test('영어 담당 교사의 수동 주간 멘트는 자동 합성 대상�
   assertEquals(merged.length, 1);
   assertEquals(merged[0].subject, '수학');
 });
+
+// ============================================================
+// WEEKLY-REPORT-FALLBACK-V4: fallback 저장 규격 테스트
+// ============================================================
+const FORBIDDEN_MARKERS = ['REPORT_GEN_DEBUG', 'tag=RED', 'validation_fallback', 'validator=fail', 'needs_input'];
+
+Deno.test('fallback 문안은 parent/student 모두 비NULL·비어있지 않음', () => {
+  for (const hasData of [true, false]) {
+    const p = neutralParentTemplate('[더멘토] 주간 학습 리포트', hasData);
+    const s = neutralStudentTemplate(hasData);
+    assertEquals(typeof p === 'string' && p.trim().length > 0, true);
+    assertEquals(typeof s === 'string' && s.trim().length > 0, true);
+  }
+});
+
+Deno.test('fallback 문안에 RED/debug/validator 표식이 없음', () => {
+  for (const hasData of [true, false]) {
+    const texts = [neutralParentTemplate('[더멘토] 주간 학습 리포트', hasData), neutralStudentTemplate(hasData)];
+    for (const t of texts) {
+      for (const m of FORBIDDEN_MARKERS) {
+        assertEquals(t.includes(m), false, `${m} 포함되면 안 됨`);
+      }
+    }
+  }
+});
+
+Deno.test('fallback 문안은 safety·groundedness 전 항목 통과', () => {
+  for (const hasData of [true, false]) {
+    const p = neutralParentTemplate('[더멘토] 주간 학습 리포트', hasData);
+    const s = neutralStudentTemplate(hasData);
+    assertEquals(scanSafety(p, { hasLessonData: hasData }).pass, true);
+    assertEquals(scanSafety(s, { hasLessonData: hasData }).pass, true);
+    assertEquals(scanGroundedness(p, '').pass, true);
+    assertEquals(scanGroundedness(s, '').pass, true);
+  }
+});
