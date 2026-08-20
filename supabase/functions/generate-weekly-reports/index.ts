@@ -340,6 +340,9 @@ Deno.serve(async (req) => {
         let debugTotal = 0;
         let debugSubmitted = 0;
         let debugDraft = 0;
+        let safetyFallback = false;
+        let safetyViolations: string[] = [];
+
         try {
           console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Generating for ${student.name} (${student.id})`);
           currentStage = 'fetch_records';
