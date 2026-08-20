@@ -4,6 +4,7 @@ import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import AssistantDashboard from '@/components/AssistantDashboard';
 import AdminStatsSection from '@/components/AdminStatsSection';
 import { supabase } from '@/integrations/supabase/client';
+import { toStorageAttendanceStatuses, isAbsent, isLate, isPresent, getAttendanceIssues } from '@/lib/attendance';
 import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
 
 import { StatCard } from '@/components/ui/stat-card';
@@ -900,7 +901,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
       const { error } = await supabase
         .from('lesson_records')
         .update({
-          attendance_status: [status],
+          attendance_status: toStorageAttendanceStatuses([status]),
           submitted: true,
           submitted_at: now,
           updated_at: now,
@@ -2892,7 +2893,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-40">
-                                    {['출석', '지각', '조퇴', '인정결석', '무단결석'].map((s) => (
+                                    {['정상등원', '지각', '조퇴', '인정결석', '무단결석'].map((s) => (
                                       <DropdownMenuItem
                                         key={s}
                                         onClick={() => submitAttendanceOnly(draft.id, draft.student_name, s)}

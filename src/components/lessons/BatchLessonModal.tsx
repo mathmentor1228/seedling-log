@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { isAbsent, toStorageAttendanceStatuses } from '@/lib/attendance';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
@@ -128,12 +129,11 @@ function mapResultToStatus(v: string): string {
   }
 }
 
-const ABSENCE_STATUSES = ['결석', '인정결석', '무단결석', '보충불가'];
-const isAbsentStatus = (att: string[] | null | undefined): boolean =>
-  Array.isArray(att) && att.some(s => ABSENCE_STATUSES.includes(s));
+// ATTENDANCE-NORMALIZE-V1: 결석 판정은 공통 모듈 사용 (레거시 '결석'/'미등원' 포함)
+const isAbsentStatus = (att: string[] | null | undefined): boolean => isAbsent(att ?? []);
 
 const ATTENDANCE_STATUS_OPTIONS = [
-  { value: '출석', label: '출석' },
+  { value: '정상등원', label: '정상등원' },
   { value: '지각', label: '지각' },
   { value: '조퇴', label: '조퇴' },
   { value: '인정결석', label: '인정결석' },
@@ -184,7 +184,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
   const [parentDirectMessage, setParentDirectMessage] = useState('');
-  const [attendanceStatus, setAttendanceStatus] = useState<string[]>(['출석']);
+  const [attendanceStatus, setAttendanceStatus] = useState<string[]>(['정상등원']);
 
   // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
@@ -249,7 +249,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setNextLessonGoal('');
     setHomeworkItems([]);
     setParentDirectMessage('');
-    setAttendanceStatus(['출석']);
+    setAttendanceStatus(['정상등원']);
     setSubmitAfter(false);
     // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
@@ -1100,7 +1100,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (pMsg.trim()) payload.parent_direct_message = pMsg.trim();
 
         const att = usePerStudentAttendance ? (perStudentAttendance[id] ?? attendanceStatus) : attendanceStatus;
-        if (att.length > 0) payload.attendance_status = att;
+        if (att.length > 0) payload.attendance_status = toStorageAttendanceStatuses(att);
 
         const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
         if (error) throw error;
@@ -1444,13 +1444,13 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                               <Badge
                                 key={opt.value}
                                 variant={studentAtt.includes(opt.value) ? 'default' : 'outline'}
-                                className={`cursor-pointer text-xs ${studentAtt.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                                className={`cursor-pointer text-xs ${studentAtt.includes(opt.value) && opt.value !== '정상등원' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
                                 onClick={() => {
                                   const cur = perStudentAttendance[d.id] ?? [...attendanceStatus];
-                                  if (opt.value === '출석') {
-                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: ['출석'] }));
+                                  if (opt.value === '정상등원') {
+                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: ['정상등원'] }));
                                   } else {
-                                    const without출석 = cur.filter(v => v !== '출석');
+                                    const without출석 = cur.filter(v => v !== '정상등원');
                                     const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
                                     setPerStudentAttendance(prev => ({ ...prev, [d.id]: next.length > 0 ? next : ['출석'] }));
                                   }
@@ -1470,15 +1470,15 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                       <Badge
                         key={opt.value}
                         variant={attendanceStatus.includes(opt.value) ? 'default' : 'outline'}
-                        className={`cursor-pointer text-xs ${attendanceStatus.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                        className={`cursor-pointer text-xs ${attendanceStatus.includes(opt.value) && opt.value !== '정상등원' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
                         onClick={() => {
-                          if (opt.value === '출석') {
-                            setAttendanceStatus(['출석']);
+                          if (opt.value === '정상등원') {
+                            setAttendanceStatus(['정상등원']);
                           } else {
                             setAttendanceStatus(prev => {
-                              const without출석 = prev.filter(v => v !== '출석');
+                              const without출석 = prev.filter(v => v !== '정상등원');
                               const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
-                              return next.length > 0 ? next : ['출석'];
+                              return next.length > 0 ? next : ['정상등원'];
                             });
                           }
                         }}

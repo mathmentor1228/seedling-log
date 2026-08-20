@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { toStorageAttendanceStatuses } from '@/lib/attendance';
 import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
 
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
@@ -424,7 +425,7 @@ function QuickLessonEntryContent() {
           next_lesson_goal: hw,
           is_common_entry: isCommon,
           lesson_types: s.lessonTypes,
-          attendance_status: s.attendanceStatuses,
+          attendance_status: toStorageAttendanceStatuses(s.attendanceStatuses),
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
