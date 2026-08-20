@@ -329,8 +329,10 @@ Deno.serve(async (req) => {
 
       let successCount = 0;
       let errorCount = 0;
+      let validationFallbackCount = 0;
       const errors: string[] = [];
       const errorDetails: ErrorDetail[] = [];
+
 
       for (const student of studentsToGenerate) {
         // REPORT-ERROR-DETAIL-V1: Track state for error reporting
