@@ -215,22 +215,24 @@ export default function HistoricalClassAttendance() {
                           const late = isLate(st.status);
                           const present = isPresent(st.status) && !late;
                           const absentFlag = isAbsent(st.status);
-                          const info = st.status ? STATUS_LABEL[st.status] : null;
+                          const info = st.status
+                            ? { label: getAttendanceLabel(st.status) || st.status }
+                            : null;
                           return (
                             <span
                               key={st.id}
                               title={info?.label || '기록 없음'}
                               className={cn(
                                 'text-[11px] font-medium',
-                                isPresent && 'text-emerald-600',
-                                isLate && 'text-amber-600',
-                                isAbsent && 'text-destructive line-through',
+                                present && 'text-emerald-600',
+                                late && 'text-amber-600',
+                                absentFlag && 'text-destructive line-through',
                                 !st.status && 'text-muted-foreground',
                               )}
                             >
                               {st.name}
-                              {isLate && <span className="text-[9px] ml-0.5">(지각)</span>}
-                              {isAbsent && <span className="text-[9px] ml-0.5">({info?.label || '결'})</span>}
+                              {late && <span className="text-[9px] ml-0.5">(지각)</span>}
+                              {absentFlag && <span className="text-[9px] ml-0.5">({info?.label || '결'})</span>}
                             </span>
                           );
                         })}
