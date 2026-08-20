@@ -331,12 +331,22 @@ Deno.serve(async (req) => {
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
         .from('weekly_reports')
-        .select('id, student_id, parent_visible, parent_sent_at, report_quality_tag')
+        .select('id, student_id, parent_visible, parent_sent_at, report_quality_tag, parent_message, principal_comment')
         .eq('week_start', weekStart)
         .in('student_id', studentsToGenerate.map((s) => s.id));
       const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.student_id, r]));
 
-      const isProtected = (r: any) => !!r && (r.parent_visible === true || !!r.parent_sent_at);
+      // WEEKLY-REPORT-MANUAL-PROTECT-V1: 공개/발송본 + 수동 작성(자동 생성 마커 없음/원장 코멘트 있음) 행은
+      // force 여부와 무관하게 절대 덮어쓰지 않는다.
+      const isManualAuthored = (r: any) => {
+        if (!r) return false;
+        if (typeof r.principal_comment === 'string' && r.principal_comment.trim().length > 0) return true;
+        const body = typeof r.parent_message === 'string' ? r.parent_message : '';
+        if (body.trim().length > 0 && !body.includes(NARRATIVE_RENDER_PREFIX)) return true;
+        return false;
+      };
+      const isProtected = (r: any) =>
+        !!r && (r.parent_visible === true || !!r.parent_sent_at || isManualAuthored(r));
 
       let skippedExisting = 0;
       let skippedProtected = 0;
