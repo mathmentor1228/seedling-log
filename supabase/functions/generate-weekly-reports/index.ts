@@ -147,6 +147,10 @@ Deno.serve(async (req) => {
   let force = false;
   let targetWeek: 'last' | 'current' = 'last';
   let targetWeekDate: string | null = null;
+  // WEEKLY-REPORT-BATCH-V1: 작은 배치·재개 지원 (1~20, 기본 20)
+  let batchSize = 20;
+  const AI_CALL_TIMEOUT_MS = 45_000;
+
 
   // WEEKLY-REPORT-SAFEPATH-V2: legacy RPC 자동 선택 차단
   let legacyAllowed = false;
@@ -165,10 +169,18 @@ Deno.serve(async (req) => {
     else if (typeof body.target_week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.target_week)) {
       targetWeekDate = body.target_week;
     }
-    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force)가 하나라도
+    // WEEKLY-REPORT-BATCH-V1: batch_size는 1~20만 허용, 그 외/미지정은 20
+    if (body.batch_size !== undefined) {
+      const n = Number(body.batch_size);
+      batchSize = Number.isFinite(n) ? Math.min(20, Math.max(1, Math.floor(n))) : 20;
+    }
+    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force/batch_size)가 하나라도
     // 명시되면 legacy_rpc 경로를 절대 선택하지 않고 안전 per-student 경로만 사용한다.
     const usesNewApi =
-      body.target_week !== undefined || body.dry_run !== undefined || body.force !== undefined;
+      body.target_week !== undefined ||
+      body.dry_run !== undefined ||
+      body.force !== undefined ||
+      body.batch_size !== undefined;
     if (usesNewApi || dryRun) useDirectSave = true;
 
     // legacy RPC는 명시적 mode='legacy_rpc' + 관리자 확인 플래그가 모두 있고,
@@ -177,6 +189,7 @@ Deno.serve(async (req) => {
       !usesNewApi &&
       body.mode === 'legacy_rpc' &&
       body.confirm_legacy_rpc === true;
+
   } catch {
     // Ignore JSON parse errors
   }
@@ -303,6 +316,11 @@ Deno.serve(async (req) => {
         return true;
       });
 
+      // WEEKLY-REPORT-BATCH-V1: 안정적인 정렬(id 오름차순) 후 batch_size만큼만 처리 → 재호출로 재개
+      targets.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const batchTargets = targets.slice(0, batchSize);
+      const remainingCount = Math.max(0, targets.length - batchTargets.length);
+
       if (dryRun) {
         return new Response(
           JSON.stringify({
@@ -313,7 +331,17 @@ Deno.serve(async (req) => {
             weekEnd,
             dryRun: true,
             candidateCount: studentsToGenerate.length,
-            wouldGenerate: targets.length,
+            activeCount: studentsToGenerate.length,
+            pendingCount: targets.length,
+            wouldGenerate: batchTargets.length,
+            wouldProcess: batchTargets.length,
+            processed_this_batch: 0,
+            created: 0,
+            skipped: skippedExisting + skippedProtected,
+            errors: 0,
+            batch_size: batchSize,
+            remaining_count: remainingCount,
+            next_batch_needed: remainingCount > 0,
             skippedExisting,
             skippedProtected,
             force,
@@ -323,8 +351,9 @@ Deno.serve(async (req) => {
       }
 
 
-      studentsToGenerate = targets;
-      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
+      studentsToGenerate = batchTargets;
+      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length}/${targets.length} students (batchSize=${batchSize} skipExisting=${skippedExisting} protected=${skippedProtected})`);
+
 
 
       let successCount = 0;
@@ -348,9 +377,10 @@ Deno.serve(async (req) => {
           currentStage = 'fetch_records';
 
           // Invoke AI report generator
+          // WEEKLY-REPORT-BATCH-V1: 학생별 AI 호출 타임아웃 → 함수 전체 타임아웃 방지
           const invokeAiReport = async (strictNarrative: boolean) => {
             currentStage = 'llm_call';
-            return await supabase.functions.invoke('generate-ai-report', {
+            const call = supabase.functions.invoke('generate-ai-report', {
               body: {
                 student_id: student.id,
                 student_name: student.name,
@@ -363,9 +393,21 @@ Deno.serve(async (req) => {
                 forbid_future_promises: true,
                 observation_only: true,
               },
-
             });
+            let timer: number | undefined;
+            const timeout = new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('AI_CALL_TIMEOUT')),
+                AI_CALL_TIMEOUT_MS
+              ) as unknown as number;
+            });
+            try {
+              return await Promise.race([call, timeout]);
+            } finally {
+              if (timer !== undefined) clearTimeout(timer);
+            }
           };
+
 
           let aiReportData: any = null;
           let aiAttempts = 0;
@@ -543,17 +585,24 @@ Deno.serve(async (req) => {
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
-          // WEEKLY-REPORT-SAFETY-V1: 저장 전 서버측 문안 검증 (외부 노출 텍스트 전체)
+          // WEEKLY-REPORT-SAFETY-V2: 저장 전 서버측 문안 검증.
+          // 실제 저장될 최종 학부모/학생 문안(교사 코멘트 부록 포함) + subject_breakdown 전체를 동일 validator로 검사.
           const hasLessonData = lessonCount > 0;
+          const stripMarkers = (t: string) =>
+            (t || '')
+              .split('\n')
+              .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
+              .join('\n');
           const externalText = [
-            aiReportData?.parent_message || '',
-            aiReportData?.student_message || '',
+            stripMarkers(finalParentMessageToSave || aiReportData?.parent_message || ''),
+            stripMarkers(finalStudentMessageToSave || aiReportData?.student_message || ''),
             typeof aiReportData?.subject_breakdown === 'string'
               ? aiReportData.subject_breakdown
               : aiReportData?.subject_breakdown
                 ? JSON.stringify(aiReportData.subject_breakdown)
                 : '',
           ].join('\n\n');
+
 
           const safety = aiReportData
             ? scanSafety(externalText, { hasLessonData })
@@ -714,9 +763,13 @@ Deno.serve(async (req) => {
           
           // Also store error in weekly_reports.debug_info for visibility in UI
           // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
+          // WEEKLY-REPORT-BATCH-V1: 타임아웃 학생은 오류로만 집계하고 행을 만들지 않는다.
+          const isTimeout = errMsg.includes('AI_CALL_TIMEOUT');
           try {
             const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            if (!existingMap.has(student.id)) {
+            if (isTimeout) {
+              console.warn('[generate-weekly-reports] Skipped row creation (AI_CALL_TIMEOUT)');
+            } else if (!existingMap.has(student.id)) {
               await supabase
                 .from('weekly_reports')
                 .insert({
@@ -739,6 +792,7 @@ Deno.serve(async (req) => {
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
           }
+
 
           
           errorCount++;
@@ -789,8 +843,17 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           validationFallbackCount,
+          // WEEKLY-REPORT-BATCH-V1: 배치·재개 정보
+          batch_size: batchSize,
+          processed_this_batch: studentsToGenerate.length,
+          created: successCount,
+          skipped: skippedExisting + skippedProtected,
+          error_count: errorCount,
+          remaining_count: remainingCount + errorCount,
+          next_batch_needed: remainingCount + errorCount > 0,
           // REPORT-ERROR-PANEL-V1: Always include errors array (empty if none)
           errors: structuredErrors,
+
           _debug: {
             source: 'edge_function_direct_save_v2.4',
             scope,
