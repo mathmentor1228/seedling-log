@@ -5,7 +5,16 @@ import {
   neutralParentTemplate,
   neutralStudentTemplate,
   CONTENT_SAFETY_RULES,
+  scanGroundedness,
+  stripUngroundedSentences,
 } from './safety.ts';
+
+// WEEKLY-REPORT-TEACHER-EXCLUDE-V1
+// 담당 선생님이 주간 코멘트를 직접 작성하는 교사. 해당 교사와 현재 담당 관계가 있는
+// 활성 학생은 자동 주간 리포트 생성 대상에서 제외한다(기존 수동 문안은 읽지도 쓰지도 않음).
+const MANUAL_COMMENT_TEACHER_IDS = [
+  '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 영어 담당(주간 코멘트 직접 작성)
+];
 
 
 const corsHeaders = {
