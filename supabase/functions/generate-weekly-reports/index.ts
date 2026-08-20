@@ -716,6 +716,8 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           status: errorCount === 0 ? 'success' : 'partial',
+          execution_mode: 'safe_per_student',
+
           success: errorCount === 0,
           weekStart,
           weekEnd,
