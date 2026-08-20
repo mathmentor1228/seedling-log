@@ -184,12 +184,17 @@ Deno.serve(async (req) => {
       const mondayDate = new Date(kstNow);
       mondayDate.setUTCDate(mondayDate.getUTCDate() - daysFromMonday);
       mondayDate.setUTCHours(0, 0, 0, 0);
+      // WEEKLY-REPORT-REPAIR-V1: 기본은 '지난 주'(월~토). 월요일 새벽 스케줄 실행 기준.
+      if (targetWeek === 'last') {
+        mondayDate.setUTCDate(mondayDate.getUTCDate() - 7);
+      }
       
       const saturdayDate = new Date(mondayDate);
       saturdayDate.setUTCDate(saturdayDate.getUTCDate() + 5);
       
       weekStart = mondayDate.toISOString().split('T')[0];
       weekEnd = saturdayDate.toISOString().split('T')[0];
+
     }
 
     const studentCount = studentIds?.length || 'all';
