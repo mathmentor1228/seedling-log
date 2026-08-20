@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { CalendarIcon, Users, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
+import { getAttendanceLabel, getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
