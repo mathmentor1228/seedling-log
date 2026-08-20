@@ -642,7 +642,7 @@ Deno.serve(async (req) => {
           }
 
           const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
-          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
+          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} validation_fallback=${safetyFallback} safety_violations=${safetyViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
           // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
           // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
@@ -755,7 +755,7 @@ Deno.serve(async (req) => {
         week_start: weekStart,
         week_end: weekEnd,
         status: errorCount === 0 ? 'completed' : 'partial',
-        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors${errorDetailsSummary}`,
+        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors, ${validationFallbackCount} validation_fallback${errorDetailsSummary}`,
         scheduler_source: schedulerSource,
         schedule_text: SCHEDULE_CONFIG.schedule_text,
       });
@@ -788,6 +788,7 @@ Deno.serve(async (req) => {
           count: studentIds?.length || 'all',
           successCount,
           errorCount,
+          validationFallbackCount,
           // REPORT-ERROR-PANEL-V1: Always include errors array (empty if none)
           errors: structuredErrors,
           _debug: {
