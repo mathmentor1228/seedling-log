@@ -51,6 +51,8 @@ import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportPromptSettings } from '@/components/ReportPromptSettings';
+import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGenerationStatus';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -343,9 +345,12 @@ export default function Reports() {
           body: {
             manual: true,
             direct_save: true,
+            // WEEKLY-REPORT-REPAIR-V1: 재생성 허용 시에만 기존 초안 덮어쓰기(공개본은 서버에서 보호)
+            force: allowRegenerate,
             week_start: weekRange.start,
             week_end: weekRange.end,
             student_ids: batch,
+
           },
         });
 
@@ -846,7 +851,16 @@ export default function Reports() {
           </Button>
         </div>
 
+      {/* WEEKLY-REPORT-REPAIR-V1: 생성 상태 패널 */}
+      <WeeklyReportGenerationStatus
+        weekStart={weekRange.start}
+        weekEnd={weekRange.end}
+        generating={generating}
+        onGenerateAll={() => handleGenerateReports('all')}
+      />
+
       {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}
+
       <Card className="border-primary/30">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">

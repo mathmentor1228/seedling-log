@@ -239,9 +239,12 @@ export default function WeeklyReportSend() {
         body: {
           manual: true,
           direct_save: true, // KEY: bypasses legacy DB RPC formatter
+          // WEEKLY-REPORT-REPAIR-V1: 학생을 명시 선택한 경우에만 기존 초안 재생성 허용(공개본은 서버 보호)
+          force: !!(studentIds && studentIds.length > 0),
           week_start: startStr,
           week_end: endStr,
           student_ids: studentIds && studentIds.length > 0 ? studentIds : null,
+
         },
       });
 

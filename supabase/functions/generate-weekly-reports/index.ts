@@ -134,7 +134,11 @@ Deno.serve(async (req) => {
   let customWeekStart: string | null = null;
   let customWeekEnd: string | null = null;
   let useDirectSave = false;
-  
+  // WEEKLY-REPORT-REPAIR-V1
+  let dryRun = false;
+  let force = false;
+  let targetWeek: 'last' | 'current' = 'last';
+
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
@@ -143,9 +147,13 @@ Deno.serve(async (req) => {
     customWeekStart = body.week_start || null;
     customWeekEnd = body.week_end || null;
     useDirectSave = body.direct_save === true;
+    dryRun = body.dry_run === true;
+    force = body.force === true;
+    if (body.target_week === 'current') targetWeek = 'current';
   } catch {
     // Ignore JSON parse errors
   }
+
 
   const scope = studentIds && studentIds.length > 0 ? 'selected' : 'all';
   const schedulerSource = isManual ? 'manual' : 'pg_cron';
@@ -176,12 +184,17 @@ Deno.serve(async (req) => {
       const mondayDate = new Date(kstNow);
       mondayDate.setUTCDate(mondayDate.getUTCDate() - daysFromMonday);
       mondayDate.setUTCHours(0, 0, 0, 0);
+      // WEEKLY-REPORT-REPAIR-V1: 기본은 '지난 주'(월~토). 월요일 새벽 스케줄 실행 기준.
+      if (targetWeek === 'last') {
+        mondayDate.setUTCDate(mondayDate.getUTCDate() - 7);
+      }
       
       const saturdayDate = new Date(mondayDate);
       saturdayDate.setUTCDate(saturdayDate.getUTCDate() + 5);
       
       weekStart = mondayDate.toISOString().split('T')[0];
       weekEnd = saturdayDate.toISOString().split('T')[0];
+
     }
 
     const studentCount = studentIds?.length || 'all';
@@ -214,20 +227,63 @@ Deno.serve(async (req) => {
       let studentsToGenerate: { id: string; name: string }[] = [];
       
       if (studentIds && studentIds.length > 0) {
-        const { data: students } = await supabase
+        const { data: students, error: stuErr } = await supabase
           .from('students')
           .select('id, name')
           .in('id', studentIds);
+        if (stuErr) throw new Error(`STUDENT_FETCH_ERROR: ${stuErr.message}`);
         studentsToGenerate = students || [];
       } else {
-        const { data: students } = await supabase
+        // WEEKLY-REPORT-REPAIR-V1: 활성 학생 기준을 관리자 화면과 동일하게 맞춘다.
+        const { data: students, error: stuErr } = await supabase
           .from('students')
           .select('id, name')
-          .or('status.is.null,status.neq.inactive');
+          .in('enrollment_status', ['재학', '재등원']);
+        if (stuErr) throw new Error(`STUDENT_FETCH_ERROR: ${stuErr.message}`);
         studentsToGenerate = students || [];
       }
 
-      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students`);
+      // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
+      const { data: existingRows } = await supabase
+        .from('weekly_reports')
+        .select('student_id, parent_visible, parent_sent_at, report_quality_tag')
+        .eq('week_start', weekStart)
+        .in('student_id', studentsToGenerate.map((s) => s.id));
+      const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.student_id, r]));
+
+      const isProtected = (r: any) => !!r && (r.parent_visible === true || !!r.parent_sent_at);
+
+      let skippedExisting = 0;
+      let skippedProtected = 0;
+      const targets = studentsToGenerate.filter((s) => {
+        const r = existingMap.get(s.id);
+        if (!r) return true;
+        if (isProtected(r)) { skippedProtected++; return false; } // 공개/발송본은 force여도 보호
+        if (!force) { skippedExisting++; return false; }
+        return true;
+      });
+
+      if (dryRun) {
+        return new Response(
+          JSON.stringify({
+            status: 'dry_run',
+            success: true,
+            weekStart,
+            weekEnd,
+            dryRun: true,
+            candidateCount: studentsToGenerate.length,
+            wouldGenerate: targets.length,
+            skippedExisting,
+            skippedProtected,
+            force,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      studentsToGenerate = targets;
+      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
+
 
       let successCount = 0;
       let errorCount = 0;
@@ -457,12 +513,18 @@ Deno.serve(async (req) => {
               return acc;
             }, 0);
 
-            const { data: hwAssignments } = await supabase
-              .from('homework_assignments')
-              .select('result, check_status, assigned_date, checked_at')
-              .eq('student_id', student.id)
-              .lte('assigned_date', weekEnd)
-              .eq('check_status', 'checked');
+            // WEEKLY-REPORT-REPAIR-V1: 해당 주 제출 일지에 lesson_record_id로 연결된 숙제만 집계.
+            // 미연결(regular 고아) 숙제는 주간리포트 통계에 섞지 않는다.
+            const weekLessonIds = (lessons || []).map((l) => l.id);
+            const { data: hwAssignments } = weekLessonIds.length > 0
+              ? await supabase
+                  .from('homework_assignments')
+                  .select('result, check_status, assigned_date, checked_at, lesson_record_id')
+                  .eq('student_id', student.id)
+                  .in('lesson_record_id', weekLessonIds)
+                  .eq('check_status', 'checked')
+              : { data: [] as any[] };
+
             for (const a of hwAssignments || []) {
               const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
               const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
@@ -556,12 +618,13 @@ Deno.serve(async (req) => {
           console.error(`[ERROR_DETAIL] ${student.name}: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`);
           
           // Also store error in weekly_reports.debug_info for visibility in UI
+          // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
           try {
             const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            await supabase
-              .from('weekly_reports')
-              .upsert(
-                {
+            if (!existingMap.has(student.id)) {
+              await supabase
+                .from('weekly_reports')
+                .insert({
                   student_id: student.id,
                   week_start: weekStart,
                   week_end: weekEnd,
@@ -574,12 +637,14 @@ Deno.serve(async (req) => {
                   debug_info: errorDebugStr,
                   report_quality_tag: 'RED',
                   parent_visible: false,
-                },
-                { onConflict: 'student_id,week_start' }
-              );
+                });
+            } else {
+              console.warn('[generate-weekly-reports] Skipped error-row overwrite (existing report)');
+            }
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
           }
+
           
           errorCount++;
         }
