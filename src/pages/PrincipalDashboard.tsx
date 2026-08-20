@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, Component, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { getAttendanceLabel, getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -123,20 +124,22 @@ interface ClassroomSlot {
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' });
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  '정상등원': { label: '등원', color: 'text-emerald-600' },
-  '지각':     { label: '지각', color: 'text-amber-600' },
-  '인정결석': { label: '인정결석', color: 'text-muted-foreground' },
-  '무단결석': { label: '무단결석', color: 'text-destructive' },
-  '결석':     { label: '결석', color: 'text-destructive' },
-  '미등원':   { label: '미등원', color: 'text-muted-foreground' },
+// ATTENDANCE-NORMALIZE-V1: 표시 라벨은 공통 모듈, 색상만 로컬 유지
+const STATUS_COLOR: Record<string, string> = {
+  '정상등원': 'text-emerald-600',
+  '지각':     'text-amber-600',
+  '조퇴':     'text-amber-600',
+  '인정결석': 'text-muted-foreground',
+  '무단결석': 'text-destructive',
+  '보충불가': 'text-destructive',
+  'legacy_absent': 'text-destructive',
 };
 
 /* ------------------------------------------------------------------ */
 /*  Classroom View                                                     */
 /* ------------------------------------------------------------------ */
 function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upcoming' | 'past' }) {
-  const present = slot.students.filter(s => s.status === '정상등원' || s.status === '지각').length;
+  const present = slot.students.filter(s => isPresent(s.status)).length;
   const total = slot.students.length;
 
   return (
@@ -180,19 +183,21 @@ function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upc
         ) : (
           <div className="flex flex-wrap gap-x-2 gap-y-0.5 max-h-28 overflow-y-auto">
             {slot.students.map(s => {
-              const isPresent = s.status === '정상등원';
-              const isLate = s.status === '지각';
-              const isAbsent = s.status === '인정결석' || s.status === '무단결석' || s.status === '결석';
-              const info = s.status ? (STATUS_LABEL[s.status] || { label: s.status, color: 'text-muted-foreground' }) : null;
+              const isLateStudent = isLate(s.status);
+              const isPresentStudent = isPresent(s.status) && !isLateStudent;
+              const isAbsentStudent = isAbsent(s.status);
+              const info = s.status
+                ? { label: getAttendanceLabel(s.status) || s.status, color: STATUS_COLOR[s.status] || 'text-muted-foreground' }
+                : null;
               return (
                 <span
                   key={s.id}
                   title={info?.label || '수업 전'}
                   className={cn(
                     'text-[11px] font-medium',
-                    isPresent && 'text-emerald-600',
-                    isLate && 'text-amber-600',
-                    isAbsent && 'text-muted-foreground line-through',
+                    isPresentStudent && 'text-emerald-600',
+                    isLateStudent && 'text-amber-600',
+                    isAbsentStudent && 'text-muted-foreground line-through',
                     !s.status && state === 'active' && 'text-foreground',
                     !s.status && state !== 'active' && 'text-muted-foreground',
                   )}
@@ -433,8 +438,7 @@ function PrincipalContent() {
       // 출석 상태 맵
       const statusMap = new Map<string, string>();
       (lessonRecords || []).forEach((r: any) => {
-        const arr: string[] = r.attendance_status || [];
-        const status = arr.find(s => s !== '정상등원') || arr[0] || null;
+        const status = getPrimaryAttendanceStatus(r.attendance_status);
         if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
       });
 
