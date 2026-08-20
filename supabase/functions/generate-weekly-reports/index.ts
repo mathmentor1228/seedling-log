@@ -9,9 +9,10 @@ import {
   stripUngroundedSentences,
 } from './safety.ts';
 
-// WEEKLY-REPORT-TEACHER-EXCLUDE-V1
-// 담당 선생님이 주간 코멘트를 직접 작성하는 교사. 해당 교사와 현재 담당 관계가 있는
-// 활성 학생은 자동 주간 리포트 생성 대상에서 제외한다(기존 수동 문안은 읽지도 쓰지도 않음).
+// WEEKLY-REPORT-TEACHER-EXCLUDE-V2 (과목 단위 제외)
+// 담당 선생님이 주간 코멘트를 직접 작성하는 교사. 해당 교사가 담당하는 "과목"의 근거/문안만
+// 자동 생성에서 제외하고, 같은 학생의 다른 교사·다른 과목은 정상 포함한다.
+// 학생 자체를 대상에서 제외하지 않으며, 해당 교사의 수동 멘트는 자동 합성/덮어쓰기하지 않는다.
 const MANUAL_COMMENT_TEACHER_IDS = [
   '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 영어 담당(주간 코멘트 직접 작성)
 ];
@@ -305,29 +306,27 @@ Deno.serve(async (req) => {
         studentsToGenerate = students || [];
       }
 
-      // WEEKLY-REPORT-TEACHER-EXCLUDE-V1
-      // 현재 활성 담당 관계(student_subject_teachers)를 기준으로 수동 코멘트 교사 담당 학생 제외.
-      // 반 이름 문자열 추정은 하지 않는다. 제외된 학생은 조회/생성/수정 대상에서 완전히 빠진다.
-      const totalBeforeTeacherExclusion = studentsToGenerate.length;
-      let teacherExcludedCount = 0;
+      // WEEKLY-REPORT-TEACHER-EXCLUDE-V2
+      // 활성 담당 링크(student_subject_teachers)에서 (학생 → 제외 과목) 맵을 구조적으로 만든다.
+      // 학생은 제외하지 않고, 해당 과목 근거만 generate-ai-report 입력에서 빠진다.
+      const totalActiveStudents = studentsToGenerate.length;
+      const excludedSubjectsByStudent = new Map<string, Set<string>>();
       {
         const { data: links, error: linkErr } = await supabase
           .from('student_subject_teachers')
-          .select('student_id')
+          .select('student_id, subject')
           .in('teacher_id', MANUAL_COMMENT_TEACHER_IDS);
         if (linkErr) throw new Error(`TEACHER_LINK_FETCH_ERROR: ${linkErr.message}`);
-        const excludedIds = new Set((links || []).map((l: any) => l.student_id));
-        if (excludedIds.size > 0) {
-          const kept = studentsToGenerate.filter((s) => !excludedIds.has(s.id));
-          teacherExcludedCount = studentsToGenerate.length - kept.length;
-          studentsToGenerate = kept;
+        for (const l of (links || []) as any[]) {
+          if (!l?.student_id || !l?.subject) continue;
+          if (!excludedSubjectsByStudent.has(l.student_id)) excludedSubjectsByStudent.set(l.student_id, new Set());
+          excludedSubjectsByStudent.get(l.student_id)!.add(l.subject);
         }
       }
+      const subjectExcludedStudentCount = studentsToGenerate.filter((s) => excludedSubjectsByStudent.has(s.id)).length;
       console.log(
-        `[generate-weekly-reports] TEACHER_EXCLUDE_V1: before=${totalBeforeTeacherExclusion} excluded=${teacherExcludedCount} after=${studentsToGenerate.length}`
+        `[generate-weekly-reports] TEACHER_EXCLUDE_V2: active=${totalActiveStudents} subject_excluded_students=${subjectExcludedStudentCount}`
       );
-
-
 
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
@@ -364,9 +363,11 @@ Deno.serve(async (req) => {
             weekEnd,
             dryRun: true,
             candidateCount: studentsToGenerate.length,
-            activeCount: totalBeforeTeacherExclusion,
+            activeCount: totalActiveStudents,
             activeAfterTeacherExclusion: studentsToGenerate.length,
-            teacherExcludedCount,
+            exclusion_mode: 'subject_level',
+            subjectExcludedStudentCount,
+            teacherExcludedCount: 0,
             pendingCount: targets.length,
             wouldGenerate: batchTargets.length,
             wouldProcess: batchTargets.length,
@@ -427,6 +428,9 @@ Deno.serve(async (req) => {
                 forbid_counts: true,
                 forbid_future_promises: true,
                 observation_only: true,
+                // WEEKLY-REPORT-TEACHER-EXCLUDE-V2: 서버측 구조적 제외 (교사 이름 문자열 미노출)
+                exclude_subjects: Array.from(excludedSubjectsByStudent.get(student.id) || []),
+                exclude_teacher_ids: excludedSubjectsByStudent.has(student.id) ? MANUAL_COMMENT_TEACHER_IDS : [],
               },
             });
             let timer: number | undefined;
@@ -520,11 +524,15 @@ Deno.serve(async (req) => {
             throw new Error(`FETCH_ERROR: ${fetchError.message}`);
           }
 
-          debugTotal = allLessonsDebug?.length || 0;
-          debugSubmitted = allLessonsDebug?.filter(l => l.submitted === true)?.length || 0;
-          debugDraft = allLessonsDebug?.filter(l => l.submitted === false || l.submitted === null)?.length || 0;
+          const studentExcludedSubjects = excludedSubjectsByStudent.get(student.id) || new Set<string>();
+          const keepSubject = (subject: string | null) => !subject || !studentExcludedSubjects.has(subject);
+          const allLessonsDebugFiltered = (allLessonsDebug || []).filter((l: any) => keepSubject(l.subject));
+
+          debugTotal = allLessonsDebugFiltered.length;
+          debugSubmitted = allLessonsDebugFiltered.filter((l: any) => l.submitted === true).length;
+          debugDraft = allLessonsDebugFiltered.filter((l: any) => l.submitted === false || l.submitted === null).length;
           const debugSubjects: Record<string, number> = {};
-          allLessonsDebug?.forEach(l => {
+          allLessonsDebugFiltered.forEach((l: any) => {
             debugSubjects[l.subject] = (debugSubjects[l.subject] || 0) + 1;
           });
 
@@ -539,8 +547,9 @@ Deno.serve(async (req) => {
             .lte('lesson_date', weekEnd)
             .eq('submitted', true);
 
-          const lessonCount = lessons?.length || 0;
-          const subjectCount = new Set(lessons?.map(l => l.subject) || []).size;
+          const includedLessons = (lessons || []).filter((l: any) => keepSubject(l.subject));
+          const lessonCount = includedLessons.length;
+          const subjectCount = new Set(includedLessons.map((l: any) => l.subject)).size;
 
           if (!aiReportData || validatorStatus === 'fail') {
             // Retry exhausted or validator failed -> mark RED + store placeholder
@@ -569,7 +578,10 @@ Deno.serve(async (req) => {
             const VERBATIM_COMMENT_TEACHER_IDS = [
               '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
             ];
-            const { data: weeklySummaries, error: weeklySummaryErr } = await supabase
+            const skipVerbatimMerge = studentExcludedSubjects.size > 0;
+            const { data: weeklySummariesRaw, error: weeklySummaryErr } = skipVerbatimMerge
+              ? { data: [] as any[], error: null }
+              : await supabase
               .from('lesson_records')
               .select('weekly_summary, subject, teacher_id, teacher_display_name, lesson_date, weekly_summary_week')
               .eq('student_id', student.id)
@@ -577,6 +589,7 @@ Deno.serve(async (req) => {
               .not('weekly_summary', 'is', null)
               .or(`weekly_summary_week.eq.${weekStart},and(lesson_date.gte.${weekStart},lesson_date.lte.${weekEnd})`);
             if (weeklySummaryErr) console.error('weekly_summary load failed:', weeklySummaryErr.message);
+            const weeklySummaries = (weeklySummariesRaw || []).filter((r: any) => keepSubject(r.subject));
 
             // 코멘트 문장 앞부분들이 본문에 얼마나 살아있는지로 통합 여부 판정
             const isIntegrated = (comment: string, body: string) => {
@@ -950,8 +963,10 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           validationFallbackCount,
-          activeCount: totalBeforeTeacherExclusion,
-          teacherExcludedCount,
+          activeCount: totalActiveStudents,
+          exclusion_mode: 'subject_level',
+          subjectExcludedStudentCount,
+          teacherExcludedCount: 0,
           // WEEKLY-REPORT-BATCH-V1: 배치·재개 정보
           batch_size: batchSize,
           processed_this_batch: studentsToGenerate.length,
