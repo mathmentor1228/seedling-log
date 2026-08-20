@@ -9,6 +9,7 @@ export type SafetyViolation =
   | 'COMPARISON'
   | 'TRAIT_ASSERTION'
   | 'ANXIETY'
+  | 'HARSH_TONE'
   | 'EVAL_WITHOUT_DATA';
 
 // 1) 수업 횟수 / 일지 수 / 기록 수 직접 노출
