@@ -538,6 +538,48 @@ Deno.serve(async (req) => {
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
+          // WEEKLY-REPORT-SAFETY-V1: 저장 전 서버측 문안 검증 (외부 노출 텍스트 전체)
+          const hasLessonData = lessonCount > 0;
+          const externalText = [
+            aiReportData?.parent_message || '',
+            aiReportData?.student_message || '',
+            typeof aiReportData?.subject_breakdown === 'string'
+              ? aiReportData.subject_breakdown
+              : aiReportData?.subject_breakdown
+                ? JSON.stringify(aiReportData.subject_breakdown)
+                : '',
+          ].join('\n\n');
+
+          const safety = aiReportData
+            ? scanSafety(externalText, { hasLessonData })
+            : { pass: true, violations: [] as string[] };
+
+          if (aiReportData && !safety.pass) {
+            safetyFallback = true;
+            safetyViolations = safety.violations as string[];
+            validationFallbackCount++;
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=${safetyViolations.join(';')}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+            qualityTag = 'RED';
+            draftStatusToSave = 'needs_input';
+            console.warn(`[generate-weekly-reports] SAFETY_FALLBACK ${student.name}: ${safetyViolations.join(';')}`);
+          } else if (aiReportData && !hasLessonData) {
+            // 제출완료 수업기록 0건 → 평가 문안 대신 데이터 부족/관찰 필요 문안
+            safetyFallback = true;
+            safetyViolations = ['NO_LESSON_DATA'];
+            validationFallbackCount++;
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=NO_LESSON_DATA`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, false)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(false);
+            qualityTag = 'RED';
+            draftStatusToSave = 'needs_input';
+          }
+
+
+
           // Calculate stats
           let avgUnderstanding: number | null = null;
           let homeworkCompletionRate: number | null = null;
