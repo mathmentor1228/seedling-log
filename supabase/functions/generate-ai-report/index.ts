@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getAttendanceIssues } from '../_shared/attendance.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1261,7 +1262,7 @@ function buildJsonUserPrompt(
       }
       
       if (lesson.attendance_status && lesson.attendance_status.length > 0) {
-        const nonNormal = lesson.attendance_status.filter(s => s !== '정상등원' && s !== '등원');
+        const nonNormal = getAttendanceIssues(lesson.attendance_status);
         if (nonNormal.length > 0) {
           prompt += `  출결 특이사항: ${nonNormal.join(', ')}\n`;
         }
@@ -1470,7 +1471,7 @@ ${!hasTeacherNotes ? `**[주의] 이 과목에 상세 교사 기록이 부족합
     }
     
     if (lesson.attendance_status && lesson.attendance_status.length > 0) {
-      const nonNormal = lesson.attendance_status.filter(s => s !== '정상등원' && s !== '등원');
+      const nonNormal = getAttendanceIssues(lesson.attendance_status);
       if (nonNormal.length > 0) {
         prompt += `  출결 특이사항: ${nonNormal.join(', ')}\n`;
       }

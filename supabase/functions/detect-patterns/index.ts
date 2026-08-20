@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// ATTENDANCE-NORMALIZE-V1: 레거시 값('출석'/'결석'/'미등원') 포함 판정
+import { isAbsent, isLate } from '../_shared/attendance.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,7 +58,7 @@ Deno.serve(async (req) => {
         const lateCountMap = new Map<string, { count: number; name: string }>();
         for (const lr of lessonRecords) {
           const statuses = lr.attendance_status || [];
-          if (statuses.includes('지각')) {
+          if (isLate(statuses)) {
             const existing = lateCountMap.get(lr.student_id) || { count: 0, name: '' };
             existing.count += 1;
             lateCountMap.set(lr.student_id, existing);
@@ -88,7 +90,7 @@ Deno.serve(async (req) => {
         const absentByStudent = new Map<string, string[]>();
         for (const lr of lessonRecords) {
           const statuses = lr.attendance_status || [];
-          if (statuses.includes('결석') || statuses.includes('무단결석') || statuses.includes('인정결석')) {
+          if (isAbsent(statuses)) {
             const dates = absentByStudent.get(lr.student_id) || [];
             if (!dates.includes(lr.lesson_date)) {
               dates.push(lr.lesson_date);
