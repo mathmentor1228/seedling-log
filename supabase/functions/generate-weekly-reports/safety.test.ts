@@ -86,3 +86,77 @@ Deno.test('정상 관찰형 문장들은 과잉 차단되지 않음', () => {
     assertEquals(r.pass, true, `${s} -> ${r.violations.join(',')}`);
   }
 });
+
+// ============================================================
+// WEEKLY-REPORT-GROUNDEDNESS-V1 / TONE-V3
+// ============================================================
+import { scanGroundedness, stripUngroundedSentences } from './safety.ts';
+
+const EVIDENCE_BASIC =
+  '이차함수 그래프 단원 진행. 오답 정리 확인. 숙제 일부 미완료. 단어 시험 12/20.';
+
+Deno.test('창작 장면 차단 8종', () => {
+  const fabricated = [
+    '연필을 굴리며 한참을 고민했습니다.',
+    '고개를 끄덕이며 설명을 들었습니다.',
+    '눈빛이 달라지는 모습이 인상적이었습니다.',
+    '친구와 웃으며 문제를 풀었습니다.',
+    '끝까지 붙잡고 놓지 않았습니다.',
+    '표정이 밝아지는 모습이 보였습니다.',
+    '뿌듯해하는 마음이 느껴졌습니다.',
+    '책상 앞에서 자세를 고쳐 앉았습니다.',
+  ];
+  for (const s of fabricated) {
+    const r = scanGroundedness(s, EVIDENCE_BASIC);
+    assertEquals(r.pass, false, `허용되면 안 됨: ${s}`);
+  }
+});
+
+Deno.test('근거에 존재하는 관찰은 허용 4종', () => {
+  const cases: Array<[string, string]> = [
+    ['이차함수 그래프 단원을 정리했습니다.', EVIDENCE_BASIC],
+    ['오답을 다시 확인하는 과정이 기록에 남아 있습니다.', EVIDENCE_BASIC],
+    ['과제 일부가 마무리되지 않은 기록이 있었습니다.', EVIDENCE_BASIC],
+    ['수업 중 고개를 끄덕이며 확인했다는 기록이 있습니다.', '수업 중 고개를 끄덕이며 확인함'],
+  ];
+  for (const [text, ev] of cases) {
+    const r = scanGroundedness(text, ev);
+    assertEquals(r.pass, true, `${text} -> ${r.markers.join(',')}`);
+  }
+});
+
+Deno.test('창작 문장만 제거하고 나머지는 보존', () => {
+  const text =
+    '이차함수 그래프 단원을 정리했습니다. 연필을 굴리며 한참을 고민했습니다. 오답 정리는 조금 더 지켜볼 부분으로 두고 있습니다. 과제 일부가 마무리되지 않은 기록이 있었습니다.';
+  const kept = stripUngroundedSentences(text, EVIDENCE_BASIC);
+  assertEquals(kept !== null, true);
+  assertEquals(kept!.includes('연필'), false);
+  assertEquals(kept!.includes('이차함수'), true);
+});
+
+Deno.test('톤: 완곡하지만 사실을 흐리지 않는 문장 4종 통과', () => {
+  const samples = [
+    '기록상 일부 시기에 과제가 마무리되지 않은 부분이 확인됩니다. 이후 흐름이 안정적으로 이어지는지 살펴볼 부분입니다.',
+    '수업에서 다룬 개념은 정리되었고, 응용 단계는 조금 더 지켜볼 필요가 있습니다.',
+    '테스트 결과는 기록에 남아 있는 범위에서 확인했고, 반복되는 유형은 유의 깊게 살필 지점으로 두고 있습니다.',
+    '이해 정도는 기록상 시기에 따라 차이가 있어, 흐름을 조금 더 지켜볼 부분으로 보고 있습니다.',
+  ];
+  for (const s of samples) {
+    const r = scanSafety(s, { hasLessonData: true });
+    assertEquals(r.pass, true, `${s} -> ${r.violations.join(',')}`);
+    assertEquals(scanGroundedness(s, EVIDENCE_BASIC).pass, true);
+  }
+});
+
+Deno.test('톤: 직접적 질책·낙인은 차단', () => {
+  const harsh = [
+    '학습 태도가 좋지 않습니다.',
+    '과제를 제대로 하지 않습니다.',
+    '이번 주는 실망스럽습니다.',
+    '분발해야 합니다.',
+  ];
+  for (const s of harsh) {
+    const r = scanSafety(s, { hasLessonData: true });
+    assertEquals(r.pass, false, `차단되어야 함: ${s}`);
+  }
+});

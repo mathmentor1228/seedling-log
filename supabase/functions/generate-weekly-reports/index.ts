@@ -5,7 +5,16 @@ import {
   neutralParentTemplate,
   neutralStudentTemplate,
   CONTENT_SAFETY_RULES,
+  scanGroundedness,
+  stripUngroundedSentences,
 } from './safety.ts';
+
+// WEEKLY-REPORT-TEACHER-EXCLUDE-V1
+// 담당 선생님이 주간 코멘트를 직접 작성하는 교사. 해당 교사와 현재 담당 관계가 있는
+// 활성 학생은 자동 주간 리포트 생성 대상에서 제외한다(기존 수동 문안은 읽지도 쓰지도 않음).
+const MANUAL_COMMENT_TEACHER_IDS = [
+  '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 영어 담당(주간 코멘트 직접 작성)
+];
 
 
 const corsHeaders = {
@@ -296,6 +305,30 @@ Deno.serve(async (req) => {
         studentsToGenerate = students || [];
       }
 
+      // WEEKLY-REPORT-TEACHER-EXCLUDE-V1
+      // 현재 활성 담당 관계(student_subject_teachers)를 기준으로 수동 코멘트 교사 담당 학생 제외.
+      // 반 이름 문자열 추정은 하지 않는다. 제외된 학생은 조회/생성/수정 대상에서 완전히 빠진다.
+      const totalBeforeTeacherExclusion = studentsToGenerate.length;
+      let teacherExcludedCount = 0;
+      {
+        const { data: links, error: linkErr } = await supabase
+          .from('student_subject_teachers')
+          .select('student_id')
+          .in('teacher_id', MANUAL_COMMENT_TEACHER_IDS);
+        if (linkErr) throw new Error(`TEACHER_LINK_FETCH_ERROR: ${linkErr.message}`);
+        const excludedIds = new Set((links || []).map((l: any) => l.student_id));
+        if (excludedIds.size > 0) {
+          const kept = studentsToGenerate.filter((s) => !excludedIds.has(s.id));
+          teacherExcludedCount = studentsToGenerate.length - kept.length;
+          studentsToGenerate = kept;
+        }
+      }
+      console.log(
+        `[generate-weekly-reports] TEACHER_EXCLUDE_V1: before=${totalBeforeTeacherExclusion} excluded=${teacherExcludedCount} after=${studentsToGenerate.length}`
+      );
+
+
+
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
         .from('weekly_reports')
@@ -331,7 +364,9 @@ Deno.serve(async (req) => {
             weekEnd,
             dryRun: true,
             candidateCount: studentsToGenerate.length,
-            activeCount: studentsToGenerate.length,
+            activeCount: totalBeforeTeacherExclusion,
+            activeAfterTeacherExclusion: studentsToGenerate.length,
+            teacherExcludedCount,
             pendingCount: targets.length,
             wouldGenerate: batchTargets.length,
             wouldProcess: batchTargets.length,
@@ -632,6 +667,78 @@ Deno.serve(async (req) => {
             draftStatusToSave = 'needs_input';
           }
 
+          // WEEKLY-REPORT-GROUNDEDNESS-V1: 저장 전 근거 대조.
+          // 제출된 수업일지 / 연결 숙제 / 시험 결과 원문에 없는 행동·표정·몸짓·도구·장면·감정·동기 서술은 제거한다.
+          if (aiReportData && !safetyFallback) {
+            currentStage = 'validate';
+            const { data: evidenceRows } = await supabase
+              .from('lesson_records')
+              .select(
+                'subject, lesson_range, notes, internal_notes, learning_issues_note, homework_check_note, next_lesson_goal, parent_direct_message, weekly_summary, test_name, test_content, test_result, test_result_text, test_notes, test_name_2, test_content_2, test_result_2, test_result_text_2, english_grammar_unit'
+              )
+              .eq('student_id', student.id)
+              .gte('lesson_date', weekStart)
+              .lte('lesson_date', weekEnd)
+              .eq('submitted', true);
+
+            const weekLessonIdsForEvidence = (lessons || []).map((l) => l.id);
+            const { data: hwEvidence } = weekLessonIdsForEvidence.length > 0
+              ? await supabase
+                  .from('homework_assignments')
+                  .select('content, notes, result, check_status')
+                  .eq('student_id', student.id)
+                  .in('lesson_record_id', weekLessonIdsForEvidence)
+              : { data: [] as any[] };
+
+            const evidenceText = [
+              ...(evidenceRows || []).map((r: any) => Object.values(r).filter((v) => typeof v === 'string').join(' ')),
+              ...(hwEvidence || []).map((h: any) => `${h.content || ''} ${h.notes || ''} ${h.result || ''}`),
+            ].join('\n');
+
+            const parentBody = stripMarkers(finalParentMessageToSave || '');
+            const studentBody = finalStudentMessageToSave || '';
+            const breakdownText =
+              typeof aiReportData?.subject_breakdown === 'string'
+                ? aiReportData.subject_breakdown
+                : aiReportData?.subject_breakdown
+                  ? JSON.stringify(aiReportData.subject_breakdown)
+                  : '';
+
+            const gParent = scanGroundedness(parentBody, evidenceText);
+            const gStudent = scanGroundedness(studentBody, evidenceText);
+            const gBreakdown = scanGroundedness(breakdownText, evidenceText);
+
+            if (!gParent.pass || !gStudent.pass || !gBreakdown.pass) {
+              const strippedParent = stripUngroundedSentences(parentBody, evidenceText);
+              const strippedStudent = gStudent.pass
+                ? studentBody
+                : stripUngroundedSentences(studentBody, evidenceText, 20);
+
+              safetyFallback = true;
+              safetyViolations = [...safetyViolations, 'UNGROUNDED_SCENE'];
+              validationFallbackCount++;
+              qualityTag = 'RED';
+              draftStatusToSave = 'needs_input';
+
+              const header = formatParentHeader(student.name, weekStart, weekEnd);
+              const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=UNGROUNDED_SCENE`;
+
+              if (strippedParent && scanSafety(strippedParent, { hasLessonData }).pass) {
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${strippedParent}`;
+              } else {
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+              }
+              finalStudentMessageToSave =
+                strippedStudent && scanSafety(strippedStudent, { hasLessonData }).pass
+                  ? strippedStudent
+                  : neutralStudentTemplate(hasLessonData);
+
+              console.warn(
+                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK ${student.name}: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
+              );
+            }
+          }
+
 
 
           // Calculate stats
@@ -843,6 +950,8 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           validationFallbackCount,
+          activeCount: totalBeforeTeacherExclusion,
+          teacherExcludedCount,
           // WEEKLY-REPORT-BATCH-V1: 배치·재개 정보
           batch_size: batchSize,
           processed_this_batch: studentsToGenerate.length,
