@@ -138,6 +138,7 @@ Deno.serve(async (req) => {
   let dryRun = false;
   let force = false;
   let targetWeek: 'last' | 'current' = 'last';
+  let targetWeekDate: string | null = null;
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -150,9 +151,16 @@ Deno.serve(async (req) => {
     dryRun = body.dry_run === true;
     force = body.force === true;
     if (body.target_week === 'current') targetWeek = 'current';
+    else if (typeof body.target_week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.target_week)) {
+      targetWeekDate = body.target_week;
+    }
+    // WEEKLY-REPORT-REPAIR-V1: dry-run은 어떤 경로에서도 DB write가 없어야 하므로
+    // 항상 읽기 전용 계산 경로(direct_save 분기의 dry-run 반환)로 강제한다.
+    if (dryRun) useDirectSave = true;
   } catch {
     // Ignore JSON parse errors
   }
+
 
 
   const scope = studentIds && studentIds.length > 0 ? 'selected' : 'all';
