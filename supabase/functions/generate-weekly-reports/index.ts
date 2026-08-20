@@ -917,10 +917,6 @@ Deno.serve(async (req) => {
           // WEEKLY-REPORT-FALLBACK-V4: 오류 학생은 리포트 행을 만들지 않는다.
           // (NULL 문안 / RED / debug 표식 행 저장 금지 — 진단은 로그와 weekly_jobs_log로만 남긴다.)
           console.warn('[generate-weekly-reports] Skipped row creation (error path)');
-          try {
-          } catch (saveErr) {
-            console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
-          }
 
 
           
