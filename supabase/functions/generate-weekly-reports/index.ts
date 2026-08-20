@@ -305,6 +305,30 @@ Deno.serve(async (req) => {
         studentsToGenerate = students || [];
       }
 
+      // WEEKLY-REPORT-TEACHER-EXCLUDE-V1
+      // 현재 활성 담당 관계(student_subject_teachers)를 기준으로 수동 코멘트 교사 담당 학생 제외.
+      // 반 이름 문자열 추정은 하지 않는다. 제외된 학생은 조회/생성/수정 대상에서 완전히 빠진다.
+      const totalBeforeTeacherExclusion = studentsToGenerate.length;
+      let teacherExcludedCount = 0;
+      {
+        const { data: links, error: linkErr } = await supabase
+          .from('student_subject_teachers')
+          .select('student_id')
+          .in('teacher_id', MANUAL_COMMENT_TEACHER_IDS);
+        if (linkErr) throw new Error(`TEACHER_LINK_FETCH_ERROR: ${linkErr.message}`);
+        const excludedIds = new Set((links || []).map((l: any) => l.student_id));
+        if (excludedIds.size > 0) {
+          const kept = studentsToGenerate.filter((s) => !excludedIds.has(s.id));
+          teacherExcludedCount = studentsToGenerate.length - kept.length;
+          studentsToGenerate = kept;
+        }
+      }
+      console.log(
+        `[generate-weekly-reports] TEACHER_EXCLUDE_V1: before=${totalBeforeTeacherExclusion} excluded=${teacherExcludedCount} after=${studentsToGenerate.length}`
+      );
+
+
+
       // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
       const { data: existingRows } = await supabase
         .from('weekly_reports')
