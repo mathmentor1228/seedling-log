@@ -352,7 +352,13 @@ Deno.serve(async (req) => {
                 week_start: weekStart,
                 week_end: weekEnd,
                 strict_narrative: strictNarrative,
+                // WEEKLY-REPORT-SAFETY-V1: 생성 단계 문안 규칙 강화
+                content_safety_rules: CONTENT_SAFETY_RULES,
+                forbid_counts: true,
+                forbid_future_promises: true,
+                observation_only: true,
               },
+
             });
           };
 
