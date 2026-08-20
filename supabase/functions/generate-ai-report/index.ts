@@ -387,6 +387,10 @@ interface GenerateReportRequest {
   previous_week_lessons?: LessonRecord[];
   // When true, we force the stricter narrative-only system message even on the first attempt.
   strict_narrative?: boolean;
+  // REPORT_SUBJECT_TEACHER_EXCLUDE_V1: 서버에서 구조적으로 전달되는 제외 대상
+  // (교사 이름 문자열은 프롬프트에 노출하지 않고, 여기서 근거 자체를 제거한다)
+  exclude_subjects?: string[];
+  exclude_teacher_ids?: string[];
 }
 
 interface ValidationResult {
@@ -739,6 +743,21 @@ Deno.serve(async (req) => {
     const { student_id, student_name, week_start, week_end } = reqBody;
     const strictNarrative = reqBody.strict_narrative === true;
 
+    // REPORT_SUBJECT_TEACHER_EXCLUDE_V1
+    // 담당 선생님이 직접 멘트를 작성하는 과목(교사 링크 기준)은 입력 근거와 출력에서 모두 제외한다.
+    // 같은 학생의 다른 교사·다른 과목 근거는 그대로 유지한다.
+    const excludedSubjects = new Set((reqBody.exclude_subjects || []).filter(Boolean));
+    const excludedTeacherIds = new Set((reqBody.exclude_teacher_ids || []).filter(Boolean));
+    const isExcludedRecord = (row: any): boolean => {
+      if (!row) return false;
+      if (row.subject && excludedSubjects.has(row.subject)) return true;
+      if (row.teacher_id && excludedTeacherIds.has(row.teacher_id)) return true;
+      return false;
+    };
+    const dropExcluded = <T,>(rows: T[] | null | undefined): T[] =>
+      (rows || []).filter((r) => !isExcludedRecord(r as any));
+    console.log(`[REPORT_SUBJECT_TEACHER_EXCLUDE_V1] excluded_subjects=${excludedSubjects.size} excluded_teachers=${excludedTeacherIds.size}`);
+
     // REPORT_TEMPLATE_DB_V1: Fetch active templates from report_templates table
     const { data: activeTemplates, error: templateError } = await supabase
       .from('report_templates')
@@ -769,12 +788,14 @@ Deno.serve(async (req) => {
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
     // DATA_DEBUG: Fetch ALL lesson records first (no filters except student + date range)
-    const { data: allLessonsRaw, error: allLessonsError } = await supabase
+    const { data: allLessonsRawUnfiltered, error: allLessonsError } = await supabase
       .from('lesson_records')
       .select('id, student_id, lesson_date, subject, submitted, submitted_at, teacher_id')
       .eq('student_id', student_id)
       .gte('lesson_date', week_start)
       .lte('lesson_date', week_end);
+
+    const allLessonsRaw = dropExcluded(allLessonsRawUnfiltered as any[]);
 
     // Debug counters
     const totalFetched = allLessonsRaw?.length || 0;
@@ -801,7 +822,7 @@ Deno.serve(async (req) => {
     }
 
     // Now fetch the full lesson records for submitted only
-    const { data: currentWeekLessons, error: lessonsError } = await supabase
+    const { data: currentWeekLessonsRaw, error: lessonsError } = await supabase
       .from('lesson_records')
       .select('*')
       .eq('student_id', student_id)
@@ -813,6 +834,8 @@ Deno.serve(async (req) => {
     if (lessonsError) {
       throw new Error(`Failed to fetch lesson records: ${lessonsError.message}`);
     }
+
+    const currentWeekLessons = dropExcluded(currentWeekLessonsRaw as any[]);
 
     console.log(`[DATA_DEBUG] Final submitted lessons for AI: ${currentWeekLessons?.length || 0}`);
 
@@ -830,7 +853,7 @@ Deno.serve(async (req) => {
       .not('weekly_summary', 'is', null)
       .or(`weekly_summary_week.eq.${week_start},and(lesson_date.gte.${week_start},lesson_date.lte.${week_end})`);
     const verbatimComments: Record<string, { teacher: string; text: string }> = {};
-    for (const r of (verbatimRows ?? []) as any[]) {
+    for (const r of dropExcluded(verbatimRows as any[])) {
       if (!verbatimComments[r.subject]) {
         verbatimComments[r.subject] = { teacher: r.teacher_display_name || '담당 선생님', text: r.weekly_summary };
       }
@@ -866,7 +889,7 @@ Deno.serve(async (req) => {
     const prevWeekEnd = new Date(week_start);
     prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
-    const { data: previousLessons } = await supabase
+    const { data: previousLessonsRaw } = await supabase
       .from('lesson_records')
       .select('*')
       .eq('student_id', student_id)
@@ -874,6 +897,8 @@ Deno.serve(async (req) => {
       .lte('lesson_date', prevWeekEnd.toISOString().split('T')[0])
       .eq('submitted', true)
       .order('lesson_date', { ascending: false });
+
+    const previousLessons = dropExcluded(previousLessonsRaw as any[]);
 
     // Fetch curriculum info for context
     const curriculumKeys = currentWeekLessons
@@ -891,11 +916,13 @@ Deno.serve(async (req) => {
 
     // HW-MERGE-V1: also pull homework_assignments checked by teachers
     // (teachers often mark HW completion via DailyHomeworkChecklist, not via lesson_records.homework_status)
-    const { data: hwAssignments } = await supabase
+    const { data: hwAssignmentsRaw } = await supabase
       .from('homework_assignments')
       .select('subject, result, check_status, assigned_date, checked_at')
       .eq('student_id', student_id)
       .lte('assigned_date', week_end);
+
+    const hwAssignments = dropExcluded(hwAssignmentsRaw as any[]);
 
     const mapHwResult = (r: string | null): 'completed' | 'partial' | 'not_done' | null => {
       if (!r) return null;
