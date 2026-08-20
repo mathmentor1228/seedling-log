@@ -748,9 +748,20 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // LEGACY MODE: Use DB RPC (for scheduled runs)
+    // LEGACY MODE: DB RPC — 명시적 mode='legacy_rpc' + confirm_legacy_rpc=true 전용
     // ============================================================
-    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Using LEGACY DB RPC mode`);
+    if (!legacyAllowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          execution_mode: 'blocked_legacy_rpc',
+          error: 'LEGACY_RPC_DISABLED: legacy RPC path is not selectable automatically.',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Using LEGACY DB RPC mode (explicitly confirmed)`);
+
 
     const rpcParams: Record<string, unknown> = {
       _week_start: weekStart,
