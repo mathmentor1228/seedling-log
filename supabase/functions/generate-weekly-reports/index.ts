@@ -562,18 +562,17 @@ Deno.serve(async (req) => {
           const subjectCount = new Set(includedLessons.map((l: any) => l.subject)).size;
 
           if (!aiReportData || validatorStatus === 'fail') {
-            // Retry exhausted or validator failed -> mark RED + store placeholder
+            // WEEKLY-REPORT-FALLBACK-V4: 사용자 노출 표식 없이 중립 문안만 저장한다.
             validatorStatus = 'fail';
-            riskLevelFromAi = 'high';
-            draftStatusToSave = 'needs_input';
-            qualityTag = 'RED';
-            
+            riskLevelFromAi = null;
+            draftStatusToSave = 'ready';
+            qualityTag = 'YELLOW';
+
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validator=fail retries=${aiAttempts}`;
-            
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${header}\n\n${debugLine}\n\n${RED_PARENT_PLACEHOLDER}`;
-            finalStudentMessageToSave = null;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, lessonCount > 0)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(lessonCount > 0);
           } else {
+
             riskLevelFromAi = aiReportData?.risk_level || 'low';
             draftStatusToSave = aiReportData?.draft_status || 'ready';
             
