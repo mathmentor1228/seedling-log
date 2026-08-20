@@ -635,10 +635,10 @@ Deno.serve(async (req) => {
               ? ' weekly_summary=MISSING'
               : ` weekly_summary=${totalComments} integrated=${integratedCount} appended=${summaryBlocks.length}`;
 
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`;
-            
+            console.log(`[generate-weekly-reports] INTERNAL tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`);
+
             // parent_message from generate-ai-report already includes the header, so don't add it again
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}${summaryAppendix}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${aiReportData.parent_message}${summaryAppendix}`;
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
