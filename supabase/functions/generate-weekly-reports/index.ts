@@ -227,20 +227,63 @@ Deno.serve(async (req) => {
       let studentsToGenerate: { id: string; name: string }[] = [];
       
       if (studentIds && studentIds.length > 0) {
-        const { data: students } = await supabase
+        const { data: students, error: stuErr } = await supabase
           .from('students')
           .select('id, name')
           .in('id', studentIds);
+        if (stuErr) throw new Error(`STUDENT_FETCH_ERROR: ${stuErr.message}`);
         studentsToGenerate = students || [];
       } else {
-        const { data: students } = await supabase
+        // WEEKLY-REPORT-REPAIR-V1: 활성 학생 기준을 관리자 화면과 동일하게 맞춘다.
+        const { data: students, error: stuErr } = await supabase
           .from('students')
           .select('id, name')
-          .or('status.is.null,status.neq.inactive');
+          .in('enrollment_status', ['재학', '재등원']);
+        if (stuErr) throw new Error(`STUDENT_FETCH_ERROR: ${stuErr.message}`);
         studentsToGenerate = students || [];
       }
 
-      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students`);
+      // WEEKLY-REPORT-REPAIR-V1: idempotency + 공개본 보호
+      const { data: existingRows } = await supabase
+        .from('weekly_reports')
+        .select('student_id, parent_visible, parent_sent_at, report_quality_tag')
+        .eq('week_start', weekStart)
+        .in('student_id', studentsToGenerate.map((s) => s.id));
+      const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.student_id, r]));
+
+      const isProtected = (r: any) => !!r && (r.parent_visible === true || !!r.parent_sent_at);
+
+      let skippedExisting = 0;
+      let skippedProtected = 0;
+      const targets = studentsToGenerate.filter((s) => {
+        const r = existingMap.get(s.id);
+        if (!r) return true;
+        if (isProtected(r)) { skippedProtected++; return false; } // 공개/발송본은 force여도 보호
+        if (!force) { skippedExisting++; return false; }
+        return true;
+      });
+
+      if (dryRun) {
+        return new Response(
+          JSON.stringify({
+            status: 'dry_run',
+            success: true,
+            weekStart,
+            weekEnd,
+            dryRun: true,
+            candidateCount: studentsToGenerate.length,
+            wouldGenerate: targets.length,
+            skippedExisting,
+            skippedProtected,
+            force,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      studentsToGenerate = targets;
+      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Processing ${studentsToGenerate.length} students (skipExisting=${skippedExisting} protected=${skippedProtected})`);
+
 
       let successCount = 0;
       let errorCount = 0;
