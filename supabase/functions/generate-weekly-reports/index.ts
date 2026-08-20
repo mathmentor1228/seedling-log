@@ -140,6 +140,9 @@ Deno.serve(async (req) => {
   let targetWeek: 'last' | 'current' = 'last';
   let targetWeekDate: string | null = null;
 
+  // WEEKLY-REPORT-SAFEPATH-V2: legacy RPC 자동 선택 차단
+  let legacyAllowed = false;
+
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
@@ -154,12 +157,25 @@ Deno.serve(async (req) => {
     else if (typeof body.target_week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.target_week)) {
       targetWeekDate = body.target_week;
     }
-    // WEEKLY-REPORT-REPAIR-V1: dry-run은 어떤 경로에서도 DB write가 없어야 하므로
-    // 항상 읽기 전용 계산 경로(direct_save 분기의 dry-run 반환)로 강제한다.
-    if (dryRun) useDirectSave = true;
+    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force)가 하나라도
+    // 명시되면 legacy_rpc 경로를 절대 선택하지 않고 안전 per-student 경로만 사용한다.
+    const usesNewApi =
+      body.target_week !== undefined || body.dry_run !== undefined || body.force !== undefined;
+    if (usesNewApi || dryRun) useDirectSave = true;
+
+    // legacy RPC는 명시적 mode='legacy_rpc' + 관리자 확인 플래그가 모두 있고,
+    // 새 API 파라미터가 전혀 없을 때만 허용한다.
+    legacyAllowed =
+      !usesNewApi &&
+      body.mode === 'legacy_rpc' &&
+      body.confirm_legacy_rpc === true;
   } catch {
     // Ignore JSON parse errors
   }
+
+  // 기본(파라미터 없는 스케줄/수동 호출)도 안전 경로로 강제
+  if (!legacyAllowed) useDirectSave = true;
+
 
 
 
