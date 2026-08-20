@@ -1,4 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// WEEKLY-REPORT-SAFETY-V1
+import {
+  scanSafety,
+  neutralParentTemplate,
+  neutralStudentTemplate,
+  CONTENT_SAFETY_RULES,
+} from './safety.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -321,8 +329,10 @@ Deno.serve(async (req) => {
 
       let successCount = 0;
       let errorCount = 0;
+      let validationFallbackCount = 0;
       const errors: string[] = [];
       const errorDetails: ErrorDetail[] = [];
+
 
       for (const student of studentsToGenerate) {
         // REPORT-ERROR-DETAIL-V1: Track state for error reporting
@@ -330,6 +340,9 @@ Deno.serve(async (req) => {
         let debugTotal = 0;
         let debugSubmitted = 0;
         let debugDraft = 0;
+        let safetyFallback = false;
+        let safetyViolations: string[] = [];
+
         try {
           console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Generating for ${student.name} (${student.id})`);
           currentStage = 'fetch_records';
@@ -344,7 +357,13 @@ Deno.serve(async (req) => {
                 week_start: weekStart,
                 week_end: weekEnd,
                 strict_narrative: strictNarrative,
+                // WEEKLY-REPORT-SAFETY-V1: 생성 단계 문안 규칙 강화
+                content_safety_rules: CONTENT_SAFETY_RULES,
+                forbid_counts: true,
+                forbid_future_promises: true,
+                observation_only: true,
               },
+
             });
           };
 
@@ -524,6 +543,48 @@ Deno.serve(async (req) => {
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
+          // WEEKLY-REPORT-SAFETY-V1: 저장 전 서버측 문안 검증 (외부 노출 텍스트 전체)
+          const hasLessonData = lessonCount > 0;
+          const externalText = [
+            aiReportData?.parent_message || '',
+            aiReportData?.student_message || '',
+            typeof aiReportData?.subject_breakdown === 'string'
+              ? aiReportData.subject_breakdown
+              : aiReportData?.subject_breakdown
+                ? JSON.stringify(aiReportData.subject_breakdown)
+                : '',
+          ].join('\n\n');
+
+          const safety = aiReportData
+            ? scanSafety(externalText, { hasLessonData })
+            : { pass: true, violations: [] as string[] };
+
+          if (aiReportData && !safety.pass) {
+            safetyFallback = true;
+            safetyViolations = safety.violations as string[];
+            validationFallbackCount++;
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=${safetyViolations.join(';')}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+            qualityTag = 'RED';
+            draftStatusToSave = 'needs_input';
+            console.warn(`[generate-weekly-reports] SAFETY_FALLBACK ${student.name}: ${safetyViolations.join(';')}`);
+          } else if (aiReportData && !hasLessonData) {
+            // 제출완료 수업기록 0건 → 평가 문안 대신 데이터 부족/관찰 필요 문안
+            safetyFallback = true;
+            safetyViolations = ['NO_LESSON_DATA'];
+            validationFallbackCount++;
+            const header = formatParentHeader(student.name, weekStart, weekEnd);
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=NO_LESSON_DATA`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, false)}`;
+            finalStudentMessageToSave = neutralStudentTemplate(false);
+            qualityTag = 'RED';
+            draftStatusToSave = 'needs_input';
+          }
+
+
+
           // Calculate stats
           let avgUnderstanding: number | null = null;
           let homeworkCompletionRate: number | null = null;
@@ -581,7 +642,7 @@ Deno.serve(async (req) => {
           }
 
           const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
-          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
+          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} validation_fallback=${safetyFallback} safety_violations=${safetyViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
           // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
           // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
@@ -694,7 +755,7 @@ Deno.serve(async (req) => {
         week_start: weekStart,
         week_end: weekEnd,
         status: errorCount === 0 ? 'completed' : 'partial',
-        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors${errorDetailsSummary}`,
+        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors, ${validationFallbackCount} validation_fallback${errorDetailsSummary}`,
         scheduler_source: schedulerSource,
         schedule_text: SCHEDULE_CONFIG.schedule_text,
       });
@@ -727,6 +788,7 @@ Deno.serve(async (req) => {
           count: studentIds?.length || 'all',
           successCount,
           errorCount,
+          validationFallbackCount,
           // REPORT-ERROR-PANEL-V1: Always include errors array (empty if none)
           errors: structuredErrors,
           _debug: {
