@@ -667,6 +667,78 @@ Deno.serve(async (req) => {
             draftStatusToSave = 'needs_input';
           }
 
+          // WEEKLY-REPORT-GROUNDEDNESS-V1: 저장 전 근거 대조.
+          // 제출된 수업일지 / 연결 숙제 / 시험 결과 원문에 없는 행동·표정·몸짓·도구·장면·감정·동기 서술은 제거한다.
+          if (aiReportData && !safetyFallback) {
+            currentStage = 'validate';
+            const { data: evidenceRows } = await supabase
+              .from('lesson_records')
+              .select(
+                'subject, lesson_range, notes, internal_notes, learning_issues_note, homework_check_note, next_lesson_goal, parent_direct_message, weekly_summary, test_name, test_content, test_result, test_result_text, test_notes, test_name_2, test_content_2, test_result_2, test_result_text_2, english_grammar_unit'
+              )
+              .eq('student_id', student.id)
+              .gte('lesson_date', weekStart)
+              .lte('lesson_date', weekEnd)
+              .eq('submitted', true);
+
+            const weekLessonIdsForEvidence = (lessons || []).map((l) => l.id);
+            const { data: hwEvidence } = weekLessonIdsForEvidence.length > 0
+              ? await supabase
+                  .from('homework_assignments')
+                  .select('content, notes, result, check_status')
+                  .eq('student_id', student.id)
+                  .in('lesson_record_id', weekLessonIdsForEvidence)
+              : { data: [] as any[] };
+
+            const evidenceText = [
+              ...(evidenceRows || []).map((r: any) => Object.values(r).filter((v) => typeof v === 'string').join(' ')),
+              ...(hwEvidence || []).map((h: any) => `${h.content || ''} ${h.notes || ''} ${h.result || ''}`),
+            ].join('\n');
+
+            const parentBody = stripMarkers(finalParentMessageToSave || '');
+            const studentBody = finalStudentMessageToSave || '';
+            const breakdownText =
+              typeof aiReportData?.subject_breakdown === 'string'
+                ? aiReportData.subject_breakdown
+                : aiReportData?.subject_breakdown
+                  ? JSON.stringify(aiReportData.subject_breakdown)
+                  : '';
+
+            const gParent = scanGroundedness(parentBody, evidenceText);
+            const gStudent = scanGroundedness(studentBody, evidenceText);
+            const gBreakdown = scanGroundedness(breakdownText, evidenceText);
+
+            if (!gParent.pass || !gStudent.pass || !gBreakdown.pass) {
+              const strippedParent = stripUngroundedSentences(parentBody, evidenceText);
+              const strippedStudent = gStudent.pass
+                ? studentBody
+                : stripUngroundedSentences(studentBody, evidenceText, 20);
+
+              safetyFallback = true;
+              safetyViolations = [...safetyViolations, 'UNGROUNDED_SCENE'];
+              validationFallbackCount++;
+              qualityTag = 'RED';
+              draftStatusToSave = 'needs_input';
+
+              const header = formatParentHeader(student.name, weekStart, weekEnd);
+              const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=RED validation_fallback=true violations=UNGROUNDED_SCENE`;
+
+              if (strippedParent && scanSafety(strippedParent, { hasLessonData }).pass) {
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${strippedParent}`;
+              } else {
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+              }
+              finalStudentMessageToSave =
+                strippedStudent && scanSafety(strippedStudent, { hasLessonData }).pass
+                  ? strippedStudent
+                  : neutralStudentTemplate(hasLessonData);
+
+              console.warn(
+                `[generate-weekly-reports] GROUNDEDNESS_FALLBACK ${student.name}: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
+              );
+            }
+          }
+
 
 
           // Calculate stats
