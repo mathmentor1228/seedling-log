@@ -843,8 +843,17 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           validationFallbackCount,
+          // WEEKLY-REPORT-BATCH-V1: 배치·재개 정보
+          batch_size: batchSize,
+          processed_this_batch: studentsToGenerate.length,
+          created: successCount,
+          skipped: skippedExisting + skippedProtected,
+          error_count: errorCount,
+          remaining_count: remainingCount + errorCount,
+          next_batch_needed: remainingCount + errorCount > 0,
           // REPORT-ERROR-PANEL-V1: Always include errors array (empty if none)
           errors: structuredErrors,
+
           _debug: {
             source: 'edge_function_direct_save_v2.4',
             scope,
