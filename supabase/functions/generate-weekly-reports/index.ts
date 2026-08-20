@@ -169,10 +169,18 @@ Deno.serve(async (req) => {
     else if (typeof body.target_week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.target_week)) {
       targetWeekDate = body.target_week;
     }
-    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force)가 하나라도
+    // WEEKLY-REPORT-BATCH-V1: batch_size는 1~20만 허용, 그 외/미지정은 20
+    if (body.batch_size !== undefined) {
+      const n = Number(body.batch_size);
+      batchSize = Number.isFinite(n) ? Math.min(20, Math.max(1, Math.floor(n))) : 20;
+    }
+    // WEEKLY-REPORT-SAFEPATH-V2: 새 API 파라미터(target_week/dry_run/force/batch_size)가 하나라도
     // 명시되면 legacy_rpc 경로를 절대 선택하지 않고 안전 per-student 경로만 사용한다.
     const usesNewApi =
-      body.target_week !== undefined || body.dry_run !== undefined || body.force !== undefined;
+      body.target_week !== undefined ||
+      body.dry_run !== undefined ||
+      body.force !== undefined ||
+      body.batch_size !== undefined;
     if (usesNewApi || dryRun) useDirectSave = true;
 
     // legacy RPC는 명시적 mode='legacy_rpc' + 관리자 확인 플래그가 모두 있고,
@@ -181,6 +189,7 @@ Deno.serve(async (req) => {
       !usesNewApi &&
       body.mode === 'legacy_rpc' &&
       body.confirm_legacy_rpc === true;
+
   } catch {
     // Ignore JSON parse errors
   }
