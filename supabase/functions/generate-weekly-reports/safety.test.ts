@@ -1,6 +1,6 @@
 // 순수 validator 테스트 (운영 DB 접근 없음)
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { scanSafety, neutralParentTemplate } from './safety.ts';
+import { scanSafety, neutralParentTemplate, neutralStudentTemplate } from './safety.ts';
 
 Deno.test('횟수 노출은 실패', () => {
   const r = scanSafety('이번 주 총 3회 수업을 진행했습니다.', { hasLessonData: true });
