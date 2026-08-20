@@ -60,6 +60,14 @@ const ANXIETY_PATTERNS: RegExp[] = [
   /(심각(한|합니다|해집니다)|위험(합니다|한\s*수준)|큰일|돌이킬\s*수\s*없|포기|가망|손을\s*놓|이대로라면\s*\S*(어렵|불가))/,
 ];
 
+
+// 7) WEEKLY-REPORT-TONE-V3: 직접적인 질책·낙인·실망 표현(완곡 표현으로 대체되어야 함)
+const HARSH_TONE_PATTERNS: RegExp[] = [
+  /(문제가\s*(많|심각|큽)|태도가\s*(좋지\s*않|불량)|실망(스럽|입니다|했습니다)|한심|형편없|엉망|기대에\s*못\s*미(칩니다|쳤습니다)|나태|안일)/,
+  /(제대로\s*(하지\s*않|안\s*하)|전혀\s*\S*지\s*않습니다|하려는\s*의지가\s*보이지\s*않)/,
+  /(반성|각성|분발)(이\s*필요합니다|해야\s*합니다)/,
+];
+
 const GROUPS: Array<{ type: SafetyViolation; patterns: RegExp[] }> = [
   { type: 'COUNT_EXPOSURE', patterns: COUNT_EXPOSURE_PATTERNS },
   { type: 'FUTURE_PROMISE', patterns: FUTURE_PROMISE_PATTERNS },
@@ -67,6 +75,7 @@ const GROUPS: Array<{ type: SafetyViolation; patterns: RegExp[] }> = [
   { type: 'COMPARISON', patterns: COMPARISON_PATTERNS },
   { type: 'TRAIT_ASSERTION', patterns: TRAIT_ASSERTION_PATTERNS },
   { type: 'ANXIETY', patterns: ANXIETY_PATTERNS },
+  { type: 'HARSH_TONE', patterns: HARSH_TONE_PATTERNS },
 ];
 
 export function scanSafety(
