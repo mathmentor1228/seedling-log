@@ -849,7 +849,16 @@ export default function Reports() {
           </Button>
         </div>
 
+      {/* WEEKLY-REPORT-REPAIR-V1: 생성 상태 패널 */}
+      <WeeklyReportGenerationStatus
+        weekStart={weekRange.start}
+        weekEnd={weekRange.end}
+        generating={generating}
+        onGenerateAll={() => handleGenerateReports('all')}
+      />
+
       {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}
+
       <Card className="border-primary/30">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
