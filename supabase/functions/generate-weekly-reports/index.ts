@@ -1,4 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// WEEKLY-REPORT-SAFETY-V1
+import {
+  scanSafety,
+  neutralParentTemplate,
+  neutralStudentTemplate,
+  CONTENT_SAFETY_RULES,
+} from './safety.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
