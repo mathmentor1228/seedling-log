@@ -808,6 +808,7 @@ Deno.serve(async (req) => {
         success: true,
         weekStart,
         weekEnd,
+        execution_mode: 'legacy_rpc',
         message: 'Weekly reports generated successfully (legacy mode)',
         schedulerSource,
         scope,
