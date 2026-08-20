@@ -581,32 +581,32 @@ Deno.serve(async (req) => {
           const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
           const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
-          // Upsert with quality tag
+          // WEEKLY-REPORT-SAFEPATH-V2: blind upsert 금지.
+          // 기존 행이 없으면 insert, force로 허용된 기존(비공개·미발송) 행만 id로 update.
           currentStage = 'save_report';
-          const { error: upsertError } = await supabase
-            .from('weekly_reports')
-            .upsert(
-              {
-                student_id: student.id,
-                week_start: weekStart,
-                week_end: weekEnd,
-                total_lessons: lessonCount,
-                avg_understanding: avgUnderstanding,
-                homework_completion_rate: homeworkCompletionRate,
-                common_issues: commonIssues,
-                risk_level: riskLevel,
-                summary: draftStatusToSave,
-                parent_message: finalParentMessageToSave,
-                student_message: finalStudentMessageToSave,
-                generated_at: new Date().toISOString(),
-                debug_info: debugInfoStr,
-                report_quality_tag: qualityTag,
-                parent_visible: false,
-              },
-              {
-                onConflict: 'student_id,week_start',
-              }
-            );
+          const payload = {
+            student_id: student.id,
+            week_start: weekStart,
+            week_end: weekEnd,
+            total_lessons: lessonCount,
+            avg_understanding: avgUnderstanding,
+            homework_completion_rate: homeworkCompletionRate,
+            common_issues: commonIssues,
+            risk_level: riskLevel,
+            summary: draftStatusToSave,
+            parent_message: finalParentMessageToSave,
+            student_message: finalStudentMessageToSave,
+            generated_at: new Date().toISOString(),
+            debug_info: debugInfoStr,
+            report_quality_tag: qualityTag,
+            parent_visible: false,
+          };
+
+          const existingRow = existingMap.get(student.id);
+          const { error: upsertError } = existingRow?.id
+            ? await supabase.from('weekly_reports').update(payload).eq('id', existingRow.id)
+            : await supabase.from('weekly_reports').insert(payload);
+
 
           if (upsertError) {
             console.error(`[generate-weekly-reports] Upsert error for ${student.name}:`, upsertError);
