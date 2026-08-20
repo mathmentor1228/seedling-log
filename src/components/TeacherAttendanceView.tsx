@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
 
 import { Badge } from '@/components/ui/badge';
@@ -359,12 +360,12 @@ export function TeacherAttendanceView() {
             const attendance = lesson?.attendance_status ?? [];
             const isEarly = attendance.includes('조기등원');
 
+            // ATTENDANCE-NORMALIZE-V1: 레거시 값('출석'/'결석'/'미등원')은 조회 시 정규화해 판정
             let status: AttendanceStatus = '미등원';
-            if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
-            else if (attendance.includes('지각')) status = '지각';
-            else if (attendance.includes('정상등원') || attendance.includes('출석') || isEarly) status = '등원';
+            if (isAbsent(attendance)) status = '결석';
+            else if (isLate(attendance)) status = '지각';
+            else if (isPresent(attendance) || isEarly) status = '등원';
             else if (log?.checked_in_at) status = '등원';
-            else if (attendance.includes('미등원')) status = '미등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
             else if (student.baseStatus === '등원') status = '등원';
@@ -481,7 +482,8 @@ export function TeacherAttendanceView() {
       } else if (newStatus === '지각') {
         lessonAttendanceStatus = ['지각'];
       } else if (newStatus === '미등원') {
-        lessonAttendanceStatus = ['미등원'];
+        // ATTENDANCE-NORMALIZE-V1: '미등원'은 표준값이 아니다 → 미기록(빈 배열)으로 되돌린다
+        lessonAttendanceStatus = [];
       } else if (newStatus === '등원') {
         // EARLY-ARRIVAL-GUARD-V1: block 임의 등원처리 well before class
         const [sh, sm] = activeSlot.startTime.split(':').map(Number);

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { CalendarIcon, Users, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -78,7 +79,7 @@ export default function HistoricalClassAttendance() {
         const statusMap = new Map<string, string>();
         (lessonRecords || []).forEach((r: any) => {
           const arr: string[] = r.attendance_status || [];
-          const status = arr.find((s) => s !== '정상등원') || arr[0] || null;
+          const status = getPrimaryAttendanceStatus(arr);
           if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
         });
 
@@ -118,9 +119,9 @@ export default function HistoricalClassAttendance() {
     slots.forEach((s) => {
       s.students.forEach((st) => {
         total++;
-        if (st.status === '정상등원') present++;
-        else if (st.status === '지각') { present++; late++; }
-        else if (st.status && (st.status.includes('결석') || st.status === '미등원')) absent++;
+        if (isLate(st.status)) { present++; late++; }
+        else if (isPresent(st.status)) present++;
+        else if (isAbsent(st.status)) absent++;
       });
     });
     return { total, present, late, absent };
@@ -186,7 +187,7 @@ export default function HistoricalClassAttendance() {
 
             <div className="space-y-2">
               {slots.map((s) => {
-                const present = s.students.filter((st) => st.status === '정상등원' || st.status === '지각').length;
+                const present = s.students.filter((st) => isPresent(st.status)).length;
                 return (
                   <div key={s.scheduleId} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -211,9 +212,9 @@ export default function HistoricalClassAttendance() {
                     {s.students.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1">
                         {s.students.map((st) => {
-                          const isPresent = st.status === '정상등원';
-                          const isLate = st.status === '지각';
-                          const isAbsent = st.status && (st.status.includes('결석') || st.status === '미등원');
+                          const late = isLate(st.status);
+                          const present = isPresent(st.status) && !late;
+                          const absentFlag = isAbsent(st.status);
                           const info = st.status ? STATUS_LABEL[st.status] : null;
                           return (
                             <span
