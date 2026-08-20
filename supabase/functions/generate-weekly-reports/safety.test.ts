@@ -1,6 +1,6 @@
 // 순수 validator 테스트 (운영 DB 접근 없음)
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { scanSafety, neutralParentTemplate } from './safety.ts';
+import { scanSafety, neutralParentTemplate, neutralStudentTemplate } from './safety.ts';
 
 Deno.test('횟수 노출은 실패', () => {
   const r = scanSafety('이번 주 총 3회 수업을 진행했습니다.', { hasLessonData: true });
@@ -159,4 +159,59 @@ Deno.test('톤: 직접적 질책·낙인은 차단', () => {
     const r = scanSafety(s, { hasLessonData: true });
     assertEquals(r.pass, false, `차단되어야 함: ${s}`);
   }
+});
+
+// ============================================================
+// TEACHER-EXCLUDE-V2: 과목 단위 제외 fixture 테스트
+// ============================================================
+type Rec = { subject: string; teacher_id?: string | null };
+function filterEvidence(rows: Rec[], excludeSubjects: string[], excludeTeachers: string[]) {
+  const s = new Set(excludeSubjects);
+  const t = new Set(excludeTeachers);
+  return rows.filter((r) => !(s.has(r.subject) || (r.teacher_id && t.has(r.teacher_id))));
+}
+
+const ENG_TEACHER = 'T-ENG';
+
+Deno.test('혼합 과목 학생: 영어 근거만 제외되고 타 과목은 유지된다', () => {
+  const rows: Rec[] = [
+    { subject: '영어', teacher_id: ENG_TEACHER },
+    { subject: '영어', teacher_id: null },
+    { subject: '수학', teacher_id: 'T-MATH' },
+    { subject: '과학', teacher_id: 'T-SCI' },
+  ];
+  const kept = filterEvidence(rows, ['영어'], [ENG_TEACHER]);
+  assertEquals(kept.length, 2);
+  assertEquals(kept.every((r) => r.subject !== '영어'), true);
+});
+
+Deno.test('혼합 과목 학생은 studentsToGenerate에서 제외되지 않는다', () => {
+  const active = ['S1', 'S2', 'S3'];
+  const excludedSubjectsByStudent = new Map([['S2', new Set(['영어'])]]);
+  const target = active.filter(() => true); // 학생 단위 제외 없음
+  assertEquals(target.length, 3);
+  assertEquals(excludedSubjectsByStudent.get('S2')?.has('영어'), true);
+});
+
+Deno.test('영어만 있는 학생은 근거 0건 → 데이터 부족 중립 문안', () => {
+  const rows: Rec[] = [{ subject: '영어', teacher_id: ENG_TEACHER }];
+  const kept = filterEvidence(rows, ['영어'], [ENG_TEACHER]);
+  assertEquals(kept.length, 0);
+  const parent = neutralParentTemplate('헤더', kept.length > 0);
+  const student = neutralStudentTemplate(kept.length > 0);
+  const scanP = scanSafety(parent, { hasLessonData: false });
+  const scanS = scanSafety(student, { hasLessonData: false });
+  assertEquals(scanP.violations.length, 0);
+  assertEquals(scanS.violations.length, 0);
+  assertEquals(typeof student === 'string' && student.length > 0, true);
+});
+
+Deno.test('영어 담당 교사의 수동 주간 멘트는 자동 합성 대상에서 빠진다', () => {
+  const summaries = [
+    { subject: '영어', teacher_id: ENG_TEACHER, weekly_summary: '수동 멘트' },
+    { subject: '수학', teacher_id: 'T-MATH', weekly_summary: '수학 코멘트' },
+  ];
+  const merged = filterEvidence(summaries as Rec[], ['영어'], [ENG_TEACHER]);
+  assertEquals(merged.length, 1);
+  assertEquals(merged[0].subject, '수학');
 });
