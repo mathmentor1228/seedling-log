@@ -51,6 +51,8 @@ import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportPromptSettings } from '@/components/ReportPromptSettings';
+import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGenerationStatus';
+
 import {
   AlertDialog,
   AlertDialogAction,
