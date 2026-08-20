@@ -914,34 +914,10 @@ Deno.serve(async (req) => {
           errors.push(`${student.name}: ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal}`);
           console.error(`[ERROR_DETAIL] ${student.name}: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`);
           
-          // Also store error in weekly_reports.debug_info for visibility in UI
-          // WEEKLY-REPORT-REPAIR-V1: 기존 리포트가 있으면 오류 행으로 덮어쓰지 않는다.
-          // WEEKLY-REPORT-BATCH-V1: 타임아웃 학생은 오류로만 집계하고 행을 만들지 않는다.
-          const isTimeout = errMsg.includes('AI_CALL_TIMEOUT');
+          // WEEKLY-REPORT-FALLBACK-V4: 오류 학생은 리포트 행을 만들지 않는다.
+          // (NULL 문안 / RED / debug 표식 행 저장 금지 — 진단은 로그와 weekly_jobs_log로만 남긴다.)
+          console.warn('[generate-weekly-reports] Skipped row creation (error path)');
           try {
-            const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
-            if (isTimeout) {
-              console.warn('[generate-weekly-reports] Skipped row creation (AI_CALL_TIMEOUT)');
-            } else if (!existingMap.has(student.id)) {
-              await supabase
-                .from('weekly_reports')
-                .insert({
-                  student_id: student.id,
-                  week_start: weekStart,
-                  week_end: weekEnd,
-                  total_lessons: 0,
-                  risk_level: 'high',
-                  summary: 'error',
-                  parent_message: null,
-                  student_message: null,
-                  generated_at: new Date().toISOString(),
-                  debug_info: errorDebugStr,
-                  report_quality_tag: 'RED',
-                  parent_visible: false,
-                });
-            } else {
-              console.warn('[generate-weekly-reports] Skipped error-row overwrite (existing report)');
-            }
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
           }
