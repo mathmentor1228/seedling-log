@@ -369,6 +369,32 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
         </CardContent>
       </Card>
 
+      {/* CLOSEOUT-ATT-GATE-V1: 수업출결 미선택 안내 */}
+      {finalizeBlocked && (
+        <div
+          data-testid="closeout-unmarked-banner"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2"
+        >
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            수업출결 미선택 {unmarkedStudents.length}명 — 마감할 수 없습니다
+          </p>
+          <p className="text-[11px] text-amber-700/90 dark:text-amber-300/90 break-words">
+            {unmarkedStudents.map((s) => s.name).join(', ')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={applyAllPresent}>
+              미기록 전원 정상등원
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={applyAllUnmarkedAbsent}>
+              미기록 전원 인정결석
+            </Button>
+          </div>
+        </div>
+      )}
+
+
+
       {/* 공통 진도 / 숙제 */}
       <Card>
         <CardContent className="p-4 space-y-3">
