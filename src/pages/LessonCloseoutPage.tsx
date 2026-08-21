@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LessonCloseoutForm, UNSAVED_CONFIRM_MESSAGE } from '@/components/lessons/LessonCloseoutForm';
 import { Button } from '@/components/ui/button';
