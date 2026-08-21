@@ -16,7 +16,7 @@ import {
   type ClassDayGroup,
 } from './usePrincipalAlerts';
 
-type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_gap' | 'no_check_in';
+type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_gap' | 'no_check_in' | 'job_failure';
 
 interface ActionItem {
   key: ItemKey;
@@ -107,7 +107,7 @@ export function PrincipalActionCenter({
     ];
     if (alerts.jobFailures > 0) {
       list.push({
-        key: 'not_started',
+        key: 'job_failure',
         label: '자동 작업 실패',
         basis: `최근 ${ALERT_WINDOW_DAYS}일 · 주간 리포트 자동 생성 작업 실패`,
         count: alerts.jobFailures,
@@ -157,7 +157,14 @@ export function PrincipalActionCenter({
               <button
                 key={`${it.key}-${it.label}`}
                 type="button"
-                onClick={() => (it.groups ? setDetail(it) : onOpenNoCheckIn())}
+                onClick={() => {
+                  if (it.key === 'not_started' || it.key === 'in_progress') {
+                    navigate(`/admin/unclosed?days=${ALERT_WINDOW_DAYS}&status=${it.key}`);
+                    return;
+                  }
+                  if (it.groups) setDetail(it);
+                  else onOpenNoCheckIn();
+                }}
                 className={cn(
                   'text-left rounded-xl border p-3 transition-colors hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/40 min-w-0',
                   TONE[it.tone]
@@ -179,9 +186,15 @@ export function PrincipalActionCenter({
           </div>
         )}
 
+        {!alerts.loading && !alerts.error && (
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate(`/admin/unclosed?days=${ALERT_WINDOW_DAYS}`)}>
+            강사별 미마감 관리 열기
+          </Button>
+        )}
+
         {!alerts.loading && !alerts.error && problems.length > 0 && (
           <p className="text-[11px] text-muted-foreground">
-            숫자를 누르면 해당 반·날짜 목록으로 이동합니다. 완료된 정상 건은 목록에 표시하지 않습니다.
+            미작성·작성 중 숫자를 누르면 강사별 미마감 화면으로, 그 외 숫자는 해당 반·날짜 목록으로 이동합니다. 완료된 정상 건은 목록에 표시하지 않습니다.
           </p>
         )}
       </CardContent>
