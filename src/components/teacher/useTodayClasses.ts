@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
+import { isPresent, isUnrecorded } from '@/lib/attendance';
 
 export type ClassCardState = 'before' | 'ongoing' | 'needs_close' | 'closed';
 
@@ -16,7 +17,12 @@ export interface TodayClassCard {
   endTime: string;
   classroomName: string | null;
   studentCount: number;
+  /** attendance_logs.checked_in_at 기준 '입실' 인원 (출입 태그) */
   checkedInCount: number;
+  /** lesson_records.attendance_status 가 명시적으로 기록된 '수업출결' 인원 (교사 판단) */
+  classAttendanceCount: number;
+  /** 수업출결은 출석 취급인데 당일 입실 로그가 없는 인원 (중립 안내용) */
+  missingCheckInCount: number;
   recordedCount: number;
   submittedCount: number;
   state: ClassCardState;
@@ -130,9 +136,12 @@ export function useTodayClasses(teacherId: string, date?: string): TodayClassesD
         const checkedIn = new Set(
           (logsRes.data || []).filter((l: any) => l.checked_in_at).map((l: any) => l.student_id)
         );
-        const recMap = new Map<string, { submitted: boolean }>();
+        const recMap = new Map<string, { submitted: boolean; attendance: string[] }>();
         (recRes.data || []).forEach((r: any) => {
-          recMap.set(`${r.student_id}:${r.class_id || 'null'}`, { submitted: !!r.submitted });
+          recMap.set(`${r.student_id}:${r.class_id || 'null'}`, {
+            submitted: !!r.submitted,
+            attendance: Array.isArray(r.attendance_status) ? r.attendance_status : [],
+          });
         });
 
         const now = nowHHMM();
@@ -167,6 +176,13 @@ export function useTodayClasses(teacherId: string, date?: string): TodayClassesD
             classroomName: r.classrooms?.name || null,
             studentCount: memberIds.length,
             checkedInCount: memberIds.filter((id) => checkedIn.has(id)).length,
+            classAttendanceCount: memberIds.filter(
+              (id) => !isUnrecorded(recMap.get(`${id}:${r.class_id}`)?.attendance ?? [])
+            ).length,
+            missingCheckInCount: memberIds.filter(
+              (id) =>
+                isPresent(recMap.get(`${id}:${r.class_id}`)?.attendance ?? []) && !checkedIn.has(id)
+            ).length,
             recordedCount: recorded,
             submittedCount: submitted,
             state,

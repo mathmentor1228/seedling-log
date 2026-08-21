@@ -321,7 +321,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
             {subject && <Badge variant="outline" className="text-[10px]">{subject}</Badge>}
             <Badge variant="secondary" className="text-[10px] tabular-nums">{date}</Badge>
             <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
-              출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
+              수업출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
             </span>
           </div>
 
@@ -401,7 +401,8 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                   {s.submitted && <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30" variant="outline">마감됨</Badge>}
                 </div>
 
-                {/* 출결 */}
+                {/* 수업출결 (교사 판단) — 저장 컬럼은 attendance_status 그대로 */}
+                <p className="text-[10px] font-semibold text-muted-foreground">수업출결 <span className="font-normal">(교사 판단 · 출입 태그와 별개)</span></p>
                 <div className="flex flex-wrap gap-1">
                   {ATT_OPTIONS.map((opt) => {
                     const active = s.attendance.includes(opt);

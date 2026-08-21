@@ -33,6 +33,8 @@ interface StudentAttendance {
   school: string | null;
   grade: string | null;
   status: AttendanceStatus;
+  /** 상태 판정 원천: 'lesson' = 수업일지 수업출결(교사 판단), 'log' = 출입 태그 입실 로그 */
+  statusSource?: 'lesson' | 'log' | 'none';
   checkedInAt?: string | null;
   isEarly?: boolean;
 }
@@ -79,6 +81,16 @@ function StudentRow({ student, onStatusChange, isLoading }: {
               student.status === '지각' ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"
             )}>
               {timeLabel}
+            </span>
+          )}
+          {student.statusSource === 'lesson' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground" title="수업일지에 교사가 기록한 출결">
+              수업출결
+            </span>
+          )}
+          {student.statusSource === 'log' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground" title="출입 태그 입실 로그 기준">
+              입실 상태
             </span>
           )}
           {student.isEarly && (
@@ -362,6 +374,9 @@ export function TeacherAttendanceView() {
 
             // ATTENDANCE-NORMALIZE-V1: 레거시 값('출석'/'결석'/'미등원')은 조회 시 정규화해 판정
             let status: AttendanceStatus = '미등원';
+            let statusSource: 'lesson' | 'log' | 'none' = 'none';
+            if (isAbsent(attendance) || isLate(attendance) || isPresent(attendance) || isEarly) statusSource = 'lesson';
+            else if (log?.checked_in_at) statusSource = 'log';
             if (isAbsent(attendance)) status = '결석';
             else if (isLate(attendance)) status = '지각';
             else if (isPresent(attendance) || isEarly) status = '등원';
@@ -376,6 +391,7 @@ export function TeacherAttendanceView() {
               school: student.school,
               grade: student.grade,
               status,
+              statusSource,
               checkedInAt: log?.checked_in_at ?? null,
               isEarly,
             } as StudentAttendance;
