@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
 import { getCardDisplay, type CardDisplayState } from '@/components/teacher/cardStatus';
-import { isAbsent, isPresent } from '@/lib/attendance';
+import { isPresent } from '@/lib/attendance';
 
 export const ALERT_WINDOW_DAYS = 14;
 
@@ -113,7 +113,7 @@ export function usePrincipalAlerts(): PrincipalAlerts {
         if (hasContent) acc.recorded += 1;
         if (r.submitted) acc.submitted += 1;
         if (!r.submitted && !hasAttendance) acc.unsetAttendance += 1;
-        const presentish = statuses.some((s) => isPresent(s) && !isAbsent(s));
+        const presentish = isPresent(statuses);
         if (presentish && r.student_id && !checkedIn.has(`${r.student_id}:${r.lesson_date}`)) acc.gap += 1;
         map.set(key, acc);
       });
