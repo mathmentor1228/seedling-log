@@ -230,7 +230,7 @@ export function LessonCloseoutForm({ classId, date, onClose }: Props) {
       for (const s of students) {
         const attendance = toStorageAttendanceStatuses(s.attendance);
         const disabled = scoreDisabled(lessonTypes, attendance);
-        const payload: Record<string, any> = {
+        const payload = {
           teacher_id: user.id,
           student_id: s.id,
           class_id: classId,
@@ -245,7 +245,7 @@ export function LessonCloseoutForm({ classId, date, onClose }: Props) {
           internal_notes: s.internalNotes.trim() || null,
           lesson_types: lessonTypes.length > 0 ? lessonTypes : ['정규수업'],
           attendance_status: attendance,
-        };
+        } as Record<string, any> & { student_id: string; subject: string; lesson_date: string };
         if (finalize) {
           payload.submitted = true;
           payload.submitted_at = new Date().toISOString();
