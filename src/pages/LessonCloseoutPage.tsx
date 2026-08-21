@@ -11,6 +11,13 @@ function LessonCloseoutContent() {
   const navigate = useNavigate();
   const classId = params.get('classId') || '';
   const date = params.get('date') || getTodayKST();
+  const dirtyRef = useRef(false);
+  const handleDirtyChange = useCallback((d: boolean) => { dirtyRef.current = d; }, []);
+  const guardedBack = useCallback(() => {
+    if (dirtyRef.current && !window.confirm(UNSAVED_CONFIRM_MESSAGE)) return;
+    dirtyRef.current = false;
+    navigate(-1);
+  }, [navigate]);
 
   if (!classId) {
     return <p className="p-6 text-sm text-muted-foreground">반 정보가 없습니다. 교사 홈에서 수업을 선택해 주세요.</p>;
