@@ -116,6 +116,27 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
           };
         });
         setRows(built);
+
+        // 조회 기간 '이전'에 남아 있는 미마감 건수 (기존 권한 그대로, 읽기 전용)
+        const [olderCntRes, olderFirstRes] = await Promise.all([
+          supabase
+            .from('lesson_records')
+            .select('id', { count: 'exact', head: true })
+            .eq('teacher_id', teacherId)
+            .eq('submitted', false)
+            .lt('lesson_date', startDate),
+          supabase
+            .from('lesson_records')
+            .select('lesson_date')
+            .eq('teacher_id', teacherId)
+            .eq('submitted', false)
+            .lt('lesson_date', startDate)
+            .order('lesson_date', { ascending: true })
+            .limit(1),
+        ]);
+        if (cancelled) return;
+        setOlderCount((olderCntRes as any)?.count || 0);
+        setOlderEarliest((olderFirstRes as any)?.data?.[0]?.lesson_date || null);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || '수업 기록을 불러오지 못했습니다.');
       } finally {
