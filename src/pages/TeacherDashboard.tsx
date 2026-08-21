@@ -6,6 +6,8 @@ import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
 import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
+import { TeacherTodayBoard } from '@/components/teacher/TeacherTodayBoard';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 function LiveClock() {
@@ -24,11 +26,26 @@ const TEACHER_TABS = ['📋 출결 현황', '📊 수업 관리'] as const;
 
 function TeacherSideBySide() {
   const [mobileTab, setMobileTab] = useState<number>(0);
+  const [showLegacyWidgets, setShowLegacyWidgets] = useState(false);
 
   return (
     <div className="space-y-3">
-      <PrepLectureProposalsWidget />
-      <WeeklySummaryWidget />
+      {/* TEACHER-TODAY-V1: 오늘 업무 중심 상단 */}
+      <TeacherTodayBoard />
+
+      <button
+        onClick={() => setShowLegacyWidgets((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {showLegacyWidgets ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        내신특강 제안 · 주간 요약 위젯
+      </button>
+      {showLegacyWidgets && (
+        <div className="space-y-3">
+          <PrepLectureProposalsWidget />
+          <WeeklySummaryWidget />
+        </div>
+      )}
       <div className="flex lg:hidden justify-center gap-2">
         {TEACHER_TABS.map((label, i) => (
           <button
