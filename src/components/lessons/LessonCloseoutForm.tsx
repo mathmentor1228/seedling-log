@@ -231,9 +231,27 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     submitted: students.filter((s) => s.submitted).length,
   }), [students]);
 
+  // CLOSEOUT-ATT-GATE-V1: 수업출결 미선택은 정상등원으로 암묵 처리하지 않는다.
+  const unmarkedStudents = useMemo(
+    () => students.filter((s) => s.attendance.length === 0),
+    [students]
+  );
+  const finalizeBlocked = unmarkedStudents.length > 0;
+
   const persist = async (finalize: boolean) => {
     if (savingRef.current) return;
     if (!user?.id) return;
+    if (finalize && finalizeBlocked) {
+      setSaveError(
+        `수업출결 미선택 ${unmarkedStudents.length}명이 있어 마감할 수 없습니다. 각 학생의 수업출결을 선택하거나 '미기록 전원 정상등원'을 사용하세요.`
+      );
+      toast({
+        title: '수업출결 미선택',
+        description: `${unmarkedStudents.length}명의 수업출결을 먼저 선택해 주세요.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
