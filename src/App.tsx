@@ -33,6 +33,7 @@ const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
 const AssistantDashboardPage = lazy(() => import("./pages/AssistantDashboardPage"));
 const ParentDashboardPage = lazy(() => import("./pages/ParentDashboardPage"));
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const StudentKartePage = lazy(() => import("./pages/StudentKartePage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const LessonsPage = lazy(() => import("./pages/LessonsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
@@ -175,6 +176,7 @@ const App = () => (
                 {/* Admin App Routes */}
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/students" element={<StudentsPage />} />
+                <Route path="/students/:studentId/karte" element={<StudentKartePage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />

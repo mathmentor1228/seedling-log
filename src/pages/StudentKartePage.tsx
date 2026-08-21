@@ -277,7 +277,7 @@ function KarteContent() {
 
 export default function StudentKartePage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']} allowedEmails={['bfkor8810@naver.com']}>
+    <ProtectedRoute allowedRoles={['admin']}>
       <KarteContent />
     </ProtectedRoute>
   );

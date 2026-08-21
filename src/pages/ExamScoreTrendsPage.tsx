@@ -1,3 +1,4 @@
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 // EXAM-SCORE-TRENDS-V1: 학생별 내신 성적 추이 + 가장 많이 오른 학생 랭킹
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,7 +52,7 @@ function periodSortKey(year: number | null, period: string | null) {
   return (year ?? 0) * 10 + (period ? m[period] ?? 0 : 0);
 }
 
-export default function ExamScoreTrendsPage() {
+function ExamScoreTrendsContent() {
   const [rows, setRows] = useState<Row[]>([]);
   const [students, setStudents] = useState<Record<string, Student>>({});
   const [loading, setLoading] = useState(true);
@@ -502,5 +503,13 @@ function StudentTrendCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+export default function ExamScoreTrendsPage() {
+  return (
+    <ProtectedRoute allowedRoles={['admin', 'teacher']} noLayout>
+      <ExamScoreTrendsContent />
+    </ProtectedRoute>
   );
 }
