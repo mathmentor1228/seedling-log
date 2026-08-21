@@ -77,7 +77,7 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
       try {
         const { data, error: err } = await supabase
           .from('lesson_records')
-          .select('id, lesson_date, class_id, student_id, subject, attendance_status, submitted, understanding_score, lesson_range, individual_progress, homework_status, next_homework, students(name), classes(name)')
+          .select('id, lesson_date, class_id, student_id, subject, attendance_status, submitted, understanding_score, lesson_range, homework_status, next_lesson_goal, students(name), classes(name)')
           .eq('teacher_id', teacherId)
           .gte('lesson_date', startDate)
           .lte('lesson_date', endDate)
@@ -85,8 +85,8 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
         if (err) throw err;
         if (cancelled) return;
         const built: Row[] = (data || []).map((r: any) => {
-          const hasProgress = !!(r.lesson_range || r.individual_progress);
-          const hasHomework = !!(r.next_homework || (r.homework_status && r.homework_status !== 'none_assigned'));
+          const hasProgress = !!(r.lesson_range && String(r.lesson_range).trim());
+          const hasHomework = !!(r.homework_status && r.homework_status !== 'none_assigned');
           const touched =
             hasProgress ||
             hasHomework ||
