@@ -10,14 +10,9 @@ import { Input } from '@/components/ui/input';
 import { cn, getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar } from 'lucide-react';
-import { useTodayClasses, type ClassCardState, type TodayClassCard } from './useTodayClasses';
+import { useTodayClasses, type TodayClassCard } from './useTodayClasses';
+import { getCardDisplay } from './cardStatus';
 
-const STATE_META: Record<ClassCardState, { label: string; chip: string; cta: string }> = {
-  before: { label: '수업 전', chip: 'bg-muted text-muted-foreground border-border', cta: '미리 준비' },
-  ongoing: { label: '진행 중', chip: 'bg-blue-500/15 text-blue-600 border-blue-500/30', cta: '수업 마감' },
-  needs_close: { label: '마감 필요', chip: 'bg-amber-500/15 text-amber-600 border-amber-500/30', cta: '이어서 마감' },
-  closed: { label: '마감 완료', chip: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', cta: '보기·수정' },
-};
 
 function formatKoreanDay(dateStr: string): string {
   return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', { weekday: 'long' });
@@ -37,7 +32,7 @@ function findRecentClassDate(selectedDate: string, activeDays: number[]): string
 }
 
 function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: string; onOpen: () => void }) {
-  const meta = STATE_META[card.state];
+  const meta = getCardDisplay(card);
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
       <div className="text-center shrink-0 w-14">
@@ -53,15 +48,16 @@ function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: stri
           </span>
         </div>
         <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{card.studentCount}명</span>
-          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />입실 {card.checkedInCount}/{card.studentCount}</span>
+          <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />학생 {card.studentCount}명</span>
+          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />출결 {card.checkedInCount}/{card.studentCount}</span>
           <span>일지 {card.submittedCount}/{card.studentCount}</span>
           {card.classroomName && <span>· {card.classroomName}</span>}
         </p>
       </div>
-      <Button size="sm" variant={card.state === 'closed' ? 'outline' : 'default'} onClick={onOpen} className="shrink-0">
+      <Button size="sm" variant={meta.ctaVariant} onClick={onOpen} className="shrink-0">
         {meta.cta}
       </Button>
+
     </div>
   );
 }
