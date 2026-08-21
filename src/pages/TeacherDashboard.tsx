@@ -73,7 +73,10 @@ function TeacherSideBySide() {
             <div className="flex items-center justify-between p-4 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">📋</span>
-                <h2 className="text-sm font-bold text-foreground">출결 현황</h2>
+                <h2 className="text-sm font-bold text-foreground">오늘 실시간 출결</h2>
+                <span className="text-[10px] text-muted-foreground">
+                  {getTodayKST().replace(/-/g, '.')} ({formatKoreanDay(getTodayKST())})
+                </span>
               </div>
               <LiveClock />
             </div>
