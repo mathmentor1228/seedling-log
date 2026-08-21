@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST } from '@/lib/utils';
 import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
 import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { TeacherTodayBoard } from '@/components/teacher/TeacherTodayBoard';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+
+function formatKoreanDay(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', { weekday: 'long' });
+}
 
 /* ------------------------------------------------------------------ */
 function LiveClock() {
