@@ -1061,6 +1061,18 @@ export default function Students() {
                                 {iss.label}
                               </button>
                             ))}
+                            {isAdmin(role) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={() => navigate(`/students/${student.id}/karte`)}
+                                title="학생 카르테 보기"
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                카르테
+                              </Button>
+                            )}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                               {isAdmin(role) && (
                                 <>
