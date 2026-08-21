@@ -60,13 +60,16 @@ interface StudentState {
   expanded: boolean;
 }
 
+export const UNSAVED_CONFIRM_MESSAGE = '저장하지 않은 변경사항이 있습니다. 나가시겠습니까?';
+
 interface Props {
   classId: string;
   date: string;
   onClose?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function LessonCloseoutForm({ classId, date, onClose }: Props) {
+export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -185,6 +188,16 @@ export function LessonCloseoutForm({ classId, date, onClose }: Props) {
   }, [classId, date]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 상위 페이지(뒤로 버튼)와 dirty 상태 공유
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]);
+
+  const handleClose = () => {
+    if (!onClose) return;
+    if (dirty && !window.confirm(UNSAVED_CONFIRM_MESSAGE)) return;
+    onClose();
+  };
 
   // 페이지 이탈 경고
   useEffect(() => {
@@ -510,7 +523,7 @@ export function LessonCloseoutForm({ classId, date, onClose }: Props) {
           )}
           <div className="flex gap-2">
             {onClose && (
-              <Button variant="ghost" onClick={onClose} disabled={saving} className="shrink-0">닫기</Button>
+              <Button variant="ghost" onClick={handleClose} disabled={saving} className="shrink-0">닫기</Button>
             )}
             <Button variant="outline" onClick={() => persist(false)} disabled={saving || students.length === 0} className="flex-1">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
