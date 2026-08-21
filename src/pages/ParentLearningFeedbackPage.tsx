@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +48,7 @@ interface ActiveStudent { id: string; name: string; school_level: string | null;
 
 interface SendResult { student_id: string; student_name: string; ok?: boolean; reason?: string; }
 
-export default function ParentLearningFeedbackPage() {
+function ParentLearningFeedbackContent() {
   const { role } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [activeStudents, setActiveStudents] = useState<ActiveStudent[]>([]);
@@ -403,5 +404,13 @@ export default function ParentLearningFeedbackPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function ParentLearningFeedbackPage() {
+  return (
+    <ProtectedRoute allowedRoles={['admin']} noLayout>
+      <ParentLearningFeedbackContent />
+    </ProtectedRoute>
   );
 }

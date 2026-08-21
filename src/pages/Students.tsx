@@ -32,7 +32,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles, ChevronUp, ChevronDown, AlertCircle, Phone, GraduationCap, BookOpen, Users as UsersIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles, ChevronUp, ChevronDown, AlertCircle, Phone, GraduationCap, BookOpen, Users as UsersIcon, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sheet,
   SheetContent,
@@ -74,6 +75,7 @@ interface Student {
 
 export default function Students() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1061,6 +1063,18 @@ export default function Students() {
                                 {iss.label}
                               </button>
                             ))}
+                            {isAdmin(role) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[10px]"
+                                onClick={() => navigate(`/students/${student.id}/karte`)}
+                                title="학생 카르테 보기"
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                카르테
+                              </Button>
+                            )}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                               {isAdmin(role) && (
                                 <>
