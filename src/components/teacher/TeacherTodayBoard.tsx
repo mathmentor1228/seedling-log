@@ -1,6 +1,6 @@
 // TEACHER-TODAY-V1
 // 교사 홈 상단: 오늘 수업 요약 + 반별 카드 (읽기 전용, 저장은 마감 화면에서만)
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn, getTodayKST } from '@/lib/utils';
-import { Loader2, AlertTriangle, RefreshCw, Users, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar } from 'lucide-react';
 import { useTodayClasses, type ClassCardState, type TodayClassCard } from './useTodayClasses';
 
 const STATE_META: Record<ClassCardState, { label: string; chip: string; cta: string }> = {
@@ -17,6 +18,23 @@ const STATE_META: Record<ClassCardState, { label: string; chip: string; cta: str
   needs_close: { label: '마감 필요', chip: 'bg-amber-500/15 text-amber-600 border-amber-500/30', cta: '이어서 마감' },
   closed: { label: '마감 완료', chip: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30', cta: '보기·수정' },
 };
+
+function formatKoreanDay(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', { weekday: 'long' });
+}
+
+function findRecentClassDate(selectedDate: string, activeDays: number[]): string | null {
+  if (!activeDays.length) return null;
+  const activeSet = new Set(activeDays);
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(`${selectedDate}T12:00:00+09:00`);
+    d.setDate(d.getDate() - i);
+    if (activeSet.has(d.getDay())) {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+  return null;
+}
 
 function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: string; onOpen: () => void }) {
   const meta = STATE_META[card.state];
@@ -52,7 +70,24 @@ export function TeacherTodayBoard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [date, setDate] = useState(getTodayKST());
+  const [activeDays, setActiveDays] = useState<number[]>([]);
   const { cards, missedCount, loading, error, reload } = useTodayClasses(user?.id || '', date);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    supabase
+      .from('class_schedules')
+      .select('day_of_week')
+      .eq('teacher_id', user.id)
+      .eq('is_active', true)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const days = [...new Set((data || []).map((r: any) => r.day_of_week))];
+        setActiveDays(days);
+      });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const stats = useMemo(() => {
     const total = cards.length;
@@ -63,6 +98,9 @@ export function TeacherTodayBoard() {
   const open = (card: TodayClassCard) => {
     navigate(`/lessons/close?classId=${card.classId}&date=${date}&scheduleId=${card.scheduleId}`);
   };
+
+  const selectedDayLabel = formatKoreanDay(date);
+  const recentDate = useMemo(() => findRecentClassDate(date, activeDays), [date, activeDays]);
 
   return (
     <Card className="border-primary/20">
@@ -79,6 +117,10 @@ export function TeacherTodayBoard() {
               onChange={(e) => setDate(e.target.value || getTodayKST())}
               className="h-8 w-[150px] text-xs"
             />
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {selectedDayLabel}
+            </span>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={reload} aria-label="새로고침">
               <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             </Button>
@@ -115,7 +157,21 @@ export function TeacherTodayBoard() {
         ) : error ? (
           <p className="text-xs text-destructive py-3">{error}</p>
         ) : cards.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-4 text-center">선택한 날짜에 배정된 정규 수업이 없습니다.</p>
+          <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-5 text-center space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {selectedDayLabel}에는 배정된 수업이 없습니다.
+            </p>
+            {recentDate && recentDate !== date && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setDate(recentDate)}
+                className="text-xs"
+              >
+                가장 최근 수업일 보기 ({recentDate.replace(/-/g, '.').slice(5)} {formatKoreanDay(recentDate)})
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="space-y-2">
             {cards.map((c) => (
