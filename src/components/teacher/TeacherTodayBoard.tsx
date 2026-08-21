@@ -32,7 +32,7 @@ function findRecentClassDate(selectedDate: string, activeDays: number[]): string
 }
 
 function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: string; onOpen: () => void }) {
-  const meta = STATE_META[card.state];
+  const meta = getCardDisplay(card);
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
       <div className="text-center shrink-0 w-14">
@@ -48,15 +48,16 @@ function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: stri
           </span>
         </div>
         <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{card.studentCount}명</span>
-          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />입실 {card.checkedInCount}/{card.studentCount}</span>
+          <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />학생 {card.studentCount}명</span>
+          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />출결 {card.checkedInCount}/{card.studentCount}</span>
           <span>일지 {card.submittedCount}/{card.studentCount}</span>
           {card.classroomName && <span>· {card.classroomName}</span>}
         </p>
       </div>
-      <Button size="sm" variant={card.state === 'closed' ? 'outline' : 'default'} onClick={onOpen} className="shrink-0">
+      <Button size="sm" variant={meta.ctaVariant} onClick={onOpen} className="shrink-0">
         {meta.cta}
       </Button>
+
     </div>
   );
 }
