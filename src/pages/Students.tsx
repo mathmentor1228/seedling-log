@@ -32,7 +32,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles, ChevronUp, ChevronDown, AlertCircle, Phone, GraduationCap, BookOpen, Users as UsersIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles, ChevronUp, ChevronDown, AlertCircle, Phone, GraduationCap, BookOpen, Users as UsersIcon, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sheet,
   SheetContent,
