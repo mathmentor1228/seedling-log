@@ -1,5 +1,5 @@
 // STUDENT-KARTE-V1 — 순수 계산 유틸 (읽기 전용, 저장/판단 점수 없음)
-import { getAttendanceCategory, isUnrecorded } from '@/lib/attendance';
+import { getAttendanceCategory, isAbsent, isUnrecorded } from '@/lib/attendance';
 
 export interface KarteLesson {
   id: string;
@@ -89,12 +89,12 @@ export function summarizeKarte(params: {
       if (unrecorded) attendanceUnset += 1;
     }
     const cats = statuses.map(getAttendanceCategory);
-    if (cats.some((c) => c === 'absent' || c === 'unauthorized_absent')) absent += 1;
+    const absentHere = isAbsent(statuses);
+    if (absentHere) absent += 1;
     if (cats.includes('late')) late += 1;
     if (cats.includes('early_leave')) earlyLeave += 1;
     const presentish =
-      !cats.some((c) => c === 'absent' || c === 'unauthorized_absent') &&
-      cats.some((c) => c === 'present' || c === 'late' || c === 'early_leave');
+      !absentHere && cats.some((c) => c === 'present' || c === 'late' || c === 'early_leave');
     if (presentish && !checkedInDates.has(l.lesson_date)) checkInGap += 1;
   }
 
