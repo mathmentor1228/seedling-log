@@ -523,7 +523,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
           )}
           <div className="flex gap-2">
             {onClose && (
-              <Button variant="ghost" onClick={onClose} disabled={saving} className="shrink-0">닫기</Button>
+              <Button variant="ghost" onClick={handleClose} disabled={saving} className="shrink-0">닫기</Button>
             )}
             <Button variant="outline" onClick={() => persist(false)} disabled={saving || students.length === 0} className="flex-1">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
