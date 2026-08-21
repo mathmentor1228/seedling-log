@@ -11,6 +11,7 @@ import {
   CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, LogIn, LogOut, Users,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
@@ -520,13 +521,19 @@ function PrincipalContent() {
 
       <PageTransition>
         <div className="space-y-5">
-          {/* 출석 현황 — 클릭 시 학생 명단 모달 */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* PRINCIPAL-ACTION-V1 — 행동이 필요한 항목만 최상단 */}
+          <PrincipalActionCenter
+            todayNoCheckInCount={absentCount}
+            onOpenNoCheckIn={() => setDetailOpen('absent')}
+          />
+
+          {/* 오늘 출입 태그 요약 (문제 없음 항목은 여기서 요약만) */}
+          <div className="grid grid-cols-2 gap-3">
             <StatCard
               icon={CheckCircle}
-              label="전체 출석률"
+              label="오늘 입실률"
               value={attendanceRate}
-              sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`}
+              sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 · 출입 태그 기준`}
               color="green"
               onClick={() => setDetailOpen('rate')}
             />
@@ -534,19 +541,12 @@ function PrincipalContent() {
               icon={Clock}
               label="지각"
               value={lateCount}
-              sub="오늘 기준"
+              sub="오늘 · 출입 태그 기준"
               color="orange"
               onClick={() => setDetailOpen('late')}
             />
-            <StatCard
-              icon={XCircle}
-              label="결석"
-              value={absentCount}
-              sub="미등원 학생"
-              color="red"
-              onClick={() => setDetailOpen('absent')}
-            />
           </div>
+
 
           <AttendanceDetailDialog
             kind={detailOpen}

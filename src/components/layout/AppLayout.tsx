@@ -163,17 +163,28 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     ];
   }
 
+  // ADMIN-NAV-REGROUP-V1: 원장/관리자·조교 메뉴를 사용 목적 기준 4그룹 + 기타로 정돈
+  // (URL·권한·기능은 그대로 유지, 배치와 그룹명만 변경)
   return [
 
     { label: '대시보드', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
     {
-      label: '수업',
+      label: '오늘 운영',
+      items: [
+        { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+        { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
+        { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
+        { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+      ],
+    },
+    {
+      label: '학습 관리',
       items: [
         { label: '수업 계획', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
-        { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+        { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
         { label: '단어시험관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
         { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
@@ -181,46 +192,38 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     },
     ...materialGroup,
     {
-      label: '조교',
-      items: [
-        { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, allowedRoles: ['admin', 'assistant'] },
-        { label: '영어팀 채널', href: '/private-channel', icon: <MessageCircle className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'] },
-      ],
-    },
-    {
-      label: '관리',
+      label: '학생·행정',
       items: [
         { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
         { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, allowedRoles: ['admin'] },
-        { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
+        { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, allowedRoles: ['admin'] },
+        { label: '수강료 관리', href: '/admin/tuition', icon: <Wallet className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+        { label: '수입 관리', href: '/admin/income', icon: <TrendingUp className="w-4 h-4" />, allowedRoles: ['admin'] },
+        { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, allowedRoles: ['admin', 'assistant'] },
       ],
     },
     {
-      label: '리포트',
+      label: '리포트·분석',
       items: [
         { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
         { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
+        { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
+        { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
+        { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
       ],
     },
     {
-      label: '원장',
+      label: '기타',
       items: [
-        { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
-        { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
-        { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
-        { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
-        { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
+        { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '특강 신청 현황', href: '/admin/intensive-applications', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
         { label: '학부모 설문', href: '/admin/parent-learning-feedback', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
+        { label: '영어팀 채널', href: '/private-channel', icon: <MessageCircle className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'] },
       ],
     },
-    { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, allowedRoles: ['admin'] },
-    { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
-    { label: '수강료 관리', href: '/admin/tuition', icon: <Wallet className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
-    { label: '수입 관리', href: '/admin/income', icon: <TrendingUp className="w-4 h-4" />, allowedRoles: ['admin'] },
   ];
+
 };
 
 export function AppLayout({ children }: AppLayoutProps) {
