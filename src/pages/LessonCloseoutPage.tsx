@@ -1,6 +1,7 @@
+import { useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { LessonCloseoutForm } from '@/components/lessons/LessonCloseoutForm';
+import { LessonCloseoutForm, UNSAVED_CONFIRM_MESSAGE } from '@/components/lessons/LessonCloseoutForm';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { getTodayKST } from '@/lib/utils';
