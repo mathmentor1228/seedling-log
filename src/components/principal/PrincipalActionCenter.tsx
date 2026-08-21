@@ -16,7 +16,7 @@ import {
   type ClassDayGroup,
 } from './usePrincipalAlerts';
 
-type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_gap' | 'no_check_in';
+type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_gap' | 'no_check_in' | 'job_failure';
 
 interface ActionItem {
   key: ItemKey;
@@ -107,7 +107,7 @@ export function PrincipalActionCenter({
     ];
     if (alerts.jobFailures > 0) {
       list.push({
-        key: 'not_started',
+        key: 'job_failure',
         label: '자동 작업 실패',
         basis: `최근 ${ALERT_WINDOW_DAYS}일 · 주간 리포트 자동 생성 작업 실패`,
         count: alerts.jobFailures,
