@@ -25,10 +25,15 @@ function LessonCloseoutContent() {
 
   return (
     <div className="max-w-3xl mx-auto p-3 sm:p-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mb-2">
+      <Button variant="ghost" size="sm" onClick={guardedBack} className="mb-2">
         <ArrowLeft className="h-4 w-4 mr-1" /> 뒤로
       </Button>
-      <LessonCloseoutForm classId={classId} date={date} onClose={() => navigate(-1)} />
+      <LessonCloseoutForm
+        classId={classId}
+        date={date}
+        onClose={() => navigate(-1)}
+        onDirtyChange={handleDirtyChange}
+      />
     </div>
   );
 }
