@@ -210,6 +210,27 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
         {summaryCard('전체', filtered.length, 'bg-card text-foreground border-border', 'all')}
       </div>
 
+      {/* 조회 기간 이전 미마감 안내 */}
+      {olderCount > 0 && (
+        <button
+          type="button"
+          data-testid="older-unclosed-entry"
+          onClick={() => {
+            if (olderEarliest) setStartDate(olderEarliest);
+            setStatusFilter('all');
+          }}
+          className="w-full flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            조회 기간 이전에 미마감 {olderCount}건이 남아 있습니다
+            {olderEarliest ? ` (가장 오래된 ${olderEarliest})` : ''} — 눌러서 기간에 포함
+          </span>
+        </button>
+      )}
+
+
+
       {/* 기본 필터 */}
       <Card>
         <CardContent className="p-3 space-y-3">
