@@ -28,7 +28,7 @@ function LiveClock() {
 }
 
 /* ------------------------------------------------------------------ */
-const TEACHER_TABS = ['📋 출결 현황', '📊 수업 기록 조회'] as const;
+const TEACHER_TABS = ['📋 실시간 입실', '📊 수업 기록 조회'] as const;
 
 function TeacherSideBySide() {
   const [mobileTab, setMobileTab] = useState<number>(0);
@@ -39,7 +39,7 @@ function TeacherSideBySide() {
       {/* TEACHER-PRIORITY-V1: 1) 선택한 수업일 마감 */}
       <TeacherTodayBoard />
 
-      {/* 2) 오늘 실시간 출결 + 수업 기록 */}
+      {/* 2) 오늘 실시간 입실 + 수업 기록 */}
       <div className="flex lg:hidden justify-center gap-2">
         {TEACHER_TABS.map((label, i) => (
           <button
@@ -63,7 +63,7 @@ function TeacherSideBySide() {
             <div className="flex items-center justify-between p-4 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">📋</span>
-                <h2 className="text-sm font-bold text-foreground">오늘 실시간 출결</h2>
+                <h2 className="text-sm font-bold text-foreground">오늘 실시간 입실</h2>
                 <span className="text-[10px] text-muted-foreground">
                   {getTodayKST().replace(/-/g, '.')} ({formatKoreanDay(getTodayKST())})
                 </span>
