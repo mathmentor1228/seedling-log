@@ -70,6 +70,9 @@ function TeacherSideBySide() {
               </div>
               <LiveClock />
             </div>
+            <p className="px-4 pb-1 text-[10px] leading-snug text-muted-foreground">
+              출입 태그(입실 로그) 기준입니다. 수업일지에 기록된 <span className="font-medium">수업출결</span>이 있으면 그 값을 우선 표시합니다.
+            </p>
             <CardContent className="pt-0 px-3 pb-4">
               <TeacherAttendanceView />
             </CardContent>
