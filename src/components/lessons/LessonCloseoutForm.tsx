@@ -60,13 +60,16 @@ interface StudentState {
   expanded: boolean;
 }
 
+export const UNSAVED_CONFIRM_MESSAGE = '저장하지 않은 변경사항이 있습니다. 나가시겠습니까?';
+
 interface Props {
   classId: string;
   date: string;
   onClose?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function LessonCloseoutForm({ classId, date, onClose }: Props) {
+export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
 
