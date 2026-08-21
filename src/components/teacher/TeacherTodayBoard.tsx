@@ -49,8 +49,21 @@ function ClassCardRow({ card, date, onOpen }: { card: TodayClassCard; date: stri
         </div>
         <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />학생 {card.studentCount}명</span>
-          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />출결 {card.checkedInCount}/{card.studentCount}</span>
+          <span className="inline-flex items-center gap-1" title="출입 태그 기준 (실시간 입실 로그)">
+            <Clock className="h-3 w-3" />입실 {card.checkedInCount}/{card.studentCount}
+          </span>
+          <span title="교사가 수업일지에 기록한 출결 기준">
+            수업출결 {card.classAttendanceCount}/{card.studentCount}
+          </span>
           <span>일지 {card.submittedCount}/{card.studentCount}</span>
+          {card.missingCheckInCount > 0 && (
+            <span
+              className="text-muted-foreground/80"
+              title="수업출결은 출석인데 해당 날짜 출입 태그 기록이 없습니다. 저장에는 영향 없습니다."
+            >
+              · 입실 미기록 {card.missingCheckInCount}명
+            </span>
+          )}
           {card.classroomName && <span>· {card.classroomName}</span>}
         </p>
       </div>
