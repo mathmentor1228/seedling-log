@@ -11,6 +11,7 @@ import {
   CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, LogIn, LogOut, Users,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
