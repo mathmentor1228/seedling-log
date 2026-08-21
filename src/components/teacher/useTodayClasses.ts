@@ -59,7 +59,10 @@ export function useTodayClasses(teacherId: string, date?: string): TodayClassesD
 
   useEffect(() => {
     let cancelled = false;
-    if (!teacherId) return;
+    if (!teacherId) {
+      setLoading(false);
+      return;
+    }
 
     (async () => {
       setLoading(true);
