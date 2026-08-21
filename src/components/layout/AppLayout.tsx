@@ -495,7 +495,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         <SystemAnnouncementBar />
         <main className="flex-1">
           <div className={cn('mx-auto', isWideWorkspace ? 'max-w-none p-3 lg:p-4' : 'max-w-7xl p-5 lg:p-8')}>
-            {isDashboard && (
+            {/* TEACHER-PRIORITY-V1: /teacher는 페이지 내부 보조 영역에서 직접 렌더 */}
+            {isDashboard && location.pathname !== '/teacher' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
                 <TeamNotesBoard />
                 <AcademyCalendar />

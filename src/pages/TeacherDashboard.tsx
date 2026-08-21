@@ -7,6 +7,8 @@ import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
 import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { TeacherTodayBoard } from '@/components/teacher/TeacherTodayBoard';
+import { TeamNotesBoard } from '@/components/TeamNotesBoard';
+import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 function formatKoreanDay(dateStr: string): string {
@@ -26,30 +28,18 @@ function LiveClock() {
 }
 
 /* ------------------------------------------------------------------ */
-const TEACHER_TABS = ['📋 출결 현황', '📊 수업 관리'] as const;
+const TEACHER_TABS = ['📋 출결 현황', '📊 수업 기록 조회'] as const;
 
 function TeacherSideBySide() {
   const [mobileTab, setMobileTab] = useState<number>(0);
-  const [showLegacyWidgets, setShowLegacyWidgets] = useState(false);
+  const [showSecondary, setShowSecondary] = useState(false);
 
   return (
     <div className="space-y-3">
-      {/* TEACHER-TODAY-V1: 오늘 업무 중심 상단 */}
+      {/* TEACHER-PRIORITY-V1: 1) 선택한 수업일 마감 */}
       <TeacherTodayBoard />
 
-      <button
-        onClick={() => setShowLegacyWidgets((v) => !v)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {showLegacyWidgets ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        내신특강 제안 · 주간 요약 위젯
-      </button>
-      {showLegacyWidgets && (
-        <div className="space-y-3">
-          <PrepLectureProposalsWidget />
-          <WeeklySummaryWidget />
-        </div>
-      )}
+      {/* 2) 오늘 실시간 출결 + 수업 기록 */}
       <div className="flex lg:hidden justify-center gap-2">
         {TEACHER_TABS.map((label, i) => (
           <button
@@ -90,9 +80,32 @@ function TeacherSideBySide() {
           <Dashboard />
         </div>
       </div>
+
+      {/* 3) 보조 업무 (기본 접힘) */}
+      <div className="pt-1">
+        <button
+          onClick={() => setShowSecondary((v) => !v)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          aria-expanded={showSecondary}
+        >
+          {showSecondary ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          메모 · 일정 보기 (내신특강 제안 · 주간 요약 포함)
+        </button>
+        {showSecondary && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <TeamNotesBoard />
+              <AcademyCalendar />
+            </div>
+            <PrepLectureProposalsWidget />
+            <WeeklySummaryWidget />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 export default function TeacherDashboard() {
   return (
