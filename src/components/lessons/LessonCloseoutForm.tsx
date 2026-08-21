@@ -224,6 +224,10 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     setStudents((prev) => prev.map((s) => (s.attendance.length > 0 ? s : { ...s, attendance: ['정상등원'] })));
     setDirty(true);
   };
+  const applyAllUnmarkedAbsent = () => {
+    setStudents((prev) => prev.map((s) => (s.attendance.length > 0 ? s : { ...s, attendance: ['인정결석'] })));
+    setDirty(true);
+  };
 
   const counts = useMemo(() => ({
     total: students.length,
