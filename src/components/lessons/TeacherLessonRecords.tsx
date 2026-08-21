@@ -62,6 +62,9 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  // TEACHER-LESSONS-OLDER-V1: 조회 기간 이전에 남아 있는 미마감 (읽기 전용 집계)
+  const [olderCount, setOlderCount] = useState(0);
+  const [olderEarliest, setOlderEarliest] = useState<string | null>(null);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
@@ -113,6 +116,27 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
           };
         });
         setRows(built);
+
+        // 조회 기간 '이전'에 남아 있는 미마감 건수 (기존 권한 그대로, 읽기 전용)
+        const [olderCntRes, olderFirstRes] = await Promise.all([
+          supabase
+            .from('lesson_records')
+            .select('id', { count: 'exact', head: true })
+            .eq('teacher_id', teacherId)
+            .eq('submitted', false)
+            .lt('lesson_date', startDate),
+          supabase
+            .from('lesson_records')
+            .select('lesson_date')
+            .eq('teacher_id', teacherId)
+            .eq('submitted', false)
+            .lt('lesson_date', startDate)
+            .order('lesson_date', { ascending: true })
+            .limit(1),
+        ]);
+        if (cancelled) return;
+        setOlderCount((olderCntRes as any)?.count || 0);
+        setOlderEarliest((olderFirstRes as any)?.data?.[0]?.lesson_date || null);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || '수업 기록을 불러오지 못했습니다.');
       } finally {
@@ -185,6 +209,27 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
         {summaryCard('마감 완료', summary.done, 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30', 'done')}
         {summaryCard('전체', filtered.length, 'bg-card text-foreground border-border', 'all')}
       </div>
+
+      {/* 조회 기간 이전 미마감 안내 */}
+      {olderCount > 0 && (
+        <button
+          type="button"
+          data-testid="older-unclosed-entry"
+          onClick={() => {
+            if (olderEarliest) setStartDate(olderEarliest);
+            setStatusFilter('all');
+          }}
+          className="w-full flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            조회 기간 이전에 미마감 {olderCount}건이 남아 있습니다
+            {olderEarliest ? ` (가장 오래된 ${olderEarliest})` : ''} — 눌러서 기간에 포함
+          </span>
+        </button>
+      )}
+
+
 
       {/* 기본 필터 */}
       <Card>

@@ -224,6 +224,10 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     setStudents((prev) => prev.map((s) => (s.attendance.length > 0 ? s : { ...s, attendance: ['정상등원'] })));
     setDirty(true);
   };
+  const applyAllUnmarkedAbsent = () => {
+    setStudents((prev) => prev.map((s) => (s.attendance.length > 0 ? s : { ...s, attendance: ['인정결석'] })));
+    setDirty(true);
+  };
 
   const counts = useMemo(() => ({
     total: students.length,
@@ -231,9 +235,27 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     submitted: students.filter((s) => s.submitted).length,
   }), [students]);
 
+  // CLOSEOUT-ATT-GATE-V1: 수업출결 미선택은 정상등원으로 암묵 처리하지 않는다.
+  const unmarkedStudents = useMemo(
+    () => students.filter((s) => s.attendance.length === 0),
+    [students]
+  );
+  const finalizeBlocked = unmarkedStudents.length > 0;
+
   const persist = async (finalize: boolean) => {
     if (savingRef.current) return;
     if (!user?.id) return;
+    if (finalize && finalizeBlocked) {
+      setSaveError(
+        `수업출결 미선택 ${unmarkedStudents.length}명이 있어 마감할 수 없습니다. 각 학생의 수업출결을 선택하거나 '미기록 전원 정상등원'을 사용하세요.`
+      );
+      toast({
+        title: '수업출결 미선택',
+        description: `${unmarkedStudents.length}명의 수업출결을 먼저 선택해 주세요.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
@@ -241,7 +263,8 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     let ok = 0;
     try {
       for (const s of students) {
-        const attendance = toStorageAttendanceStatuses(s.attendance);
+        // CLOSEOUT-ATT-GATE-V1: 미선택은 임시저장에서도 '정상등원'으로 암묵 변환하지 않는다.
+        const attendance = s.attendance.length > 0 ? toStorageAttendanceStatuses(s.attendance) : [];
         const disabled = scoreDisabled(lessonTypes, attendance);
         const payload = {
           teacher_id: user.id,
@@ -350,6 +373,32 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
           </div>
         </CardContent>
       </Card>
+
+      {/* CLOSEOUT-ATT-GATE-V1: 수업출결 미선택 안내 */}
+      {finalizeBlocked && (
+        <div
+          data-testid="closeout-unmarked-banner"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2"
+        >
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            수업출결 미선택 {unmarkedStudents.length}명 — 마감할 수 없습니다
+          </p>
+          <p className="text-[11px] text-amber-700/90 dark:text-amber-300/90 break-words">
+            {unmarkedStudents.map((s) => s.name).join(', ')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={applyAllPresent}>
+              미기록 전원 정상등원
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={applyAllUnmarkedAbsent}>
+              미기록 전원 인정결석
+            </Button>
+          </div>
+        </div>
+      )}
+
+
 
       {/* 공통 진도 / 숙제 */}
       <Card>
@@ -530,9 +579,14 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               임시저장
             </Button>
-            <Button onClick={() => persist(true)} disabled={saving || students.length === 0} className="flex-1">
+            <Button
+              onClick={() => persist(true)}
+              disabled={saving || students.length === 0 || finalizeBlocked}
+              title={finalizeBlocked ? `수업출결 미선택 ${unmarkedStudents.length}명` : undefined}
+              className="flex-1"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-              수업 마감
+              {finalizeBlocked ? `수업 마감 (미선택 ${unmarkedStudents.length}명)` : '수업 마감'}
             </Button>
           </div>
         </div>
