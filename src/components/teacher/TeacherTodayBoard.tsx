@@ -101,6 +101,9 @@ export function TeacherTodayBoard() {
 
   const selectedDayLabel = formatKoreanDay(date);
   const recentDate = useMemo(() => findRecentClassDate(date, activeDays), [date, activeDays]);
+  const todayKST = getTodayKST();
+  const isSelectedPast = date !== todayKST;
+  const formattedSelectedDate = date.replace(/-/g, '.');
 
   return (
     <Card className="border-primary/20">
@@ -108,7 +111,10 @@ export function TeacherTodayBoard() {
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-base">🗓️</span>
-            <h2 className="text-sm font-bold">오늘 수업 마감</h2>
+            <h2 className="text-sm font-bold">선택한 수업일 마감</h2>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium">
+              {formattedSelectedDate} ({selectedDayLabel})
+            </Badge>
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -126,6 +132,17 @@ export function TeacherTodayBoard() {
             </Button>
           </div>
         </div>
+
+        {isSelectedPast && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            <span className="text-xs text-amber-700 dark:text-amber-400">
+              현재 과거 수업일을 보고 있습니다.
+            </span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDate(todayKST)}>
+              오늘로 돌아가기
+            </Button>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           {[
