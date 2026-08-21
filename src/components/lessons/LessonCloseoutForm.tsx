@@ -321,7 +321,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
             {subject && <Badge variant="outline" className="text-[10px]">{subject}</Badge>}
             <Badge variant="secondary" className="text-[10px] tabular-nums">{date}</Badge>
             <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
-              출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
+              수업출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
             </span>
           </div>
 

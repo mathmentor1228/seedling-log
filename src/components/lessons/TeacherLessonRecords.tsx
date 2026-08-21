@@ -309,7 +309,7 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-1">
                   <span className="truncate">{r.student_name}</span>
-                  <span>· 출결 {att || '미기록'}</span>
+                  <span>· 수업출결 {att || '미기록'}</span>
                   <span>· 진도 {r.has_progress ? '있음' : '없음'}</span>
                   <span>· 숙제 {r.has_homework ? '있음' : '없음'}</span>
                 </div>
