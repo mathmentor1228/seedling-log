@@ -129,7 +129,42 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       }]
     : [];
 
+  // TEACHER-NAV-SIMPLIFY-V1: 교사에게는 최대 3그룹으로 간소화된 메뉴만 노출
+  // (라우트/코드는 그대로 유지하고 사이드바 표시만 정리)
+  if (role === 'teacher') {
+    return [
+      {
+        label: '오늘 업무',
+        items: [
+          { label: '수업 마감', href: '/lessons/close', icon: <ClipboardCheck className="w-4 h-4" /> },
+          { label: '대시보드', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" /> },
+          { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
+          { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+          { label: '조교요청', href: '/assistant-requests', icon: <UserCheck className="w-4 h-4" /> },
+        ],
+      },
+      {
+        label: '수업 자료',
+        items: [
+          { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" /> },
+          { label: '단어시험관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" /> },
+          { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" /> },
+          { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
+          ...visibleSubjects,
+        ],
+      },
+      {
+        label: '리포트',
+        items: [
+          { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" /> },
+          { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" /> },
+        ],
+      },
+    ];
+  }
+
   return [
+
     { label: '대시보드', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
     {
