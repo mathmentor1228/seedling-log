@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST } from '@/lib/utils';
 import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
 import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { TeacherTodayBoard } from '@/components/teacher/TeacherTodayBoard';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+
+function formatKoreanDay(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00+09:00`).toLocaleDateString('ko-KR', { weekday: 'long' });
+}
 
 /* ------------------------------------------------------------------ */
 function LiveClock() {
@@ -69,7 +73,10 @@ function TeacherSideBySide() {
             <div className="flex items-center justify-between p-4 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">📋</span>
-                <h2 className="text-sm font-bold text-foreground">출결 현황</h2>
+                <h2 className="text-sm font-bold text-foreground">오늘 실시간 출결</h2>
+                <span className="text-[10px] text-muted-foreground">
+                  {getTodayKST().replace(/-/g, '.')} ({formatKoreanDay(getTodayKST())})
+                </span>
               </div>
               <LiveClock />
             </div>
