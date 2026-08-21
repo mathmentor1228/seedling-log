@@ -62,6 +62,9 @@ export function TeacherLessonRecords({ teacherId }: { teacherId: string | undefi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  // TEACHER-LESSONS-OLDER-V1: 조회 기간 이전에 남아 있는 미마감 (읽기 전용 집계)
+  const [olderCount, setOlderCount] = useState(0);
+  const [olderEarliest, setOlderEarliest] = useState<string | null>(null);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
