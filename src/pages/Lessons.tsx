@@ -39,6 +39,7 @@ import { ClinicTab } from '@/components/lessons/ClinicTab';
 import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
 import MathQuestionAnalytics from '@/components/lessons/MathQuestionAnalytics';
+import { TeacherLessonRecords } from '@/components/lessons/TeacherLessonRecords';
 
 interface Teacher {
   id: string;
@@ -231,6 +232,8 @@ export default function Lessons() {
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
   const isAdmin = checkIsAdmin(role);
+  // TEACHER-LESSONS-V1: 강사 전용 조회 UI (관리자·원장·조교는 기존 화면 유지)
+  const teacherOnlyLessons = isTeacher && !isAdmin && !isAssistant;
   const canManage = canManageLessons(role);
   
   useEffect(() => {
@@ -874,6 +877,7 @@ export default function Lessons() {
         </div>
 
         <TabsContent value="lessons" className="space-y-6">
+      {teacherOnlyLessons ? <TeacherLessonRecords teacherId={user?.id} /> : (<>
 
       {/* New lesson entry dialog (individual/batch choice) */}
       <NewLessonEntryDialog
@@ -1217,6 +1221,7 @@ export default function Lessons() {
           )}
         </CardContent>
       </Card>
+      </>) }
       </TabsContent>
 
       {(isAdmin || isTeacher || isAssistant) && (
