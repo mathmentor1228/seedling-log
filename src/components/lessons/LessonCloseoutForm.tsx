@@ -263,7 +263,8 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     let ok = 0;
     try {
       for (const s of students) {
-        const attendance = toStorageAttendanceStatuses(s.attendance);
+        // CLOSEOUT-ATT-GATE-V1: 미선택은 임시저장에서도 '정상등원'으로 암묵 변환하지 않는다.
+        const attendance = s.attendance.length > 0 ? toStorageAttendanceStatuses(s.attendance) : [];
         const disabled = scoreDisabled(lessonTypes, attendance);
         const payload = {
           teacher_id: user.id,
