@@ -1,0 +1,528 @@
+// LESSON-CLOSEOUT-V1
+// 개인·그룹 공용 '오늘 수업 마감' 화면.
+// 저장 경로는 기존 안전 경로만 사용한다:
+//   - lesson_records → safeUpsertLessonRecord
+//   - homework_assignments → reconcileLessonHomework (RPC, 삭제 후 재삽입 금지)
+// 새 테이블/새 스키마/새 저장 방식은 만들지 않는다.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
+import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
+import { reconcileLessonHomework, HOMEWORK_LOAD_COLUMNS } from '@/lib/homeworkReconcile';
+import { toStorageAttendanceStatuses, normalizeAttendanceStatuses } from '@/lib/attendance';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import { Loader2, ChevronDown, ChevronRight, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
+
+const ATT_OPTIONS = ['정상등원', '지각', '조퇴', '인정결석', '무단결석', '보충불가'] as const;
+const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const DISABLE_SCORE_LESSON_TYPES = ['테스트방문', '휴강'];
+const LESSON_TYPE_OPTIONS = ['정규수업', '보충수업', '테스트방문', '휴강'];
+
+const HW_STATUS_OPTIONS: { key: string; label: string }[] = [
+  { key: 'completed', label: '완료' },
+  { key: 'partial', label: '부분' },
+  { key: 'not_done', label: '미완' },
+  { key: 'none_assigned', label: '없음' },
+];
+
+function scoreDisabled(lessonTypes: string[], attendance: string[]) {
+  if (lessonTypes.some((t) => DISABLE_SCORE_LESSON_TYPES.includes(t))) return true;
+  if (attendance.some((s) => ABSENCE_STATUSES.includes(s))) return true;
+  return false;
+}
+
+interface HwRow { id?: string | null; content: string }
+
+interface StudentState {
+  id: string;
+  name: string;
+  school: string | null;
+  grade: string | null;
+  recordId: string | null;
+  submitted: boolean;
+  attendance: string[];
+  understanding: string;
+  homeworkStatus: string;
+  lessonRange: string;
+  nextHomework: string;      // 줄 단위 텍스트
+  existingHw: HwRow[];       // 기존 배정 (id 보존용)
+  prevHomework: { content: string; check_status: string | null }[];
+  notes: string;
+  internalNotes: string;
+  learningIssuesNote: string;
+  expanded: boolean;
+}
+
+interface Props {
+  classId: string;
+  date: string;
+  onClose?: () => void;
+}
+
+export function LessonCloseoutForm({ classId, date, onClose }: Props) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [classInfo, setClassInfo] = useState<{ name: string; subject: string } | null>(null);
+  const [students, setStudents] = useState<StudentState[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const savingRef = useRef(false);
+
+  // 공통값
+  const [lessonTypes, setLessonTypes] = useState<string[]>(['정규수업']);
+  const [commonRange, setCommonRange] = useState('');
+  const [commonGoal, setCommonGoal] = useState('');
+  const [commonHomework, setCommonHomework] = useState('');
+  const [optionalOpen, setOptionalOpen] = useState(false);
+
+  const subject = classInfo?.subject || '';
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const { data: cls, error: clsErr } = await supabase
+        .from('classes')
+        .select('name, subject')
+        .eq('id', classId)
+        .maybeSingle();
+      if (clsErr) throw clsErr;
+      if (!cls) throw new Error('반 정보를 찾을 수 없습니다.');
+      setClassInfo({ name: cls.name, subject: cls.subject as string });
+
+      const { data: cs } = await supabase
+        .from('class_students')
+        .select('student_id')
+        .eq('class_id', classId);
+      const ids = [...new Set((cs || []).map((r: any) => r.student_id))];
+      if (ids.length === 0) { setStudents([]); setLoading(false); return; }
+
+      const [stRes, recRes, prevHwRes] = await Promise.all([
+        supabase.from('students').select('id, name, school, grade').in('id', ids).neq('enrollment_status', '퇴원'),
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, submitted, attendance_status, understanding_score, homework_status, lesson_range, notes, internal_notes, learning_issues_note, next_lesson_goal, lesson_types')
+          .in('student_id', ids)
+          .eq('lesson_date', date)
+          .eq('subject', cls.subject as any),
+        supabase
+          .from('homework_assignments')
+          .select('id, student_id, content, check_status, assigned_date')
+          .in('student_id', ids)
+          .eq('subject', cls.subject as any)
+          .lt('assigned_date', date)
+          .order('assigned_date', { ascending: false })
+          .limit(300),
+      ]);
+
+      const recs = (recRes.data || []) as any[];
+      const recMap = new Map(recs.map((r) => [r.student_id, r]));
+
+      // 오늘 배정된 숙제 (기존 행 id 보존)
+      const recordIds = recs.map((r) => r.id);
+      let todayHw: any[] = [];
+      if (recordIds.length > 0) {
+        const { data } = await supabase
+          .from('homework_assignments')
+          .select(`${HOMEWORK_LOAD_COLUMNS}, lesson_record_id, student_id`)
+          .in('lesson_record_id', recordIds);
+        todayHw = data || [];
+      }
+
+      const prevMap = new Map<string, { content: string; check_status: string | null }[]>();
+      (prevHwRes.data || []).forEach((h: any) => {
+        const arr = prevMap.get(h.student_id) || [];
+        if (arr.length < 4) arr.push({ content: h.content, check_status: h.check_status ?? null });
+        prevMap.set(h.student_id, arr);
+      });
+
+      const built: StudentState[] = (stRes.data || []).map((s: any) => {
+        const rec = recMap.get(s.id);
+        const hw = todayHw.filter((h) => h.lesson_record_id === rec?.id);
+        return {
+          id: s.id,
+          name: s.name,
+          school: s.school,
+          grade: s.grade,
+          recordId: rec?.id ?? null,
+          submitted: !!rec?.submitted,
+          attendance: rec?.attendance_status ? normalizeAttendanceStatuses(rec.attendance_status).filter((v) => v !== 'legacy_absent') : [],
+          understanding: rec?.understanding_score != null ? String(rec.understanding_score) : '3',
+          homeworkStatus: rec?.homework_status || 'none_assigned',
+          lessonRange: rec?.lesson_range || '',
+          nextHomework: hw.map((h) => h.content).join('\n'),
+          existingHw: hw.map((h) => ({ id: h.id, content: h.content })),
+          prevHomework: prevMap.get(s.id) || [],
+          notes: rec?.notes || '',
+          internalNotes: rec?.internal_notes || '',
+          learningIssuesNote: rec?.learning_issues_note || '',
+          expanded: false,
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+      setStudents(built);
+      const firstRec = recs[0];
+      if (firstRec?.lesson_types?.length) setLessonTypes(firstRec.lesson_types);
+      if (firstRec?.lesson_range) setCommonRange(firstRec.lesson_range);
+      if (firstRec?.next_lesson_goal) setCommonGoal(firstRec.next_lesson_goal);
+      setDirty(false);
+    } catch (e: any) {
+      setLoadError(e?.message || '불러오기 실패');
+    } finally {
+      setLoading(false);
+    }
+  }, [classId, date]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // 페이지 이탈 경고
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
+
+  const patch = (id: string, next: Partial<StudentState>) => {
+    setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, ...next } : s)));
+    setDirty(true);
+  };
+
+  const applyCommonRange = () => {
+    setStudents((prev) => prev.map((s) => ({ ...s, lessonRange: commonRange })));
+    setDirty(true);
+  };
+  const applyCommonHomework = () => {
+    setStudents((prev) => prev.map((s) => ({ ...s, nextHomework: commonHomework })));
+    setDirty(true);
+  };
+  const applyAllPresent = () => {
+    setStudents((prev) => prev.map((s) => (s.attendance.length > 0 ? s : { ...s, attendance: ['정상등원'] })));
+    setDirty(true);
+  };
+
+  const counts = useMemo(() => ({
+    total: students.length,
+    marked: students.filter((s) => s.attendance.length > 0).length,
+    submitted: students.filter((s) => s.submitted).length,
+  }), [students]);
+
+  const persist = async (finalize: boolean) => {
+    if (savingRef.current) return;
+    if (!user?.id) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+
+    let ok = 0;
+    try {
+      for (const s of students) {
+        const attendance = toStorageAttendanceStatuses(s.attendance);
+        const disabled = scoreDisabled(lessonTypes, attendance);
+        const payload = {
+          teacher_id: user.id,
+          student_id: s.id,
+          class_id: classId,
+          subject,
+          lesson_date: date,
+          lesson_range: (s.lessonRange || commonRange || '').trim(),
+          understanding_score: disabled ? null : parseInt(s.understanding, 10),
+          homework_status: s.homeworkStatus,
+          learning_issues_note: s.learningIssuesNote.trim() || null,
+          next_lesson_goal: commonGoal.trim() || null,
+          notes: s.notes.trim() || null,
+          internal_notes: s.internalNotes.trim() || null,
+          lesson_types: lessonTypes.length > 0 ? lessonTypes : ['정규수업'],
+          attendance_status: attendance,
+        } as Record<string, any> & { student_id: string; subject: string; lesson_date: string };
+        if (finalize) {
+          payload.submitted = true;
+          payload.submitted_at = new Date().toISOString();
+        } else {
+          payload.submitted = false;
+        }
+
+        const res = await safeUpsertLessonRecord(payload, { preserveSubmitted: !finalize });
+        if (res.error || !res.id) throw new Error(res.error?.message || `${s.name} 저장 실패`);
+
+        const lines = s.nextHomework.split('\n').map((l) => l.trim()).filter(Boolean);
+        const items = lines.map((content, idx) => ({
+          id: s.existingHw[idx]?.id ?? null,
+          content,
+          homework_type: 'regular',
+        }));
+        await reconcileLessonHomework({
+          lessonRecordId: res.id,
+          studentId: s.id,
+          subject,
+          assignedDate: date,
+          items,
+        });
+        ok += 1;
+      }
+
+      toast({
+        title: finalize ? '수업 마감 완료' : '임시저장 완료',
+        description: `${ok}명 저장했습니다.`,
+      });
+      setDirty(false);
+      await load();
+    } catch (e: any) {
+      setSaveError(e?.message || '저장 중 오류가 발생했습니다. 입력값은 유지됩니다.');
+      toast({
+        title: '저장 실패',
+        description: `${ok}명 저장 후 중단되었습니다. 다시 시도해 주세요.`,
+        variant: 'destructive',
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
+  if (loadError) {
+    return <p className="text-sm text-destructive p-6">{loadError}</p>;
+  }
+
+  return (
+    <div className="space-y-3 pb-28">
+      {/* 헤더 */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-base font-bold">{classInfo?.name}</h1>
+            {subject && <Badge variant="outline" className="text-[10px]">{subject}</Badge>}
+            <Badge variant="secondary" className="text-[10px] tabular-nums">{date}</Badge>
+            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
+              출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {LESSON_TYPE_OPTIONS.map((t) => {
+              const active = lessonTypes.includes(t);
+              return (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setLessonTypes((prev) => (prev.includes(t) ? prev.filter((v) => v !== t) : [...prev, t]));
+                    setDirty(true);
+                  }}
+                  className={cn(
+                    'text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors',
+                    active ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
+                  )}
+                >
+                  {t}
+                </button>
+              );
+            })}
+            <Button size="sm" variant="outline" className="h-7 text-[11px] ml-auto" onClick={applyAllPresent}>
+              미기록 전원 정상등원
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 공통 진도 / 숙제 */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <p className="text-xs font-bold text-muted-foreground">공통 입력 → 전체 적용</p>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">진도 / 수업 내용</Label>
+            <div className="flex gap-2">
+              <Input value={commonRange} onChange={(e) => { setCommonRange(e.target.value); setDirty(true); }} placeholder="예: 수학1 p.42~55" className="h-9 text-sm" />
+              <Button size="sm" variant="outline" onClick={applyCommonRange} className="shrink-0">전체 적용</Button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">다음 숙제 (줄바꿈으로 여러 건)</Label>
+            <div className="flex gap-2">
+              <Textarea value={commonHomework} onChange={(e) => { setCommonHomework(e.target.value); setDirty(true); }} rows={2} placeholder="예: 워크북 p.20~24" className="text-sm" />
+              <Button size="sm" variant="outline" onClick={applyCommonHomework} className="shrink-0">전체 적용</Button>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setOptionalOpen((v) => !v)}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground"
+          >
+            {optionalOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            선택 항목 (다음 수업 목표)
+          </button>
+          {optionalOpen && (
+            <div className="space-y-1.5">
+              <Label className="text-[11px]">다음 수업 목표</Label>
+              <Input value={commonGoal} onChange={(e) => { setCommonGoal(e.target.value); setDirty(true); }} className="h-9 text-sm" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 학생별 */}
+      <div className="space-y-2">
+        {students.map((s) => {
+          const disabled = scoreDisabled(lessonTypes, s.attendance);
+          return (
+            <Card key={s.id} className={cn(s.submitted && 'border-emerald-500/30')}>
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold">{s.name}</span>
+                  {(s.school || s.grade) && (
+                    <span className="text-[10px] text-muted-foreground">{s.school || ''} {s.grade || ''}</span>
+                  )}
+                  {s.submitted && <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30" variant="outline">마감됨</Badge>}
+                </div>
+
+                {/* 출결 */}
+                <div className="flex flex-wrap gap-1">
+                  {ATT_OPTIONS.map((opt) => {
+                    const active = s.attendance.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => patch(s.id, { attendance: active ? [] : [opt] })}
+                        className={cn(
+                          'text-[11px] px-2 py-1 rounded-lg border font-medium transition-colors',
+                          active ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
+                        )}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 이해도 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-12">이해도</span>
+                  <div className={cn('flex gap-1', disabled && 'opacity-40 pointer-events-none')}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        disabled={disabled}
+                        onClick={() => patch(s.id, { understanding: String(n) })}
+                        className={cn(
+                          'w-7 h-7 rounded-lg border text-[11px] font-bold',
+                          s.understanding === String(n) && !disabled
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'text-muted-foreground border-border'
+                        )}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  {disabled && <span className="text-[10px] text-muted-foreground">결석·휴강은 이해도 미기록</span>}
+                </div>
+
+                {/* 지난 숙제 */}
+                <div className="flex items-start gap-2">
+                  <span className="text-[11px] text-muted-foreground w-12 pt-1.5 shrink-0">지난 숙제</span>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    {s.prevHomework.length > 0 ? (
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {s.prevHomework.map((h) => h.content).join(' / ')}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">기록 없음</p>
+                    )}
+                    <div className="flex gap-1">
+                      {HW_STATUS_OPTIONS.map((o) => (
+                        <button
+                          key={o.key}
+                          onClick={() => patch(s.id, { homeworkStatus: o.key })}
+                          className={cn(
+                            'text-[11px] px-2 py-1 rounded-lg border font-medium',
+                            s.homeworkStatus === o.key
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'text-muted-foreground border-border'
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 진도 예외 + 다음 숙제 */}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={s.lessonRange}
+                    onChange={(e) => patch(s.id, { lessonRange: e.target.value })}
+                    placeholder="개별 진도 (비우면 공통값)"
+                    className="h-8 text-xs"
+                  />
+                  <Textarea
+                    value={s.nextHomework}
+                    onChange={(e) => patch(s.id, { nextHomework: e.target.value })}
+                    rows={2}
+                    placeholder="개별 다음 숙제"
+                    className="text-xs"
+                  />
+                </div>
+
+                <button
+                  onClick={() => patch(s.id, { expanded: !s.expanded })}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                >
+                  {s.expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  선택 항목 (특이사항·학부모 메모·내부 메모)
+                </button>
+                {s.expanded && (
+                  <div className="space-y-2">
+                    <Textarea value={s.learningIssuesNote} onChange={(e) => patch(s.id, { learningIssuesNote: e.target.value })} rows={2} placeholder="학습 이슈 메모" className="text-xs" />
+                    <Textarea value={s.notes} onChange={(e) => patch(s.id, { notes: e.target.value })} rows={2} placeholder="수업 메모 (학부모 공유)" className="text-xs" />
+                    <Textarea value={s.internalNotes} onChange={(e) => patch(s.id, { internalNotes: e.target.value })} rows={2} placeholder="내부 메모" className="text-xs" />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+        {students.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-8">이 반에 등록된 재원 학생이 없습니다.</p>
+        )}
+      </div>
+
+      {/* 하단 저장 바 */}
+      <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur p-3 z-40">
+        <div className="max-w-3xl mx-auto space-y-2">
+          {saveError && (
+            <p className="text-[11px] text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" /> {saveError}
+            </p>
+          )}
+          <div className="flex gap-2">
+            {onClose && (
+              <Button variant="ghost" onClick={onClose} disabled={saving} className="shrink-0">닫기</Button>
+            )}
+            <Button variant="outline" onClick={() => persist(false)} disabled={saving || students.length === 0} className="flex-1">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              임시저장
+            </Button>
+            <Button onClick={() => persist(true)} disabled={saving || students.length === 0} className="flex-1">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              수업 마감
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

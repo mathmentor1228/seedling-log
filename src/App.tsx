@@ -70,6 +70,7 @@ const QuizLookupPage = lazy(() => import("./pages/QuizLookupPage"));
 const LessonRecordPage = lazy(() => import("./pages/LessonRecordPage"));
 const BatchLessonEntryPage = lazy(() => import("./pages/BatchLessonEntryPage"));
 const QuickLessonEntryPage = lazy(() => import("./pages/QuickLessonEntryPage"));
+const LessonCloseoutPage = lazy(() => import("./pages/LessonCloseoutPage"));
 const SubjectMaterialPage = lazy(() => import("./pages/SubjectMaterialPage"));
 const PrivateChannelPage = lazy(() => import("./pages/PrivateChannelPage"));
 const WorkLogsPage = lazy(() => import("./pages/WorkLogsPage"));
@@ -178,6 +179,7 @@ const App = () => (
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
                 <Route path="/lessons/quick" element={<QuickLessonEntryPage />} />
+                <Route path="/lessons/close" element={<LessonCloseoutPage />} />
                 <Route path="/lessons/record/new" element={<LessonRecordPage />} />
                 <Route path="/lessons/record/:recordId" element={<LessonRecordPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
