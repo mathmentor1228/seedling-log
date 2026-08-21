@@ -4,14 +4,14 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const upsertMock = vi.fn(async () => ({ id: 'rec-1', error: null }));
-const reconcileMock = vi.fn(async () => ({ error: null }));
+const upsertMock = vi.fn(async (..._args: any[]) => ({ id: 'rec-1', error: null }));
+const reconcileMock = vi.fn(async (..._args: any[]) => ({ error: null }));
 
 vi.mock('@/lib/auth', () => ({ useAuth: () => ({ user: { id: 'teacher-1' } }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock('@/lib/lessonRecordUpsert', () => ({ safeUpsertLessonRecord: (...a: any[]) => upsertMock(...(a as [])) }));
+vi.mock('@/lib/lessonRecordUpsert', () => ({ safeUpsertLessonRecord: (...a: any[]) => upsertMock(...a) }));
 vi.mock('@/lib/homeworkReconcile', () => ({
-  reconcileLessonHomework: (...a: any[]) => reconcileMock(...(a as [])),
+  reconcileLessonHomework: (...a: any[]) => reconcileMock(...a),
   HOMEWORK_LOAD_COLUMNS: 'id, content',
 }));
 
