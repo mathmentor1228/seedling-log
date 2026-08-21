@@ -75,6 +75,7 @@ interface Student {
 
 export default function Students() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
