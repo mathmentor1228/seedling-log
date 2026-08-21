@@ -189,6 +189,16 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
 
   useEffect(() => { load(); }, [load]);
 
+  // 상위 페이지(뒤로 버튼)와 dirty 상태 공유
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => { onDirtyChange?.(false); }, [onDirtyChange]);
+
+  const handleClose = () => {
+    if (!onClose) return;
+    if (dirty && !window.confirm(UNSAVED_CONFIRM_MESSAGE)) return;
+    onClose();
+  };
+
   // 페이지 이탈 경고
   useEffect(() => {
     if (!dirty) return;
