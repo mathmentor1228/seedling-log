@@ -578,9 +578,14 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               임시저장
             </Button>
-            <Button onClick={() => persist(true)} disabled={saving || students.length === 0} className="flex-1">
+            <Button
+              onClick={() => persist(true)}
+              disabled={saving || students.length === 0 || finalizeBlocked}
+              title={finalizeBlocked ? `수업출결 미선택 ${unmarkedStudents.length}명` : undefined}
+              className="flex-1"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-              수업 마감
+              {finalizeBlocked ? `수업 마감 (미선택 ${unmarkedStudents.length}명)` : '수업 마감'}
             </Button>
           </div>
         </div>
