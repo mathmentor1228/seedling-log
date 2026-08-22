@@ -52,6 +52,12 @@ import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportPromptSettings } from '@/components/ReportPromptSettings';
 import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGenerationStatus';
+import { useSearchParams } from 'react-router-dom';
+import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
+import { WeekProgressSummary, type StatusFilter } from '@/components/reports/WeekProgressSummary';
+import {
+  getWriteStatus, getDeliveryStatus, summarizeWeek, nextNeedsReview, WRITE_STATUS_LABEL,
+} from '@/lib/reportStatus';
 
 import {
   AlertDialog,
@@ -131,7 +137,10 @@ export default function Reports() {
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('q') || '';
+  });
   const [resendEnabled, setResendEnabled] = useState(false);
   const { toast } = useToast();
 
@@ -190,12 +199,34 @@ export default function Reports() {
     return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
 
+  // REPORT-STATUS-CLARITY-V1: URL query 로 주차·검색·상태 필터 유지
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Report list week filter — defaults to same as generation week
   const [reportWeekFilter, setReportWeekFilter] = useState<string>(() => {
+    const fromUrl = searchParams.get('week');
+    if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) return fromUrl;
     const lastWeek = subWeeks(new Date(), 1);
     const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
     return format(mon, 'yyyy-MM-dd');
   });
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const s = searchParams.get('status');
+    return (['needs_review', 'sendable', 'caution', 'published'].includes(s || '') ? s : 'all') as StatusFilter;
+  });
+
+  // 검수 진행 커서 (다음 검수 필요 학생 이동용)
+  const [reviewCursorId, setReviewCursorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set('week', reportWeekFilter);
+    if (statusFilter === 'all') next.delete('status'); else next.set('status', statusFilter);
+    if (searchQuery.trim()) next.set('q', searchQuery.trim()); else next.delete('q');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportWeekFilter, statusFilter, searchQuery]);
 
   // Track which students already have reports for the selected week
   const [existingReportStudentIds, setExistingReportStudentIds] = useState<Set<string>>(new Set());
@@ -753,7 +784,7 @@ export default function Reports() {
     }
   }
 
-  // Filter by search query, quality tag, and week
+  // Filter by search query, quality tag, week, and write-status
   const filteredReports = reports.filter((report) => {
     // Week filter
     if (reportWeekFilter && report.week_start !== reportWeekFilter) return false;
@@ -761,7 +792,16 @@ export default function Reports() {
     // Name filter
     const matchesName = report.student_name?.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesName) return false;
-    
+
+    // REPORT-STATUS-CLARITY-V1: 작성 상태 필터 (표시 전용)
+    if (statusFilter !== 'all') {
+      const ws = getWriteStatus(report);
+      if (statusFilter === 'needs_review' && ws !== 'needs_review') return false;
+      if (statusFilter === 'sendable' && ws !== 'ready') return false;
+      if (statusFilter === 'caution' && ws !== 'zero_lessons') return false;
+      if (statusFilter === 'published' && ws !== 'published') return false;
+    }
+
     // Quality tag filter
     if (qualityFilter === 'sendable') {
       return report.report_quality_tag === 'GREEN' || report.report_quality_tag === 'YELLOW' || !report.report_quality_tag;
@@ -778,6 +818,12 @@ export default function Reports() {
     YELLOW: weekFilteredReports.filter(r => r.report_quality_tag === 'YELLOW').length,
     RED: weekFilteredReports.filter(r => r.report_quality_tag === 'RED').length,
   };
+
+  // REPORT-STATUS-CLARITY-V1: 주차 진행 요약 (대상=활성 학생 수)
+  const weekSummary = summarizeWeek(weekFilteredReports, allStudents.length);
+  const reviewQueueCount = weekSummary.needsReview;
+  const nextReviewTarget = nextNeedsReview(weekFilteredReports, reviewCursorId);
+
 
   // Count selected targets - exclude RED reports
   const selectedStudentCount = [...sendTargets.values()].filter(t => {
@@ -820,6 +866,9 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* REPORT-STATUS-CLARITY-V1 */}
+      <ReportPurposeBanner current="manage" weekStart={reportWeekFilter} />
+
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'generate' | 'prompt')}>
         <TabsList>
           <TabsTrigger value="generate">리포트 생성 / 관리</TabsTrigger>
@@ -827,7 +876,40 @@ export default function Reports() {
         </TabsList>
 
         <TabsContent value="generate" className="space-y-6">
-        <div className="flex items-center gap-3">
+        <WeekProgressSummary
+          summary={weekSummary}
+          active={statusFilter}
+          onSelect={(f) => { setStatusFilter(f); if (f !== 'all') setQualityFilter('all'); }}
+          weekStart={reportWeekFilter}
+          weekEnd={format(addDays(new Date(reportWeekFilter), 5), 'yyyy-MM-dd')}
+        />
+
+        {reviewQueueCount > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+            <p className="text-xs sm:text-sm min-w-0 break-words flex-1">
+              검수 필요 <b>{reviewQueueCount}</b>건 (전체 {weekSummary.generated}건 중). 검수는 사람이 판단하며,
+              경고가 있어도 기존 정책대로 공개/전송을 강행할 수 있습니다.
+            </p>
+            {nextReviewTarget && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  setStatusFilter('needs_review');
+                  setQualityFilter('all');
+                  setReviewCursorId(nextReviewTarget.id || null);
+                  handlePreview(nextReviewTarget as WeeklyReport);
+                }}
+              >
+                다음 검수 필요 학생 ({nextReviewTarget.student_name || '-'})
+              </Button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 flex-wrap">
+
           <div className="flex items-center gap-2">
             <Checkbox
               id="resend"
@@ -1348,15 +1430,16 @@ export default function Reports() {
                     </TableHead>
                     <TableHead className="w-[90px]">학생 전송</TableHead>
                     <TableHead className="w-[90px]">학부모 전송</TableHead>
-                    <TableHead>학생</TableHead>
+                    <TableHead>학생 <span className="text-[10px] text-muted-foreground">(운영 상태)</span></TableHead>
                     <TableHead>기간</TableHead>
-                    <TableHead>수업 수</TableHead>
-                    <TableHead>평균 점수</TableHead>
-                    <TableHead>주요 이슈</TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">수업 수 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">평균 점수 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">주요 이슈 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
                     <TableHead>품질</TableHead>
                     <TableHead>위험도</TableHead>
-                    <TableHead>학생 상태</TableHead>
-                    <TableHead>학부모 상태</TableHead>
+                    <TableHead title="발송 근거 컬럼이 없으면 '확인 불가'로 표시됩니다">학생 발송</TableHead>
+                    <TableHead title="발송 근거 컬럼이 없으면 '확인 불가'로 표시됩니다">학부모 발송</TableHead>
+
                      <TableHead>미리보기</TableHead>
                      <TableHead>공유 링크</TableHead>
                      <TableHead>학부모 공개</TableHead>
@@ -1399,17 +1482,31 @@ export default function Reports() {
                             disabled={parentDisabled}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {report.student_name || '-'}
+                        <TableCell className="font-medium min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="break-all">{report.student_name || '-'}</span>
                             {hasNoLessons && (
                               <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/30 px-2 py-0.5 rounded-full">
                                 <XCircle className="w-3 h-3" />
                                 미제출로 제외
                               </span>
                             )}
+                            {/* REPORT-STATUS-CLARITY-V1: 작성 상태 (발송 상태와 별개) */}
+                            <span
+                              title={`운영 상태 · ${WRITE_STATUS_LABEL[getWriteStatus(report)]}`}
+                              className={cn(
+                                'text-[10px] px-1.5 py-0.5 rounded-full border',
+                                getWriteStatus(report) === 'needs_review' && 'bg-destructive/10 text-destructive border-destructive/30',
+                                getWriteStatus(report) === 'ready' && 'bg-primary/10 text-primary border-primary/30',
+                                getWriteStatus(report) === 'published' && 'bg-green-500/10 text-green-600 border-green-500/30',
+                                getWriteStatus(report) === 'zero_lessons' && 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                              )}
+                            >
+                              {WRITE_STATUS_LABEL[getWriteStatus(report)]}
+                            </span>
                           </div>
                         </TableCell>
+
                         <TableCell className="text-muted-foreground">
                           {format(new Date(report.week_start), 'MM/dd')} -{' '}
                           {format(new Date(report.week_end), 'MM/dd')}
@@ -1474,8 +1571,11 @@ export default function Reports() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" title={getDeliveryStatus(report).evidence}>
                             {getSentStatusIcon(report.student_sent_status)}
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {report.student_sent_status === 'sent' ? '발송됨' : report.student_sent_status === 'failed' ? '실패' : '확인 불가'}
+                            </span>
                             {report.student_sent_at && (
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(report.student_sent_at), 'MM/dd')}
@@ -1484,8 +1584,11 @@ export default function Reports() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" title={getDeliveryStatus(report).evidence}>
                             {getSentStatusIcon(report.parent_sent_status)}
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {report.parent_sent_status === 'sent' ? '발송됨' : report.parent_sent_status === 'failed' ? '실패' : '확인 불가'}
+                            </span>
                             {report.parent_sent_at && (
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(report.parent_sent_at), 'MM/dd')}
@@ -1493,6 +1596,7 @@ export default function Reports() {
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <Button
                             variant="ghost"
