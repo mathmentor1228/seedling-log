@@ -1,6 +1,6 @@
 // STUDENT-KARTE-V2 — 원장/담당 강사용 학생 카르테 (읽기 전용)
 // 새 저장·발송·자동 점수 없음. 기존 상세 화면으로 링크만 제공한다.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,10 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  ArrowLeft, CheckCircle2, AlertTriangle, ExternalLink, FileText,
+  ArrowLeft, CheckCircle2, AlertTriangle, ExternalLink, FileText, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { summarizeEvents } from '@/lib/reportDelivery';
+import { ConsultLogDialog } from '@/components/consult/ConsultLogDialog';
+import {
+  consultDate, daysSince, followUpState, isConsultNote, summarizeConsults, type ConsultNote,
+} from '@/lib/consultLog';
 import {
   KARTE_REPORT_WEEKS, KARTE_SUMMARY_DAYS, KARTE_TREND_WEEKS, useStudentKarte,
 } from '@/components/student-karte/useStudentKarte';
