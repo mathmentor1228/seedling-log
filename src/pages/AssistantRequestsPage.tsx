@@ -1,54 +1,13 @@
-// TEACHER-REQUEST-DETAILS-ATTACH-V1
+// DEPRECATED (ASSISTANT-MERGE-V1)
+// 사용 중단: /assistant-requests 대표 화면은 이제 AssistantPage 가 렌더한다.
+// 이 컴포넌트는 참조 0건이며 기능 손실 확인 후 제거 예정이다. (삭제 금지 · 참조 추가 금지)
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TeacherAssistantRequestsView } from '@/components/TeacherAssistantRequestsView';
-import { useAuth, isTeacher } from '@/lib/auth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ClipboardCheck } from 'lucide-react';
 
-// Full page view that reuses TeacherAssistantRequestsView for teachers
-function AssistantRequests() {
-  const { role } = useAuth();
-
-  // Teachers get the full requests view
-  if (isTeacher(role)) {
-    return <TeacherAssistantRequestsView />;
-  }
-
-  // Admin/Assistant fallback
-  return (
-    <div className="space-y-6">
-      {/* Marker for deployment confirmation */}
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        TEACHER-REQUEST-DETAILS-ATTACH-V1
-      </div>
-      
-      <div className="flex items-center gap-3">
-        <ClipboardCheck className="w-8 h-8 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">조교요청</h1>
-          <p className="text-muted-foreground">선생님이 조교에게 요청하는 업무를 관리합니다</p>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>요청 목록</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            요청 기능은 대시보드의 조교 체크리스트에서 관리됩니다. 
-            대시보드로 이동하여 요청을 생성하고 관리하세요.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-export default function AssistantRequestsPage() {
+export default function AssistantRequestsPageDeprecated() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
-      <AssistantRequests />
+      <TeacherAssistantRequestsView />
     </ProtectedRoute>
   );
 }
