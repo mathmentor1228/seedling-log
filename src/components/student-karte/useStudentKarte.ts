@@ -33,7 +33,8 @@ export interface KarteState {
   reload: () => void;
   student: KarteStudent | null;
   classNames: string[];
-  teachers: { subject: string; name: string }[];
+  /** source: 'mapping' = student_subject_teachers, 'fallback' = 반 담당/최근 수업일지 */
+  teachers: { subject: string; name: string; source: 'mapping' | 'fallback' }[];
   lastNoteDate: string | null;
   summary: KarteSummary | null;
   timeline: TimelineItem[];
@@ -64,7 +65,7 @@ export function useStudentKarte(studentId: string | undefined): KarteState {
   const [partialErrors, setPartialErrors] = useState<string[]>([]);
   const [student, setStudent] = useState<KarteStudent | null>(null);
   const [classNames, setClassNames] = useState<string[]>([]);
-  const [teachers, setTeachers] = useState<{ subject: string; name: string }[]>([]);
+  const [teachers, setTeachers] = useState<{ subject: string; name: string; source: 'mapping' | 'fallback' }[]>([]);
   const [lessons, setLessons] = useState<KarteLesson[]>([]);
   const [homework, setHomework] = useState<KarteHomework[]>([]);
   const [reports, setReports] = useState<KarteReport[]>([]);
@@ -88,8 +89,8 @@ export function useStudentKarte(studentId: string | undefined): KarteState {
       setStudent(s as KarteStudent);
 
       const [csRes, stRes, lrRes, hwRes, wrRes, tnRes, alRes] = await Promise.all([
-        supabase.from('class_students').select('class_id, classes(name)').eq('student_id', studentId),
-        supabase.from('student_subject_teachers').select('subject, teacher_id, profiles(full_name)').eq('student_id', studentId),
+        supabase.from('class_students').select('class_id, classes(id, name, teacher_id)').eq('student_id', studentId),
+        supabase.from('student_subject_teachers').select('subject, teacher_id').eq('student_id', studentId),
         supabase.from('lesson_records')
           .select('id, lesson_date, subject, submitted, attendance_status, lesson_range, understanding_score, teacher_display_name, homework_status')
           .eq('student_id', studentId).gte('lesson_date', from90).lte('lesson_date', today)
@@ -111,13 +112,64 @@ export function useStudentKarte(studentId: string | undefined): KarteState {
           .eq('student_id', studentId).gte('date', from90).lte('date', today),
       ]);
 
+      // 담당 반: class_id 기준 dedupe
+      const classRows: { id: string; name: string; teacherId: string | null }[] = [];
       if (csRes.error) errs.push('담당 반');
-      else setClassNames((csRes.data || []).map((r: any) => r.classes?.name).filter(Boolean));
+      else {
+        const seen = new Set<string>();
+        (csRes.data || []).forEach((r: any) => {
+          const c = r.classes;
+          const id = c?.id || r.class_id;
+          if (!c?.name || !id || seen.has(id)) return;
+          seen.add(id);
+          classRows.push({ id, name: c.name, teacherId: c.teacher_id || null });
+        });
+        setClassNames([...new Set(classRows.map((c) => c.name))]);
+      }
 
+      // 담당 강사: 매핑 → 실패/공백이면 반 담당·최근 수업일지로 fallback (읽기 전용)
       if (stRes.error) errs.push('담당 강사');
-      else setTeachers((stRes.data || []).map((r: any) => ({
-        subject: r.subject, name: r.profiles?.full_name || '미지정',
-      })));
+      const mappingRows = (stRes.data || []) as any[];
+      const teacherIds = [...new Set([
+        ...mappingRows.map((r) => r.teacher_id).filter(Boolean),
+        ...classRows.map((c) => c.teacherId).filter(Boolean),
+      ])] as string[];
+      const nameById = new Map<string, string>();
+      if (teacherIds.length) {
+        const { data: profs, error: pErr } = await supabase
+          .from('profiles').select('id, full_name').in('id', teacherIds);
+        if (pErr) errs.push('강사 이름');
+        else (profs || []).forEach((p: any) => nameById.set(p.id, p.full_name || ''));
+      }
+
+      const resolved: { subject: string; name: string; source: 'mapping' | 'fallback' }[] = [];
+      const seenTeacher = new Set<string>();
+      mappingRows.forEach((r) => {
+        const name = (r.teacher_id && nameById.get(r.teacher_id)) || '';
+        if (!name) return;
+        const k = `${r.subject}|${r.teacher_id}`;
+        if (seenTeacher.has(k)) return;
+        seenTeacher.add(k);
+        resolved.push({ subject: r.subject, name, source: 'mapping' });
+      });
+      if (resolved.length === 0) {
+        const fbSeen = new Set<string>();
+        classRows.forEach((c) => {
+          const name = c.teacherId ? nameById.get(c.teacherId) : '';
+          if (!name || fbSeen.has(name)) return;
+          fbSeen.add(name);
+          resolved.push({ subject: c.name, name, source: 'fallback' });
+        });
+        if (resolved.length === 0 && !lrRes.error) {
+          (lrRes.data || []).forEach((l: any) => {
+            const name = (l.teacher_display_name || '').trim();
+            if (!name || fbSeen.has(name)) return;
+            fbSeen.add(name);
+            resolved.push({ subject: l.subject || '최근 수업', name, source: 'fallback' });
+          });
+        }
+      }
+      setTeachers(resolved);
 
       if (lrRes.error) errs.push('수업일지'); else setLessons((lrRes.data || []) as any);
       if (hwRes.error) errs.push('숙제'); else setHomework((hwRes.data || []) as any);

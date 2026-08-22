@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, Component, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
+import { safePercent } from '@/components/principal/unclosedScope';
 import { supabase } from '@/integrations/supabase/client';
 import { getAttendanceLabel, getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { Button } from '@/components/ui/button';
@@ -59,8 +60,8 @@ function LiveClock() {
 /* ------------------------------------------------------------------ */
 /*  Stat Card with count-up                                            */
 /* ------------------------------------------------------------------ */
-function StatCard({ label, value, sub, color, icon: Icon, onClick }: {
-  label: string; value: number; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
+function StatCard({ label, value, unit, sub, color, icon: Icon, onClick }: {
+  label: string; value: number; unit?: string; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
   icon: React.ElementType;
   onClick?: () => void;
 }) {
@@ -99,7 +100,7 @@ function StatCard({ label, value, sub, color, icon: Icon, onClick }: {
           <p className="text-xs text-muted-foreground">{label}</p>
           <p className={`text-2xl font-bold ${textColor[color]}`}>
             <AnimatedCounter value={value} />
-            {sub?.includes('%') ? '%' : sub?.includes('명') ? '명' : ''}
+            {unit ?? ''}
           </p>
           {sub && <p className="text-2xs text-muted-foreground">{sub}</p>}
         </div>
@@ -497,8 +498,8 @@ function PrincipalContent() {
 
   const checkedIn = logs.filter(l => l.checked_in_at && !l.checked_out_at);
   const checkedOut = logs.filter(l => l.checked_out_at);
-  const totalStudents = logs.length || 1;
-  const attendanceRate = Math.round(((checkedIn.length + checkedOut.length) / totalStudents) * 100);
+  const totalStudents = logs.length;
+  const attendanceRate = safePercent(checkedIn.length + checkedOut.length, totalStudents);
   const lateCount = logs.filter(l => l.checked_in_at && new Date(l.checked_in_at).getMinutes() > 10).length;
   const absentCount = logs.filter(l => !l.checked_in_at).length;
 
@@ -533,6 +534,7 @@ function PrincipalContent() {
               icon={CheckCircle}
               label="오늘 입실률"
               value={attendanceRate}
+              unit="%"
               sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 · 출입 태그 기준`}
               color="green"
               onClick={() => setDetailOpen('rate')}
@@ -541,6 +543,7 @@ function PrincipalContent() {
               icon={Clock}
               label="지각"
               value={lateCount}
+              unit="명"
               sub="오늘 · 출입 태그 기준"
               color="orange"
               onClick={() => setDetailOpen('late')}

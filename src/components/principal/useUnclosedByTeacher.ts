@@ -6,6 +6,7 @@ import {
   addDaysKST, buildUnclosedGroups, groupByTeacher,
   type TeacherUnclosed, type UnclosedGroup, type UnclosedRecordRow,
 } from './unclosedSummary';
+import { filterFinishedRecords, getNowMinutesKST, type ClassScheduleRow } from './unclosedScope';
 
 export type WindowDays = 7 | 14 | 30;
 export type StatusFilter = 'all' | 'not_started' | 'in_progress';
@@ -49,7 +50,7 @@ export function useUnclosedByTeacher(filters: UnclosedFilters): UnclosedResult {
     setError(null);
     const errs: string[] = [];
     try {
-      const [recRes, classRes] = await Promise.all([
+      const [recRes, classRes, schedRes] = await Promise.all([
         supabase
           .from('lesson_records')
           .select('id, class_id, lesson_date, submitted, attendance_status, lesson_range, teacher_display_name')
@@ -57,14 +58,22 @@ export function useUnclosedByTeacher(filters: UnclosedFilters): UnclosedResult {
           .lte('lesson_date', to)
           .order('lesson_date', { ascending: true }),
         supabase.from('classes').select('id, name'),
+        supabase.from('class_schedules').select('class_id, day_of_week, end_time, is_active, inactive_until'),
       ]);
       if (recRes.error) throw recRes.error;
       const names = new Map<string, string>();
       if (classRes.error) errs.push('반 이름');
       else (classRes.data || []).forEach((c: any) => names.set(c.id, c.name || ''));
 
+      if (schedRes.error) errs.push('수업 시간표');
+      const scoped = filterFinishedRecords((recRes.data || []) as any[], {
+        today: to,
+        nowMinutes: getNowMinutesKST(),
+        schedules: (schedRes.data || []) as ClassScheduleRow[],
+      });
+
       setRows(
-        (recRes.data || []).map((r: any) => ({
+        scoped.map((r: any) => ({
           id: r.id,
           class_id: r.class_id,
           class_name: r.class_id ? names.get(r.class_id) || null : null,

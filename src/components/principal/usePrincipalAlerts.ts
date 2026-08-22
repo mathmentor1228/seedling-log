@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
 import { getCardDisplay, type CardDisplayState } from '@/components/teacher/cardStatus';
 import { isPresent } from '@/lib/attendance';
+import { filterFinishedRecords, getNowMinutesKST, type ClassScheduleRow } from './unclosedScope';
 
 export const ALERT_WINDOW_DAYS = 14;
 
@@ -60,7 +61,7 @@ export function usePrincipalAlerts(): PrincipalAlerts {
     setLoading(true);
     setError(null);
     try {
-      const [recRes, logRes, classRes, jobRes] = await Promise.all([
+      const [recRes, logRes, classRes, schedRes, jobRes] = await Promise.all([
         supabase
           .from('lesson_records')
           .select('id, class_id, student_id, lesson_date, submitted, attendance_status, lesson_range')
@@ -72,6 +73,7 @@ export function usePrincipalAlerts(): PrincipalAlerts {
           .gte('date', from)
           .lte('date', to),
         supabase.from('classes').select('id, name'),
+        supabase.from('class_schedules').select('class_id, day_of_week, end_time, is_active, inactive_until'),
         supabase
           .from('weekly_jobs_log')
           .select('status, run_at')
@@ -100,12 +102,19 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       };
       const map = new Map<string, Acc>();
 
-      (recRes.data || []).forEach((r: any) => {
-        if (!r.class_id) return;
-        const key = `${r.class_id}|${r.lesson_date}`;
+      const scopeCtx = {
+        today: to,
+        nowMinutes: getNowMinutesKST(),
+        schedules: (schedRes.data || []) as ClassScheduleRow[],
+      };
+      const scopedRecords = filterFinishedRecords((recRes.data || []) as any[], scopeCtx);
+
+      scopedRecords.forEach((r: any) => {
+        const classId: string = r.class_id || '';
+        const key = `${classId || 'noclass'}|${r.lesson_date}`;
         const acc =
           map.get(key) ||
-          { classId: r.class_id, date: r.lesson_date, total: 0, recorded: 0, submitted: 0, unsetAttendance: 0, gap: 0 };
+          { classId, date: r.lesson_date, total: 0, recorded: 0, submitted: 0, unsetAttendance: 0, gap: 0 };
         const statuses: string[] = Array.isArray(r.attendance_status) ? r.attendance_status : [];
         const hasAttendance = statuses.length > 0;
         const hasContent = hasAttendance || !!(r.lesson_range && String(r.lesson_range).trim());
@@ -119,13 +128,14 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       });
 
       const mk = (a: Acc, issueCount: number): ClassDayGroup => ({
-        key: `${a.classId}|${a.date}`,
+        key: `${a.classId || 'noclass'}|${a.date}`,
         classId: a.classId,
-        className: classNames.get(a.classId) || '이름 없는 반',
+        className: a.classId ? classNames.get(a.classId) || '이름 없는 반' : '(반 미지정)',
         date: a.date,
         studentCount: a.total,
         issueCount,
       });
+
 
       const ns: ClassDayGroup[] = [];
       const ip: ClassDayGroup[] = [];
