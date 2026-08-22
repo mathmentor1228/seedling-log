@@ -49,6 +49,7 @@ const AdminBriefingPage = lazy(() => import("./pages/AdminBriefingPage"));
 const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
 const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
+const AdminFeatureMapPage = lazy(() => import("./pages/AdminFeatureMapPage"));
 const ParentLearningFeedbackPage = lazy(() => import("./pages/ParentLearningFeedbackPage"));
 const TuitionPage = lazy(() => import("./pages/TuitionPage"));
 const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
@@ -181,6 +182,7 @@ const App = () => (
                 <Route path="/students/:studentId/karte" element={<StudentKartePage />} />
                 <Route path="/admin/unclosed" element={<UnclosedLessonsPage />} />
                 <Route path="/admin/data-quality" element={<DataQualityPage />} />
+                <Route path="/admin/feature-map" element={<AdminFeatureMapPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
