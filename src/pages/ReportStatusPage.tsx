@@ -382,14 +382,32 @@ export default function ReportStatusPage() {
                             <span key={subj} className="text-2xs px-1.5 py-0.5 rounded bg-accent text-accent-foreground font-medium">{subj}</span>
                           ))}
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">작성: {WRITE_STATUS_LABEL[ws]}</span>
-                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium text-muted-foreground" title={ds.evidence}>
-                            발송: {ds.label}
-                          </span>
-                          <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
-                        </div>
+                        <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
                       </div>
+
+                      {/* REPORT-DELIVERY-CONFIRM-V1: 작성 / 공개 / 발송 확인 3줄 분리 */}
+                      <div className="space-y-1.5 mb-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">작성: {WRITE_STATUS_LABEL[ws]}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">
+                            공개: {r.parent_visible ? '학부모 포털 공개됨' : '비공개'}
+                          </span>
+                          <span className="text-2xs text-muted-foreground break-words" title={ds.evidence}>
+                            자동 발송 근거: {ds.label}
+                          </span>
+                        </div>
+                        <DeliveryConfirmRow
+                          reportId={r.id}
+                          report={r}
+                          events={eventsByReport[r.id] || []}
+                          actorNames={actorNames}
+                          currentUserId={user?.id}
+                          onSaved={() => fetchDeliveryEvents(reports.map(x => x.id))}
+                        />
+                      </div>
+
 
                       <Tabs defaultValue="parent" className="w-full">
                         <TabsList className="grid w-full grid-cols-2 h-8">
