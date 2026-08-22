@@ -217,6 +217,7 @@ export function PrincipalActionCenter({
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/data-quality')}>
               데이터 점검 열기
+              <DataQualityNewBadge />
             </Button>
           </div>
         )}
