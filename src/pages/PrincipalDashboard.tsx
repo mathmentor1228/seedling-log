@@ -532,6 +532,10 @@ function PrincipalContent() {
             onOpenNoCheckIn={() => setDetailOpen('absent')}
           />
 
+          {/* CONSULT-LOG-V1 — 상담 후속조치 예정/기한 지남 */}
+          <ConsultFollowUpsCard />
+
+
           {/* 오늘 출입 태그 요약 (문제 없음 항목은 여기서 요약만) */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard
