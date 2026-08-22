@@ -225,20 +225,22 @@ export default function ReportStatusPage() {
             </p>
           </div>
 
+          <ReportPurposeBanner current="status" weekStart={weekStart} />
+
           {/* Week nav + search */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftWeek(-1)}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftWeek(-1)} aria-label="이전 주">
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               <div className="px-3 py-1.5 bg-muted rounded-md text-sm font-medium whitespace-nowrap">
                 {weekStart} ~ {weekEnd}
               </div>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftWeek(1)}>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftWeek(1)} aria-label="다음 주">
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="학생 이름 검색..."
@@ -249,15 +251,64 @@ export default function ReportStatusPage() {
             </div>
           </div>
 
+          {/* REPORT-STATUS-CLARITY-V1: 작성 상태 / 발송 상태 분리 집계 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-lg border p-3 min-w-0">
+              <p className="text-xs font-semibold mb-2">작성 상태 (조회 범위 {reports.length}건)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { k: 'all', label: `전체 ${reports.length}` },
+                  { k: 'published', label: `학부모 공개됨 ${summary.published}` },
+                  { k: 'draft', label: `비공개 초안 ${summary.sendable}` },
+                  { k: 'needs_review', label: `검수 필요·수업 0건 ${summary.needsReview + summary.caution}` },
+                ] as const).map(c => (
+                  <button
+                    key={c.k}
+                    type="button"
+                    onClick={() => setStatusFilter(c.k as any)}
+                    className={cn(
+                      'text-xs px-2 py-1 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      statusFilter === c.k ? 'bg-primary/10 border-primary text-primary' : 'hover:bg-muted'
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                마지막 변경(생성)일: {lastChangedAt ? new Date(lastChangedAt).toLocaleString('ko-KR') : '없음'}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 min-w-0">
+              <p className="text-xs font-semibold mb-2">발송 상태</p>
+              {summary.deliveryConfirmed === 0 ? (
+                <p className="text-xs text-muted-foreground break-words">
+                  발송 여부 확인 불가 — 이 주차 리포트에는 실제 발송 근거(sent_status/sent_at)가 없습니다.
+                  작성 완료·학부모 공개는 발송 완료를 의미하지 않습니다.
+                </p>
+              ) : (
+                <p className="text-xs text-foreground">
+                  발송 근거가 확인된 건수 {summary.deliveryConfirmed}건 / 전체 {reports.length}건.
+                  나머지는 발송 여부 확인 불가입니다.
+                </p>
+              )}
+            </div>
+          </div>
+
           {/* Report cards */}
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
+          ) : loadError ? (
+            <div className="text-center py-16 text-sm text-destructive break-words px-4">
+              일부 데이터를 불러오지 못했습니다: {loadError}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
-              해당 주차에 생성된 리포트가 없습니다
+              해당 주차/필터에 해당하는 리포트가 없습니다
             </div>
+
           ) : (
             <div className="space-y-4">
               {filtered.map(r => {
