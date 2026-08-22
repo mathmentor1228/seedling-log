@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
+import { ConsultFollowUpsCard } from '@/components/consult/ConsultFollowUpsCard';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
