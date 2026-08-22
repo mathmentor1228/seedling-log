@@ -13,7 +13,10 @@ import {
 import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
 import { getWriteStatus, getDeliveryStatus, WRITE_STATUS_LABEL, summarizeWeek } from '@/lib/reportStatus';
+import { DeliveryConfirmRow } from '@/components/reports/DeliveryConfirmRow';
+import { countConfirmations, type DeliveryEvent } from '@/lib/reportDelivery';
 import { cn } from '@/lib/utils';
+
 
 interface ReportRow {
   id: string;
@@ -76,6 +79,11 @@ export default function ReportStatusPage() {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인 이력 (append-only)
+  const [eventsByReport, setEventsByReport] = useState<Record<string, DeliveryEvent[]>>({});
+  const [actorNames, setActorNames] = useState<Record<string, string>>({});
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   // REPORT-STATUS-CLARITY-V1: 작성 상태 필터 (발송 상태와 분리)
@@ -180,6 +188,7 @@ export default function ReportStatusPage() {
       }
 
       setReports(rows);
+      await fetchDeliveryEvents(rows.map(r => r.id));
     } catch (err: any) {
       console.error('Error fetching report status:', err);
       setLoadError(err?.message || '리포트 조회 중 오류가 발생했습니다.');
@@ -187,6 +196,37 @@ export default function ReportStatusPage() {
       setLoading(false);
     }
   }
+
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인 이력 조회 (읽기 전용, 실제 전송 없음)
+  async function fetchDeliveryEvents(reportIds: string[]) {
+    setEventsError(null);
+    if (reportIds.length === 0) { setEventsByReport({}); return; }
+    try {
+      const { data, error } = await supabase
+        .from('report_delivery_events')
+        .select('id, report_id, status, channel, note, actor_id, created_at')
+        .in('report_id', reportIds)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map: Record<string, DeliveryEvent[]> = {};
+      (data || []).forEach((e: any) => {
+        (map[e.report_id] ||= []).push(e as DeliveryEvent);
+      });
+      setEventsByReport(map);
+
+      const actorIds = Array.from(new Set((data || []).map((e: any) => e.actor_id)));
+      if (actorIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', actorIds);
+        const names: Record<string, string> = {};
+        (profs || []).forEach((p: any) => { names[p.id] = p.full_name || '담당자'; });
+        setActorNames(names);
+      }
+    } catch (err: any) {
+      console.error('Error fetching delivery events:', err);
+      setEventsError(err?.message || '발송 확인 이력을 불러오지 못했습니다.');
+    }
+  }
+
 
   const filtered = useMemo(() => {
     let rows = reports;
@@ -205,6 +245,12 @@ export default function ReportStatusPage() {
 
   // 작성 상태 / 발송 상태 집계 (분리)
   const summary = useMemo(() => summarizeWeek(reports, reports.length), [reports]);
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인(수동 기록) 집계
+  const confirmCounts = useMemo(
+    () => countConfirmations(reports.map(r => r.id), eventsByReport),
+    [reports, eventsByReport]
+  );
+
   const lastChangedAt = useMemo(
     () => reports.reduce<string | null>((acc, r) => (r.generated_at && (!acc || r.generated_at > acc) ? r.generated_at : acc), null),
     [reports]
@@ -280,19 +326,22 @@ export default function ReportStatusPage() {
               </p>
             </div>
             <div className="rounded-lg border p-3 min-w-0">
-              <p className="text-xs font-semibold mb-2">발송 상태</p>
-              {summary.deliveryConfirmed === 0 ? (
-                <p className="text-xs text-muted-foreground break-words">
-                  발송 여부 확인 불가 — 이 주차 리포트에는 실제 발송 근거(sent_status/sent_at)가 없습니다.
-                  작성 완료·학부모 공개는 발송 완료를 의미하지 않습니다.
-                </p>
-              ) : (
-                <p className="text-xs text-foreground">
-                  발송 근거가 확인된 건수 {summary.deliveryConfirmed}건 / 전체 {reports.length}건.
-                  나머지는 발송 여부 확인 불가입니다.
+              <p className="text-xs font-semibold mb-2">발송 확인 (수동 기록)</p>
+              <p className="text-xs text-foreground break-words">
+                대상 {reports.length}건 · 공개 {summary.published}건 · 발송 확인 {confirmCounts.confirmed}건 ·
+                실패 기록 {confirmCounts.failed}건 · 미확인 {confirmCounts.unconfirmed}건
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-2 break-words">
+                자동 발송 근거(sent_status)는 여전히 {summary.deliveryConfirmed}건입니다. 이 시스템은 메시지를 전송하지 않으며,
+                외부로 보낸 뒤 사람이 기록한 확인 이력만 표시합니다.
+              </p>
+              {eventsError && (
+                <p className="text-[11px] text-destructive mt-1 break-words">
+                  발송 확인 이력 일부를 불러오지 못했습니다: {eventsError}
                 </p>
               )}
             </div>
+
           </div>
 
           {/* Report cards */}
@@ -333,14 +382,32 @@ export default function ReportStatusPage() {
                             <span key={subj} className="text-2xs px-1.5 py-0.5 rounded bg-accent text-accent-foreground font-medium">{subj}</span>
                           ))}
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">작성: {WRITE_STATUS_LABEL[ws]}</span>
-                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium text-muted-foreground" title={ds.evidence}>
-                            발송: {ds.label}
-                          </span>
-                          <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
-                        </div>
+                        <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
                       </div>
+
+                      {/* REPORT-DELIVERY-CONFIRM-V1: 작성 / 공개 / 발송 확인 3줄 분리 */}
+                      <div className="space-y-1.5 mb-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">작성: {WRITE_STATUS_LABEL[ws]}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">
+                            공개: {r.parent_visible ? '학부모 포털 공개됨' : '비공개'}
+                          </span>
+                          <span className="text-2xs text-muted-foreground break-words" title={ds.evidence}>
+                            자동 발송 근거: {ds.label}
+                          </span>
+                        </div>
+                        <DeliveryConfirmRow
+                          reportId={r.id}
+                          report={r}
+                          events={eventsByReport[r.id] || []}
+                          actorNames={actorNames}
+                          currentUserId={user?.id}
+                          onSaved={() => fetchDeliveryEvents(reports.map(x => x.id))}
+                        />
+                      </div>
+
 
                       <Tabs defaultValue="parent" className="w-full">
                         <TabsList className="grid w-full grid-cols-2 h-8">
