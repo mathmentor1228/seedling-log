@@ -188,6 +188,7 @@ export default function ReportStatusPage() {
       }
 
       setReports(rows);
+      await fetchDeliveryEvents(rows.map(r => r.id));
     } catch (err: any) {
       console.error('Error fetching report status:', err);
       setLoadError(err?.message || '리포트 조회 중 오류가 발생했습니다.');
@@ -195,6 +196,37 @@ export default function ReportStatusPage() {
       setLoading(false);
     }
   }
+
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인 이력 조회 (읽기 전용, 실제 전송 없음)
+  async function fetchDeliveryEvents(reportIds: string[]) {
+    setEventsError(null);
+    if (reportIds.length === 0) { setEventsByReport({}); return; }
+    try {
+      const { data, error } = await supabase
+        .from('report_delivery_events')
+        .select('id, report_id, status, channel, note, actor_id, created_at')
+        .in('report_id', reportIds)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const map: Record<string, DeliveryEvent[]> = {};
+      (data || []).forEach((e: any) => {
+        (map[e.report_id] ||= []).push(e as DeliveryEvent);
+      });
+      setEventsByReport(map);
+
+      const actorIds = Array.from(new Set((data || []).map((e: any) => e.actor_id)));
+      if (actorIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', actorIds);
+        const names: Record<string, string> = {};
+        (profs || []).forEach((p: any) => { names[p.id] = p.full_name || '담당자'; });
+        setActorNames(names);
+      }
+    } catch (err: any) {
+      console.error('Error fetching delivery events:', err);
+      setEventsError(err?.message || '발송 확인 이력을 불러오지 못했습니다.');
+    }
+  }
+
 
   const filtered = useMemo(() => {
     let rows = reports;
