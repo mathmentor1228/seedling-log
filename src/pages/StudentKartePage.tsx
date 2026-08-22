@@ -48,6 +48,16 @@ function KarteContent() {
   const subject = sp.get('subject') || 'all';
 
   const k = useStudentKarte(studentId, { period, subject });
+  const [consultOpen, setConsultOpen] = useState(false);
+
+  const consultNotes = useMemo(
+    () => (k.notes as ConsultNote[]).filter((n) => isConsultNote(n))
+      .sort((a, b) => consultDate(b).localeCompare(consultDate(a))),
+    [k.notes]
+  );
+  const legacyNotes = useMemo(() => k.notes.filter((n) => !isConsultNote(n as any)), [k.notes]);
+  const consultSummary = useMemo(() => summarizeConsults(consultNotes, k.today), [consultNotes, k.today]);
+
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(sp);
