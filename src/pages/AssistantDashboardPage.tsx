@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
-import { ClipboardList, Users, Calendar, BookCheck, Bell } from 'lucide-react';
+import { ClipboardList, Users, Calendar, BookCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AssistantDashboard from '@/components/AssistantDashboard';
 import { cn } from '@/lib/utils';
