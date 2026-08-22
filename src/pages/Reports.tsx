@@ -1430,15 +1430,16 @@ export default function Reports() {
                     </TableHead>
                     <TableHead className="w-[90px]">학생 전송</TableHead>
                     <TableHead className="w-[90px]">학부모 전송</TableHead>
-                    <TableHead>학생</TableHead>
+                    <TableHead>학생 <span className="text-[10px] text-muted-foreground">(운영 상태)</span></TableHead>
                     <TableHead>기간</TableHead>
-                    <TableHead>수업 수</TableHead>
-                    <TableHead>평균 점수</TableHead>
-                    <TableHead>주요 이슈</TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">수업 수 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">평균 점수 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
+                    <TableHead title="수업일지 기반 자동 집계">주요 이슈 <span className="text-[10px] text-muted-foreground">자동</span></TableHead>
                     <TableHead>품질</TableHead>
                     <TableHead>위험도</TableHead>
-                    <TableHead>학생 상태</TableHead>
-                    <TableHead>학부모 상태</TableHead>
+                    <TableHead title="발송 근거 컬럼이 없으면 '확인 불가'로 표시됩니다">학생 발송</TableHead>
+                    <TableHead title="발송 근거 컬럼이 없으면 '확인 불가'로 표시됩니다">학부모 발송</TableHead>
+
                      <TableHead>미리보기</TableHead>
                      <TableHead>공유 링크</TableHead>
                      <TableHead>학부모 공개</TableHead>
