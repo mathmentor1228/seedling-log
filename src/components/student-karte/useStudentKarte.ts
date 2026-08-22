@@ -122,7 +122,7 @@ export function useStudentKarte(
           .eq('student_id', studentId).gte('week_start', fromFetch)
           .order('week_start', { ascending: false }),
         supabase.from('team_notes')
-          .select('id, created_at, title, scope, status, target_role')
+          .select('*')
           .eq('student_id', studentId)
           .order('created_at', { ascending: false }).limit(50),
         supabase.from('attendance_logs')

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
+import { ConsultFollowUpsCard } from '@/components/consult/ConsultFollowUpsCard';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
@@ -531,6 +532,10 @@ function PrincipalContent() {
             todayNoCheckInCount={absentCount}
             onOpenNoCheckIn={() => setDetailOpen('absent')}
           />
+
+          {/* CONSULT-LOG-V1 — 상담 후속조치 예정/기한 지남 */}
+          <ConsultFollowUpsCard />
+
 
           {/* 오늘 출입 태그 요약 (문제 없음 항목은 여기서 요약만) */}
           <div className="grid grid-cols-2 gap-3">

@@ -39,6 +39,12 @@ export interface KarteNote {
   scope: string | null;
   status: string | null;
   target_role: string | null;
+  body?: string | null;
+  due_date?: string | null;
+  consulted_at?: string | null;
+  consult_target?: string | null;
+  consult_method?: string | null;
+  created_by?: string | null;
 }
 
 export interface KarteSummary {
