@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FEATURE_MAP, featuresForRole, normalizeRoutePath, signalTables } from './featureMap';
+import { DELETION_REVIEW_CANDIDATES, FEATURE_MAP, featuresByTier, featuresForRole, normalizeRoutePath, signalTables } from './featureMap';
 
 const readSrc = (p: string) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
@@ -44,7 +44,7 @@ describe('feature map catalog', () => {
     for (const f of FEATURE_MAP) {
       expect(f.label.length).toBeGreaterThan(0);
       expect(f.description.length).toBeGreaterThan(0);
-      expect(['core', 'asNeeded', 'archive']).toContain(f.tier);
+      expect(['core', 'asNeeded', 'archive', 'technical']).toContain(f.tier);
       expect(f.roles.length).toBeGreaterThan(0);
     }
   });
@@ -128,6 +128,58 @@ describe('assistant feature merge (ASSISTANT-MERGE-V1)', () => {
   });
 });
 
+describe('feature cleanup 2nd pass (FEATURE-MAP-V2)', () => {
+  const layoutSrc = readSrc('components/layout/AppLayout.tsx');
+
+  it('기술 전용 기능은 admin 에게만 보인다', () => {
+    const technical = FEATURE_MAP.filter((f) => f.tier === 'technical');
+    expect(technical.length).toBeGreaterThan(0);
+    for (const f of technical) expect(f.roles).toEqual(['admin']);
+  });
+
+  it('admin 메뉴는 목적별 그룹으로 정리되어 있다', () => {
+    const admin = layoutSrc.slice(layoutSrc.indexOf('ADMIN-NAV-FLOW-V2'));
+    for (const g of ['오늘 운영', '학생·반', '수업·출결', '리포트·상담', '운영설정']) {
+      expect(admin).toContain(`label: '${g}'`);
+    }
+  });
+
+  it('핵심 동선(수업 마감·리포트 발송 확인)이 강사 메뉴 상단에 있다', () => {
+    const teacher = layoutSrc.slice(layoutSrc.indexOf('TEACHER-NAV-FLOW-V2'), layoutSrc.indexOf('ADMIN-NAV-FLOW-V2'));
+    expect(teacher).toContain("href: '/lessons/close'");
+    expect(teacher).toContain("href: '/reports/status'");
+  });
+
+  it('실사용이 확인된 단어시험지 제작은 보관후보가 아니다', () => {
+    const f = FEATURE_MAP.find((x) => x.href === '/vocab-generator');
+    expect(f?.tier).toBe('asNeeded');
+    expect(f?.hasEntryPoint).toBe(true);
+  });
+
+  it('보관후보는 접근 경로가 명시되어 있고 라우트가 유지된다', () => {
+    const routes = appRoutePaths();
+    for (const f of featuresByTier('admin', 'archive')) {
+      expect(routeExists(normalizeRoutePath(f.href), routes)).toBe(true);
+      expect(f.accessPath || f.supersededBy).toBeTruthy();
+    }
+  });
+
+  it('삭제 검토 후보는 보고만 하고 접근 경로를 남긴다', () => {
+    expect(DELETION_REVIEW_CANDIDATES.length).toBeGreaterThan(0);
+    for (const c of DELETION_REVIEW_CANDIDATES) {
+      expect(c.reason.length).toBeGreaterThan(0);
+      expect(c.access.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('기존 라우트는 하나도 제거되지 않았다', () => {
+    const appSrc = readSrc('App.tsx');
+    for (const href of ['/vocab-test', '/math-concepts', '/quiz-lookup', '/quiz-bulk-upload', '/study-sessions', '/private-channel', '/lessons/quick', '/assistant-tasks']) {
+      expect(appSrc).toContain(`path="${href}"`);
+    }
+  });
+});
+
 describe('archive group (ARCHIVE-FINALIZE-V1)', () => {
   const layoutSrc = readSrc('components/layout/AppLayout.tsx');
 
@@ -156,7 +208,6 @@ describe('archive group (ARCHIVE-FINALIZE-V1)', () => {
   it('archive pages render the archive notice', () => {
     const pages = [
       'pages/VocabTestPage.tsx',
-      'pages/VocabTestGeneratorPage.tsx',
       'pages/MathConceptPage.tsx',
       'pages/QuizLookupPage.tsx',
       'pages/QuizBulkUploadPage.tsx',
