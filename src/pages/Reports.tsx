@@ -1481,17 +1481,31 @@ export default function Reports() {
                             disabled={parentDisabled}
                           />
                         </TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            {report.student_name || '-'}
+                        <TableCell className="font-medium min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="break-all">{report.student_name || '-'}</span>
                             {hasNoLessons && (
                               <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/30 px-2 py-0.5 rounded-full">
                                 <XCircle className="w-3 h-3" />
                                 미제출로 제외
                               </span>
                             )}
+                            {/* REPORT-STATUS-CLARITY-V1: 작성 상태 (발송 상태와 별개) */}
+                            <span
+                              title={`운영 상태 · ${WRITE_STATUS_LABEL[getWriteStatus(report)]}`}
+                              className={cn(
+                                'text-[10px] px-1.5 py-0.5 rounded-full border',
+                                getWriteStatus(report) === 'needs_review' && 'bg-destructive/10 text-destructive border-destructive/30',
+                                getWriteStatus(report) === 'ready' && 'bg-primary/10 text-primary border-primary/30',
+                                getWriteStatus(report) === 'published' && 'bg-green-500/10 text-green-600 border-green-500/30',
+                                getWriteStatus(report) === 'zero_lessons' && 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                              )}
+                            >
+                              {WRITE_STATUS_LABEL[getWriteStatus(report)]}
+                            </span>
                           </div>
                         </TableCell>
+
                         <TableCell className="text-muted-foreground">
                           {format(new Date(report.week_start), 'MM/dd')} -{' '}
                           {format(new Date(report.week_end), 'MM/dd')}
