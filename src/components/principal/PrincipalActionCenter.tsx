@@ -16,7 +16,7 @@ import {
   type ClassDayGroup,
 } from './usePrincipalAlerts';
 
-type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_gap' | 'no_check_in' | 'job_failure';
+type ItemKey = 'not_started' | 'in_progress' | 'attendance_unset' | 'check_in_partial' | 'no_check_in' | 'job_failure';
 
 interface ActionItem {
   key: ItemKey;
@@ -88,13 +88,13 @@ export function PrincipalActionCenter({
         groups: alerts.attendanceUnset,
       },
       {
-        key: 'check_in_gap',
-        label: '수업출결·입실 태그 차이',
-        basis: `최근 ${ALERT_WINDOW_DAYS}일 · 출석 처리인데 출입 태그 입실 기록 없음`,
-        count: sumIssues(alerts.checkInGap),
+        key: 'check_in_partial',
+        label: '입실 태그 부분 누락',
+        basis: `최근 ${ALERT_WINDOW_DAYS}일 · 종료된 수업 · 마감 완료 · 출석 처리 학생 중, 같은 반에서 일부만 태그된 경우의 누락 인원 (결석 제외)`,
+        count: sumIssues(alerts.checkInPartial),
         unit: '명',
-        tone: 'neutral',
-        groups: alerts.checkInGap,
+        tone: 'amber',
+        groups: alerts.checkInPartial,
       },
       {
         key: 'no_check_in',
@@ -186,6 +186,30 @@ export function PrincipalActionCenter({
           </div>
         )}
 
+        {!alerts.loading && !alerts.error && alerts.checkInUntagged.length > 0 && (
+          <details className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+            <summary className="text-xs font-medium cursor-pointer list-none flex items-center gap-1.5">
+              <ChevronRight className="w-3 h-3 shrink-0" />
+              입실 태그 미사용 수업 {alerts.checkInUntagged.length}개
+              <span className="text-[11px] font-normal text-muted-foreground">
+                (참고 · 학생 {alerts.checkInUntaggedStudents}명)
+              </span>
+            </summary>
+            <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">
+              반 전체가 출입 태그를 쓰지 않은 수업입니다. 학생 개인의 누락이 아니므로 경고 숫자에 넣지 않습니다.
+              기준: 최근 {ALERT_WINDOW_DAYS}일 · 종료된 수업 · 마감 완료 · 출석 처리 학생 · 단위는 수업(반·날짜).
+            </p>
+            <ul className="mt-2 space-y-1">
+              {alerts.checkInUntagged.map((g) => (
+                <li key={g.key} className="text-[11px] text-muted-foreground flex items-center justify-between gap-2">
+                  <span className="truncate">{fmtDate(g.date)} · {g.className}</span>
+                  <span className="tabular-nums shrink-0">체크인 0/{g.studentCount}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         {!alerts.loading && !alerts.error && (
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate(`/admin/unclosed?days=${ALERT_WINDOW_DAYS}`)}>
             강사별 미마감 관리 열기
@@ -218,7 +242,10 @@ export function PrincipalActionCenter({
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{g.className}</p>
                       <p className="text-xs text-muted-foreground">
-                        {fmtDate(g.date)} · 대상 {g.issueCount}/{g.studentCount}명
+                        {fmtDate(g.date)} ·{' '}
+                        {detail?.key === 'check_in_partial'
+                          ? `체크인 ${g.studentCount - g.issueCount}/${g.studentCount} · 누락 ${g.issueCount}명`
+                          : `대상 ${g.issueCount}/${g.studentCount}명`}
                       </p>
                     </div>
                     <Button

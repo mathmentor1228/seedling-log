@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
 import { getCardDisplay, type CardDisplayState } from '@/components/teacher/cardStatus';
-import { isPresent } from '@/lib/attendance';
 import { filterFinishedRecords, getNowMinutesKST, type ClassScheduleRow } from './unclosedScope';
 import { classifyCheckInGaps, type CheckInGapGroup } from './checkInGap';
 
