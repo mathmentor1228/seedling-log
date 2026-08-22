@@ -196,12 +196,34 @@ export default function Reports() {
     return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
 
+  // REPORT-STATUS-CLARITY-V1: URL query 로 주차·검색·상태 필터 유지
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Report list week filter — defaults to same as generation week
   const [reportWeekFilter, setReportWeekFilter] = useState<string>(() => {
+    const fromUrl = searchParams.get('week');
+    if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) return fromUrl;
     const lastWeek = subWeeks(new Date(), 1);
     const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
     return format(mon, 'yyyy-MM-dd');
   });
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    const s = searchParams.get('status');
+    return (['needs_review', 'sendable', 'caution', 'published'].includes(s || '') ? s : 'all') as StatusFilter;
+  });
+
+  // 검수 진행 커서 (다음 검수 필요 학생 이동용)
+  const [reviewCursorId, setReviewCursorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set('week', reportWeekFilter);
+    if (statusFilter === 'all') next.delete('status'); else next.set('status', statusFilter);
+    if (searchQuery.trim()) next.set('q', searchQuery.trim()); else next.delete('q');
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportWeekFilter, statusFilter, searchQuery]);
 
   // Track which students already have reports for the selected week
   const [existingReportStudentIds, setExistingReportStudentIds] = useState<Set<string>>(new Set());
