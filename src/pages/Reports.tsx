@@ -1571,8 +1571,11 @@ export default function Reports() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" title={getDeliveryStatus(report).evidence}>
                             {getSentStatusIcon(report.student_sent_status)}
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {report.student_sent_status === 'sent' ? '발송됨' : report.student_sent_status === 'failed' ? '실패' : '확인 불가'}
+                            </span>
                             {report.student_sent_at && (
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(report.student_sent_at), 'MM/dd')}
@@ -1581,8 +1584,11 @@ export default function Reports() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" title={getDeliveryStatus(report).evidence}>
                             {getSentStatusIcon(report.parent_sent_status)}
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {report.parent_sent_status === 'sent' ? '발송됨' : report.parent_sent_status === 'failed' ? '실패' : '확인 불가'}
+                            </span>
                             {report.parent_sent_at && (
                               <span className="text-xs text-muted-foreground">
                                 {format(new Date(report.parent_sent_at), 'MM/dd')}
@@ -1590,6 +1596,7 @@ export default function Reports() {
                             )}
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <Button
                             variant="ghost"
