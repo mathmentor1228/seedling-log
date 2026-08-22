@@ -155,7 +155,11 @@ function KarteContent() {
               <p className="font-medium break-words">
                 {k.teachers.length ? k.teachers.map((t) => `${t.subject} ${t.name}`).join(', ') : '지정 없음'}
               </p>
+              {k.teachers.some((t) => t.source === 'fallback') && (
+                <p className="text-[11px] text-muted-foreground">최근 수업 담당(대체) · 담당 매핑 미등록</p>
+              )}
             </div>
+
             <div className="min-w-0">
               <p className="text-muted-foreground">최근 상담·메모</p>
               <p className="font-medium">{k.lastNoteDate || '상담 기록 없음'}</p>
