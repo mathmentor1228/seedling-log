@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -10,6 +11,9 @@ import {
   Search, Loader2, ChevronLeft, ChevronRight, FileBarChart,
 } from 'lucide-react';
 import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
+import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
+import { getWriteStatus, getDeliveryStatus, WRITE_STATUS_LABEL, summarizeWeek } from '@/lib/reportStatus';
+import { cn } from '@/lib/utils';
 
 interface ReportRow {
   id: string;
@@ -22,8 +26,15 @@ interface ReportRow {
   parent_message: string | null;
   generated_at: string;
   risk_level: string | null;
+  parent_visible?: boolean | null;
+  report_quality_tag?: string | null;
+  student_sent_status?: string | null;
+  parent_sent_status?: string | null;
+  student_sent_at?: string | null;
+  parent_sent_at?: string | null;
   teacher_subjects?: string[]; // subjects this teacher teaches for this student
 }
+
 
 function stripDebugMarkers(text: string): string {
   if (!text) return '';
