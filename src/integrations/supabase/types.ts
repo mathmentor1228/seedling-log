@@ -4421,6 +4421,47 @@ export type Database = {
         }
         Relationships: []
       }
+      report_delivery_events: {
+        Row: {
+          actor_id: string
+          channel: string
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          note: string | null
+          report_id: string
+          status: string
+        }
+        Insert: {
+          actor_id?: string
+          channel: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          note?: string | null
+          report_id: string
+          status: string
+        }
+        Update: {
+          actor_id?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          note?: string | null
+          report_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_delivery_events_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_templates: {
         Row: {
           created_at: string
