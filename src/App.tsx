@@ -7,6 +7,7 @@ import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import { StudentAuthProvider } from "@/lib/studentAuth";
+import { CompatRedirect } from "@/components/CompatRedirect";
 
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
