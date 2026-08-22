@@ -179,6 +179,7 @@ const App = () => (
                 <Route path="/students" element={<StudentsPage />} />
                 <Route path="/students/:studentId/karte" element={<StudentKartePage />} />
                 <Route path="/admin/unclosed" element={<UnclosedLessonsPage />} />
+                <Route path="/admin/data-quality" element={<DataQualityPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
