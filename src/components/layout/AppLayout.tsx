@@ -54,6 +54,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: ReactNode;
+  /** 모호한 명칭 구분용 1줄 설명 (툴팁) */
+  description?: string;
   adminOnly?: boolean;
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
   allowedEmails?: string[];
