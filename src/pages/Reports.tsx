@@ -866,6 +866,9 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* REPORT-STATUS-CLARITY-V1 */}
+      <ReportPurposeBanner current="manage" weekStart={reportWeekFilter} />
+
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'generate' | 'prompt')}>
         <TabsList>
           <TabsTrigger value="generate">리포트 생성 / 관리</TabsTrigger>
@@ -873,7 +876,40 @@ export default function Reports() {
         </TabsList>
 
         <TabsContent value="generate" className="space-y-6">
-        <div className="flex items-center gap-3">
+        <WeekProgressSummary
+          summary={weekSummary}
+          active={statusFilter}
+          onSelect={(f) => { setStatusFilter(f); if (f !== 'all') setQualityFilter('all'); }}
+          weekStart={reportWeekFilter}
+          weekEnd={format(addDays(new Date(reportWeekFilter), 5), 'yyyy-MM-dd')}
+        />
+
+        {reviewQueueCount > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+            <p className="text-xs sm:text-sm min-w-0 break-words flex-1">
+              검수 필요 <b>{reviewQueueCount}</b>건 (전체 {weekSummary.generated}건 중). 검수는 사람이 판단하며,
+              경고가 있어도 기존 정책대로 공개/전송을 강행할 수 있습니다.
+            </p>
+            {nextReviewTarget && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  setStatusFilter('needs_review');
+                  setQualityFilter('all');
+                  setReviewCursorId(nextReviewTarget.id || null);
+                  handlePreview(nextReviewTarget as WeeklyReport);
+                }}
+              >
+                다음 검수 필요 학생 ({nextReviewTarget.student_name || '-'})
+              </Button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 flex-wrap">
+
           <div className="flex items-center gap-2">
             <Checkbox
               id="resend"
