@@ -229,9 +229,9 @@ function ExamScoreTrendsContent() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-3 gap-4 min-w-0">
               {/* Top Risers */}
-              <Card className="md:col-span-2">
+              <Card className="md:col-span-2 min-w-0">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <TrendingUp className="w-5 h-5 text-emerald-500" />
@@ -246,7 +246,7 @@ function ExamScoreTrendsContent() {
               </Card>
 
               {/* Top Fallers */}
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <TrendingDown className="w-5 h-5 text-red-500" />
@@ -264,7 +264,7 @@ function ExamScoreTrendsContent() {
               </Card>
 
               {/* Summary stats */}
-              <Card className="md:col-span-3">
+              <Card className="md:col-span-3 min-w-0">
                 <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5">
                   <Stat label="시험 본 학생" value={Object.keys(studentMap).length} suffix="명" />
                   <Stat
@@ -306,7 +306,7 @@ function ExamScoreTrendsContent() {
             />
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid lg:grid-cols-2 gap-4 min-w-0">
             {filteredStudentIds.map(sid => (
               <StudentTrendCard
                 key={sid}
