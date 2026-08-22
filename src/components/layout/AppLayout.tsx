@@ -348,7 +348,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         key={item.href}
         to={item.href}
         onClick={() => setSidebarOpen(false)}
-        title={sidebarCollapsed ? item.label : undefined}
+        title={sidebarCollapsed ? item.label : item.description}
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
           indent && !sidebarCollapsed && "pl-8",
