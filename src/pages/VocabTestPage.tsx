@@ -10,8 +10,8 @@ import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabTestAssignManager } from '@/components/vocab/VocabTestAssignManager';
 import { VocabSelfTestResults } from '@/components/vocab/VocabSelfTestResults';
-import {
 import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
+import {
   BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings,
   BookOpen, Languages, CalendarDays, ClipboardList, Send, Zap,
   LayoutDashboard, FilePlus2, Users2, LineChart, Cog,
