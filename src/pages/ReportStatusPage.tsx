@@ -245,6 +245,12 @@ export default function ReportStatusPage() {
 
   // 작성 상태 / 발송 상태 집계 (분리)
   const summary = useMemo(() => summarizeWeek(reports, reports.length), [reports]);
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인(수동 기록) 집계
+  const confirmCounts = useMemo(
+    () => countConfirmations(reports.map(r => r.id), eventsByReport),
+    [reports, eventsByReport]
+  );
+
   const lastChangedAt = useMemo(
     () => reports.reduce<string | null>((acc, r) => (r.generated_at && (!acc || r.generated_at > acc) ? r.generated_at : acc), null),
     [reports]
