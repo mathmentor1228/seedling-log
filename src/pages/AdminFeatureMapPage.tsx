@@ -94,8 +94,13 @@ function SignalText({ feature, signals }: { feature: FeatureEntry; signals: Reco
 
 function FeatureRow({ feature, signals }: { feature: FeatureEntry; signals: Record<string, Signal> }) {
   const isDynamic = feature.href.includes(':');
+  const count30 = feature.signalTable ? signals[feature.signalTable]?.count30 ?? 0 : 0;
+  // 보관 기능인데 최근 30일 새 기록이 있으면 amber 주의 (자동 복귀는 하지 않음 · 원장 판단)
+  const rediscovered = feature.tier === 'archive' && count30 > 0;
   return (
-    <div className="border border-border rounded-lg p-3 space-y-1.5">
+    <div className={rediscovered
+      ? 'border border-amber-500/40 bg-amber-500/5 rounded-lg p-3 space-y-1.5'
+      : 'border border-border rounded-lg p-3 space-y-1.5'}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-sm text-foreground">{feature.label}</span>
         <Badge variant="outline" className={TIER_STYLE[feature.tier]}>
@@ -103,6 +108,11 @@ function FeatureRow({ feature, signals }: { feature: FeatureEntry; signals: Reco
         </Badge>
         {!feature.hasEntryPoint && (
           <Badge variant="outline" className="text-[10px]">메뉴 없음</Badge>
+        )}
+        {rediscovered && (
+          <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600">
+            최근 30일 새 기록 있음 · 원장 판단 필요
+          </Badge>
         )}
         {feature.note && (
           <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -123,6 +133,19 @@ function FeatureRow({ feature, signals }: { feature: FeatureEntry; signals: Reco
         )}
         <SignalText feature={feature} signals={signals} />
       </div>
+      {feature.compatHrefs?.length ? (
+        <p className="text-[11px] text-muted-foreground break-all">
+          호환 주소(자동 이동): {feature.compatHrefs.join(', ')}
+        </p>
+      ) : null}
+      {feature.supersededBy && (
+        <p className="text-[11px] text-muted-foreground">
+          대표 대체 기능:{' '}
+          <Link to={feature.supersededBy.href} className="text-primary">
+            {feature.supersededBy.label}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
