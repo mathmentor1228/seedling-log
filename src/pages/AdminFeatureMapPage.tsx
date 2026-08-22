@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
 import {
+  DELETION_REVIEW_CANDIDATES,
   FEATURE_MAP,
   TIER_LABEL,
   featuresByTier,
@@ -28,12 +29,20 @@ const ROLE_TABS: { value: FeatureRole; label: string }[] = [
   { value: 'assistant', label: '조교' },
 ];
 
-const TIER_ORDER: FeatureTier[] = ['core', 'asNeeded', 'archive'];
+const TIER_ORDER: FeatureTier[] = ['core', 'asNeeded', 'archive', 'technical'];
 
 const TIER_STYLE: Record<FeatureTier, string> = {
   core: 'bg-primary/10 text-primary border-primary/30',
   asNeeded: 'bg-muted text-muted-foreground border-border',
   archive: 'bg-destructive/10 text-destructive border-destructive/30',
+  technical: 'bg-sky-500/10 text-sky-600 border-sky-500/30',
+};
+
+const TIER_HINT: Record<FeatureTier, string> = {
+  core: '주 1회 이상 또는 수업·출결·학생·리포트·상담에 필수',
+  asNeeded: '월·학기 단위로 필요한 업무 (정산·계정·시즌 업무 포함)',
+  archive: '최근 90일 0건 + 직접 진입 없음 + 핵심 흐름과 중복 · 사이드바 보관 그룹에서만 노출(URL 유지)',
+  technical: '감사·점검용 화면 · 원장(admin) 전용',
 };
 
 function useUsageSignals() {
@@ -122,6 +131,15 @@ function FeatureRow({ feature, signals }: { feature: FeatureEntry; signals: Reco
         )}
       </div>
       <p className="text-xs text-muted-foreground">{feature.description}</p>
+      {feature.audit && (
+        <p className="text-[11px] text-muted-foreground tabular-nums">
+          감사 스냅샷(2026-08-22): 최근 90일 {feature.audit.c90}건 · 마지막 {feature.audit.lastAt ?? '기록 없음'}
+          {feature.essentialLowUse ? ' · 저빈도 필수(보관후보 제외)' : ''}
+        </p>
+      )}
+      {feature.accessPath && (
+        <p className="text-[11px] text-muted-foreground break-all">접근 경로: {feature.accessPath}</p>
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {isDynamic ? (
           <span className="text-muted-foreground break-all">{feature.href}</span>
@@ -192,6 +210,7 @@ function FeatureMapContent() {
                     <CardTitle className="text-sm">
                       {TIER_LABEL[tier]} <span className="text-muted-foreground font-normal">({items.length})</span>
                     </CardTitle>
+                    <p className="text-[11px] text-muted-foreground">{TIER_HINT[tier]}</p>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {items.map((f) => (
@@ -204,6 +223,24 @@ function FeatureMapContent() {
           </TabsContent>
         ))}
       </Tabs>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">삭제 검토 후보 (보고용 · 삭제하지 않음)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <p className="text-muted-foreground">
+            아래 항목은 최근 사용 신호가 없지만 데이터·라우트를 그대로 보존합니다. 기존 기록은 표시된 경로로 계속 열람할 수 있습니다.
+          </p>
+          {DELETION_REVIEW_CANDIDATES.map((c) => (
+            <div key={c.name} className="border border-border rounded-md p-2 space-y-0.5">
+              <p className="font-medium text-foreground break-all">{c.name}</p>
+              <p className="text-muted-foreground">{c.reason}</p>
+              <p className="text-muted-foreground break-all">접근 경로: {c.access}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">

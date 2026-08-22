@@ -139,7 +139,9 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
   if (role === 'teacher') {
     return [
       { label: '오늘 수업', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" />, description: '선택한 수업일 마감 + 오늘 실시간 출결' },
-      { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회' },
+      { label: '수업 마감', href: '/lessons/close', icon: <ClipboardCheck className="w-4 h-4" />, description: '출결·이해도·숙제를 한 번에 마감' },
+      { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회 · 학생 카르테 진입' },
+      { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '주간 리포트 작성·발송 확인' },
       { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
       {
         label: '학생·수업 준비',
@@ -147,7 +149,6 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
           { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도' },
           { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·배부' },
           { label: '조교 요청·업무', href: '/assistant-requests', icon: <UserCheck className="w-4 h-4" />, description: '조교 업무 요청 생성과 처리 상태 확인' },
-          { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '주간 리포트 작성·발송 상태 확인' },
         ],
       },
       {
@@ -156,6 +157,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
           { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" />, description: '학교별 내신 일정·성적 입력' },
           { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" />, description: '학교별 기출·학사자료 보관함' },
           { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, description: '학생별 성적 변화 그래프' },
+          { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '문서 업로드로 단어시험지 생성·인쇄' },
           ...visibleSubjects,
         ],
       },
@@ -163,8 +165,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         label: '기타/보관 기능',
         archive: true,
         items: [
-          { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감' },
-          { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 단어시험 관리' },
+          { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관후보 · 대표 기능: 단어시험지 제작' },
           { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감' },
           { label: '문제 조회', href: '/quiz-lookup', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수학 자료실' },
           { label: '문제 일괄 업로드', href: '/quiz-bulk-upload', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 문제 조회' },
@@ -184,30 +185,36 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     {
       label: '오늘 운영',
       items: [
-        { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회' },
         { label: '일일 운영 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, description: '오늘 등원·수업·미처리 업무 종합', adminOnly: true },
-        { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, description: '월 단위 출결 대장', adminOnly: true },
         { label: '미마감 관리', href: '/admin/unclosed', icon: <AlertTriangle className="w-4 h-4" />, description: '강사별 미마감 수업일지 집계', adminOnly: true },
-        { label: '데이터 점검', href: '/admin/data-quality', icon: <AlertTriangle className="w-4 h-4" />, description: '학생-반 연결 등 구조 이상 점검', adminOnly: true },
         { label: '조교 요청·업무', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, description: '요청 생성·배정과 조교 업무 처리 상태', allowedRoles: ['admin', 'teacher', 'assistant'] },
       ],
     },
     {
-      label: '학생·수업',
+      label: '학생·반',
       items: [
-        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, description: '학생 등록·수정·반 배정', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, description: '학생 등록·수정·반 배정 · 학생 카르테 진입', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
         { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, description: '반 생성·명단·시간표 연결', allowedRoles: ['admin'] },
         { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도', allowedRoles: ['admin', 'teacher'] },
         { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·입고·배부·교재비', allowedRoles: ['admin', 'teacher'] },
       ],
     },
     {
-      label: '소통·리포트',
+      label: '수업·출결',
+      items: [
+        { label: '수업 마감', href: '/lessons/close', icon: <ClipboardCheck className="w-4 h-4" />, description: '출결·이해도·숙제를 한 번에 마감', allowedRoles: ['admin', 'teacher'] },
+        { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회' },
+        { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, description: '월 단위 출결 대장', adminOnly: true },
+        { label: '주간 수업 점검', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, description: '주차별 수업일지 검수·휴원일 관리', adminOnly: true },
+      ],
+    },
+    {
+      label: '리포트·상담',
       items: [
         { label: '주간 리포트 생성', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, description: '주차별 리포트 초안 생성·검수', adminOnly: true },
-        { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '작성·발송 상태 확인', allowedRoles: ['admin', 'teacher'] },
+        { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '작성·발송 확인 기록', allowedRoles: ['admin', 'teacher'] },
         { label: '학부모 설문', href: '/admin/parent-learning-feedback', icon: <ClipboardList className="w-4 h-4" />, description: '학습정보 전달 설문 발송·응답', adminOnly: true },
-        { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, description: '행정 업무 게시판', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+        { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, description: '행정 업무 게시판·팀 메모', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
       ],
     },
     {
@@ -216,29 +223,29 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" />, description: '학교별 내신 일정·성적 입력', allowedRoles: ['admin', 'teacher'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" />, description: '학교별 기출·학사자료 보관함' },
         { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, description: '학생별 성적 변화 그래프', allowedRoles: ['admin', 'teacher'] },
+        { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '문서 업로드로 단어시험지 생성·인쇄', allowedRoles: ['admin', 'teacher'] },
       ],
     },
     ...materialGroup,
     {
-      label: '분석·관리',
+      label: '운영설정',
       items: [
-        { label: '운영 통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, description: '학생·수업·숙제 지표 통계', adminOnly: true },
-        { label: '주간 수업 점검', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, description: '주차별 수업일지 검수·휴원일 관리', adminOnly: true },
-        { label: '원장 KPI 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, description: 'KPI·운영 변경 이력·학부모 열람 현황', adminOnly: true },
-        { label: '기능 지도', href: '/admin/feature-map', icon: <LayoutDashboard className="w-4 h-4" />, description: '기능별 핵심/필요 시/보관과 사용 신호(읽기 전용)', adminOnly: true },
         { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, description: '직원 계정·역할 관리', allowedRoles: ['admin'] },
         { label: '수강료 관리', href: '/admin/tuition', icon: <Wallet className="w-4 h-4" />, description: '월 청구 생성·미납 관리', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
         { label: '수입 관리', href: '/admin/income', icon: <TrendingUp className="w-4 h-4" />, description: '월별 수입 집계', allowedRoles: ['admin'] },
         { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, description: '조교 근무 기록', allowedRoles: ['admin', 'assistant'] },
         { label: '특강 신청 현황', href: '/admin/intensive-applications', icon: <ClipboardList className="w-4 h-4" />, description: '방학 특강 신청 접수', adminOnly: true },
+        { label: '운영 통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, description: '학생·수업·숙제 지표 통계', adminOnly: true },
+        { label: '원장 KPI 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, description: 'KPI·운영 변경 이력·학부모 열람 현황', adminOnly: true },
+        { label: '데이터 점검', href: '/admin/data-quality', icon: <AlertTriangle className="w-4 h-4" />, description: '기술 전용 · 학생-반 연결 등 구조 이상 감사', adminOnly: true },
+        { label: '기능 지도', href: '/admin/feature-map', icon: <LayoutDashboard className="w-4 h-4" />, description: '기술 전용 · 핵심/보조/보관후보 분류와 사용 신호', adminOnly: true },
       ],
     },
     {
       label: '기타/보관 기능',
       archive: true,
       items: [
-        { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감', allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 단어시험 관리', allowedRoles: ['admin', 'teacher'] },
+        { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관후보 · 대표 기능: 단어시험지 제작', allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감', allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '문제 조회', href: '/quiz-lookup', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수학 자료실', allowedRoles: ['admin', 'teacher'] },
         { label: '문제 일괄 업로드', href: '/quiz-bulk-upload', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 문제 조회', allowedRoles: ['admin', 'teacher'] },
