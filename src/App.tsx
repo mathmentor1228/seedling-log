@@ -35,6 +35,7 @@ const ParentDashboardPage = lazy(() => import("./pages/ParentDashboardPage"));
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const StudentKartePage = lazy(() => import("./pages/StudentKartePage"));
 const UnclosedLessonsPage = lazy(() => import("./pages/UnclosedLessonsPage"));
+const DataQualityPage = lazy(() => import("./pages/DataQualityPage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const LessonsPage = lazy(() => import("./pages/LessonsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
