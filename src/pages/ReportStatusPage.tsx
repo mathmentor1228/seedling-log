@@ -180,18 +180,36 @@ export default function ReportStatusPage() {
       }
 
       setReports(rows);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching report status:', err);
+      setLoadError(err?.message || '리포트 조회 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   }
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return reports;
+    let rows = reports;
+    if (statusFilter !== 'all') {
+      rows = rows.filter(r => {
+        const ws = getWriteStatus(r);
+        if (statusFilter === 'published') return ws === 'published';
+        if (statusFilter === 'needs_review') return ws === 'needs_review' || ws === 'zero_lessons';
+        return ws === 'ready'; // draft
+      });
+    }
+    if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase();
-    return reports.filter(r => r.student_name.toLowerCase().includes(q));
-  }, [reports, searchQuery]);
+    return rows.filter(r => r.student_name.toLowerCase().includes(q));
+  }, [reports, searchQuery, statusFilter]);
+
+  // 작성 상태 / 발송 상태 집계 (분리)
+  const summary = useMemo(() => summarizeWeek(reports, reports.length), [reports]);
+  const lastChangedAt = useMemo(
+    () => reports.reduce<string | null>((acc, r) => (r.generated_at && (!acc || r.generated_at > acc) ? r.generated_at : acc), null),
+    [reports]
+  );
+
 
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher']}>
