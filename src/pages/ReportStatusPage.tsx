@@ -13,7 +13,10 @@ import {
 import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
 import { getWriteStatus, getDeliveryStatus, WRITE_STATUS_LABEL, summarizeWeek } from '@/lib/reportStatus';
+import { DeliveryConfirmRow } from '@/components/reports/DeliveryConfirmRow';
+import { countConfirmations, type DeliveryEvent } from '@/lib/reportDelivery';
 import { cn } from '@/lib/utils';
+
 
 interface ReportRow {
   id: string;
