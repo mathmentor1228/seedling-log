@@ -326,19 +326,22 @@ export default function ReportStatusPage() {
               </p>
             </div>
             <div className="rounded-lg border p-3 min-w-0">
-              <p className="text-xs font-semibold mb-2">발송 상태</p>
-              {summary.deliveryConfirmed === 0 ? (
-                <p className="text-xs text-muted-foreground break-words">
-                  발송 여부 확인 불가 — 이 주차 리포트에는 실제 발송 근거(sent_status/sent_at)가 없습니다.
-                  작성 완료·학부모 공개는 발송 완료를 의미하지 않습니다.
-                </p>
-              ) : (
-                <p className="text-xs text-foreground">
-                  발송 근거가 확인된 건수 {summary.deliveryConfirmed}건 / 전체 {reports.length}건.
-                  나머지는 발송 여부 확인 불가입니다.
+              <p className="text-xs font-semibold mb-2">발송 확인 (수동 기록)</p>
+              <p className="text-xs text-foreground break-words">
+                대상 {reports.length}건 · 공개 {summary.published}건 · 발송 확인 {confirmCounts.confirmed}건 ·
+                실패 기록 {confirmCounts.failed}건 · 미확인 {confirmCounts.unconfirmed}건
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-2 break-words">
+                자동 발송 근거(sent_status)는 여전히 {summary.deliveryConfirmed}건입니다. 이 시스템은 메시지를 전송하지 않으며,
+                외부로 보낸 뒤 사람이 기록한 확인 이력만 표시합니다.
+              </p>
+              {eventsError && (
+                <p className="text-[11px] text-destructive mt-1 break-words">
+                  발송 확인 이력 일부를 불러오지 못했습니다: {eventsError}
                 </p>
               )}
             </div>
+
           </div>
 
           {/* Report cards */}
