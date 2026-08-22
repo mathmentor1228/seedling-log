@@ -41,9 +41,7 @@ export function diffFindings(findings: DQFinding[], acks: DQAckRow[]): DQFinding
     const newKeys = signed.filter((k) => !acked.has(k));
     // 키가 없는 유형(집계형)은 건수 증가분으로 판정
     const countFallback = Math.max(0, finding.recordCount - (ack?.record_count ?? 0));
-    const newCount = finding.groupKeys.length > 0
-      ? (newKeys.length ? Math.max(newKeys.length, countFallback && ack ? 0 : newKeys.length) : 0)
-      : countFallback;
+    const newCount = finding.groupKeys.length > 0 ? newKeys.length : countFallback;
     return {
       finding,
       newCount,
