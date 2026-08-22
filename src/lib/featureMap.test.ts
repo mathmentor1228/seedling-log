@@ -25,6 +25,15 @@ function routeExists(href: string, patterns: string[]): boolean {
   });
 }
 
+
+/** 역할별 네비게이션 소스 조각 (teacher / admin) */
+function roleNavParts(): string[] {
+  const src = readSrc('components/layout/AppLayout.tsx');
+  const teacher = src.slice(src.indexOf('TEACHER-NAV-FLOW-V2'), src.indexOf('ADMIN-NAV-FLOW-V2'));
+  const admin = src.slice(src.indexOf('ADMIN-NAV-FLOW-V2'));
+  return [teacher, admin];
+}
+
 describe('feature map catalog', () => {
   it('has unique hrefs', () => {
     const hrefs = FEATURE_MAP.map((f) => f.href);
@@ -112,8 +121,7 @@ describe('assistant feature merge (ASSISTANT-MERGE-V1)', () => {
   });
 
   it('no duplicate hrefs within each role sidebar', () => {
-    const [teacherPart, adminPart] = layoutSrc.split('// ADMIN-NAV-FLOW-V2');
-    for (const part of [teacherPart, adminPart]) {
+    for (const part of roleNavParts()) {
       const hrefs = [...part.matchAll(/href: '([^']+)'/g)].map((m) => m[1]);
       expect(new Set(hrefs).size).toBe(hrefs.length);
     }
@@ -129,21 +137,14 @@ describe('archive group (ARCHIVE-FINALIZE-V1)', () => {
   });
 
   it('archive features only appear inside the archive groups', () => {
-    const archiveHrefs = new Set(FEATURE_MAP.filter((f) => f.tier === 'archive').map((f) => f.href));
-    // 보관 그룹은 각 역할 네비게이션의 마지막 그룹이다.
-    const outside = layoutSrc
-      .split("label: '기타/보관 기능'")
-      .filter((_, i, arr) => i < arr.length - 1)
-      .map((chunk, i, arr) => (i === arr.length - 1 ? chunk : chunk))
-      .join('\n');
-    const beforeArchive = layoutSrc.split("label: '기타/보관 기능'");
+    const archiveHrefs = FEATURE_MAP.filter((f) => f.tier === 'archive').map((f) => f.href);
     const leaked: string[] = [];
-    // 첫 조각(teacher 보관 그룹 이전) + 두 번째 조각에서 admin 보관 그룹 이전 부분만 검사
-    const scanned = [beforeArchive[0], beforeArchive[1] ?? ''].join('\n');
-    for (const href of archiveHrefs) {
-      if (scanned.includes(`href: '${href}'`)) leaked.push(href);
+    for (const part of roleNavParts()) {
+      const beforeArchive = part.split("label: '기타/보관 기능'")[0];
+      for (const href of archiveHrefs) {
+        if (beforeArchive.includes(`href: '${href}'`)) leaked.push(href);
+      }
     }
-    expect(outside.length).toBeGreaterThan(0);
     expect(leaked).toEqual([]);
   });
 
