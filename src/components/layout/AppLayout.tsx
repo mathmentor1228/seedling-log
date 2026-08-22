@@ -65,6 +65,8 @@ interface NavItem {
 interface NavGroup {
   label: string;
   items: NavItem[];
+  /** 보관 그룹: 기본 접힘 · 활성 라우트여도 자동으로 열리지 않음 */
+  archive?: boolean;
 }
 
 type NavEntry = NavItem | NavGroup;
@@ -144,7 +146,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         items: [
           { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도' },
           { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·배부' },
-          { label: '조교 요청', href: '/assistant-requests', icon: <UserCheck className="w-4 h-4" />, description: '조교에게 업무 요청' },
+          { label: '조교 요청·업무', href: '/assistant-requests', icon: <UserCheck className="w-4 h-4" />, description: '조교 업무 요청 생성과 처리 상태 확인' },
           { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '주간 리포트 작성·발송 상태 확인' },
         ],
       },
@@ -159,9 +161,15 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       },
       {
         label: '기타/보관 기능',
+        archive: true,
         items: [
-          { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '최근 사용 신호 없음' },
-          { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '최근 사용 신호 없음' },
+          { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감' },
+          { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 단어시험 관리' },
+          { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감' },
+          { label: '문제 조회', href: '/quiz-lookup', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수학 자료실' },
+          { label: '문제 일괄 업로드', href: '/quiz-bulk-upload', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 문제 조회' },
+          { label: '자습·클리닉 관리', href: '/study-sessions', icon: <Clock className="w-4 h-4" />, description: '보관 · 대표 기능: 시간표' },
+          { label: '빠른 수업일지 입력', href: '/lessons/quick', icon: <ClipboardList className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감' },
         ],
       },
     ];
@@ -181,7 +189,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, description: '월 단위 출결 대장', adminOnly: true },
         { label: '미마감 관리', href: '/admin/unclosed', icon: <AlertTriangle className="w-4 h-4" />, description: '강사별 미마감 수업일지 집계', adminOnly: true },
         { label: '데이터 점검', href: '/admin/data-quality', icon: <AlertTriangle className="w-4 h-4" />, description: '학생-반 연결 등 구조 이상 점검', adminOnly: true },
-        { label: '조교 요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, description: '강사→조교 업무 요청', allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '조교 요청·업무', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, description: '요청 생성·배정과 조교 업무 처리 상태', allowedRoles: ['admin', 'teacher', 'assistant'] },
       ],
     },
     {
@@ -227,10 +235,15 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     },
     {
       label: '기타/보관 기능',
+      archive: true,
       items: [
-        { label: '조교 업무 보드', href: '/assistant-tasks', icon: <UserCheck className="w-4 h-4" />, description: '조교 요청 화면과 데이터 중복', allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '최근 사용 신호 없음', allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '최근 사용 신호 없음', allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '단어시험 관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감', allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '보관 · 대표 기능: 단어시험 관리', allowedRoles: ['admin', 'teacher'] },
+        { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감', allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '문제 조회', href: '/quiz-lookup', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 수학 자료실', allowedRoles: ['admin', 'teacher'] },
+        { label: '문제 일괄 업로드', href: '/quiz-bulk-upload', icon: <Brain className="w-4 h-4" />, description: '보관 · 대표 기능: 문제 조회', allowedRoles: ['admin', 'teacher'] },
+        { label: '자습·클리닉 관리', href: '/study-sessions', icon: <Clock className="w-4 h-4" />, description: '보관 · 대표 기능: 시간표', allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '빠른 수업일지 입력', href: '/lessons/quick', icon: <ClipboardList className="w-4 h-4" />, description: '보관 · 대표 기능: 수업 마감', allowedRoles: ['admin', 'teacher'] },
         { label: '영어팀 채널', href: '/private-channel', icon: <MessageCircle className="w-4 h-4" />, description: '영어팀 전용 메시지', allowedRoles: ['admin'], allowedEmails: ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'] },
       ],
     },
@@ -334,8 +347,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   const groupContainsActive = (group: NavGroup) =>
     group.items.some(item => location.pathname === item.href);
 
-  const isGroupOpen = (group: NavGroup) =>
-    openGroups[group.label] !== undefined ? openGroups[group.label] : groupContainsActive(group);
+  const isGroupOpen = (group: NavGroup) => {
+    if (openGroups[group.label] !== undefined) return openGroups[group.label];
+    // 보관 그룹은 새로고침·로그인·활성 라우트와 무관하게 항상 기본 접힘
+    if (group.archive) return false;
+    return groupContainsActive(group);
+  };
 
   // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard routes
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/teacher';
