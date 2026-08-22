@@ -372,38 +372,88 @@ function KarteContent() {
         )}
       </SectionCard>
 
-      {/* (마) 상담·메모 */}
+      {/* (마) 상담 기록 */}
       <SectionCard
-        title="상담 · 원내 메모"
-        basis="기존 팀 메모 중 이 학생과 연결된 기록만 조회합니다. 이 화면에서는 작성·수정하지 않습니다."
+        title="상담 기록"
+        basis="기존 팀 메모(학생 연결)를 그대로 사용합니다. 이 화면에서는 추가만 가능하고 수정·삭제는 하지 않습니다. 문자·알림톡은 전송되지 않습니다."
       >
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-[11px] text-muted-foreground">
+            마지막 상담 {consultSummary.lastDate || '기록 없음'}
+            {consultSummary.lastDate && daysSince(consultSummary.lastDate, k.today) !== null
+              ? ` (${daysSince(consultSummary.lastDate, k.today)}일 경과)` : ''}
+            {consultSummary.openFollowUps > 0
+              ? ` · 후속조치 미완료 ${consultSummary.openFollowUps}건${consultSummary.overdue ? ` (기한 지남 ${consultSummary.overdue})` : ''}`
+              : ' · 후속조치 미완료 없음'}
+          </p>
+          <Button size="sm" className="h-7 text-xs" onClick={() => setConsultOpen(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1" /> 상담 기록 추가
+          </Button>
+        </div>
+
         {k.notesUnavailable ? (
           <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 py-4">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> 상담 기록을 조회하지 못했습니다. 기록이 0건이라는 뜻이 아닙니다.
           </p>
-        ) : k.notes.length === 0 ? (
-          <EmptyLine text="연결된 상담·메모 기록이 없습니다." />
+        ) : consultNotes.length === 0 ? (
+          <EmptyLine text="이 학생과 연결된 상담 기록이 없습니다. 상담 직후 바로 남겨주세요." />
         ) : (
           <ul className="space-y-1.5">
-            {k.notes.slice(0, 10).map((n) => (
-              <li key={n.id} className="flex items-start gap-2 p-2.5 rounded-lg border border-border/50 bg-muted/20 min-w-0">
-                <span className="text-[11px] tabular-nums text-muted-foreground shrink-0 w-[52px] pt-0.5">
-                  {n.created_at.slice(5, 10)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium break-words">{n.title || '제목 없음'}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 break-words">
-                    {[n.scope, n.status, n.target_role ? `대상 ${n.target_role}` : null].filter(Boolean).join(' · ') || '분류 없음'}
-                  </p>
-                </div>
-              </li>
-            ))}
+            {consultNotes.slice(0, 5).map((n) => {
+              const st = followUpState(n as any, k.today);
+              return (
+                <li key={n.id} className="p-2.5 rounded-lg border border-border/50 bg-muted/20 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] tabular-nums text-muted-foreground">{consultDate(n as any)}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      {n.consult_target || '대상 미기재'} · {n.consult_method || '방식 미기재'}
+                    </span>
+                    {st !== 'none' && (
+                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded',
+                        st === 'overdue' ? 'bg-destructive/10 text-destructive'
+                          : st === 'due' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400')}>
+                        후속 {n.due_date}{st === 'overdue' ? ' 기한 지남' : st === 'done' ? ' 완료' : ' 예정'}
+                      </span>
+                    )}
+                  </div>
+                  <details className="mt-1">
+                    <summary className="text-xs break-words cursor-pointer line-clamp-2">{n.body || '내용 없음'}</summary>
+                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap break-words">{n.body || '내용 없음'}</p>
+                  </details>
+                </li>
+              );
+            })}
           </ul>
         )}
+
+        {legacyNotes.length > 0 && (
+          <details className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+            <summary className="text-xs font-medium cursor-pointer">이전 형식 원내 메모 {legacyNotes.length}건</summary>
+            <ul className="mt-1.5 space-y-1">
+              {legacyNotes.slice(0, 10).map((n) => (
+                <li key={n.id} className="text-[11px] text-muted-foreground break-words">
+                  {n.created_at.slice(0, 10)} · {n.title || '제목 없음'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         <div className="pt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <FileText className="w-3.5 h-3.5" /> 최근 {KARTE_REPORT_WEEKS}주 리포트 {k.reports.length}건 · 조회 전용 화면입니다.
+          <FileText className="w-3.5 h-3.5" /> 최근 {KARTE_REPORT_WEEKS}주 리포트 {k.reports.length}건 · 상담은 추가만 가능한 기록입니다.
         </div>
       </SectionCard>
+
+      {s && (
+        <ConsultLogDialog
+          open={consultOpen}
+          onOpenChange={setConsultOpen}
+          studentId={s.id}
+          studentName={s.name}
+          onSaved={k.reload}
+        />
+      )}
     </div>
   );
 }
