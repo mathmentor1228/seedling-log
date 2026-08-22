@@ -771,7 +771,7 @@ export function TeacherExamBoard() {
               <Badge variant="outline" className="text-muted-foreground">예정 시험 미등록</Badge>
             )}
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 min-w-0">
             {g.students
               .map(s => ({ s, d: cardData(s, g) }))
               .sort((a, b) =>
@@ -781,7 +781,7 @@ export function TeacherExamBoard() {
               .map(({ s, d }) => (
                 <Card
                   key={s.id}
-                  className={`cursor-pointer transition-shadow hover:shadow-md ${
+                  className={`min-w-0 cursor-pointer transition-shadow hover:shadow-md ${
                     d.anyDoubleDrop ? 'border-red-300' : d.anyDrop ? 'border-amber-300' : ''
                   }`}
                   onClick={() => setDetailStudent(s)}
@@ -876,7 +876,7 @@ export function TeacherExamBoard() {
 
       {/* 표(엑셀) 모드 */}
       {viewMode === 'table' && scopedStudents.length > 0 && (
-        <Card>
+        <Card className="min-w-0">
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
