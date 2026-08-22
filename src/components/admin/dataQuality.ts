@@ -45,6 +45,7 @@ export interface DQFinding {
   groupUnit: string;      // 그룹 단위 명칭
   recordUnit: string;     // 레코드 단위 명칭
   samples: string[];      // 개인정보 없는 대표 값 (반명/날짜 등)
+  groupKeys: string[];    // 확인(ack) 비교용 안정 식별 키 (이름/전화번호 미포함, 저장 시 해시)
   link?: { label: string; href: string };
   note?: string;
 }
@@ -95,6 +96,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const noTeacher = activeClasses.filter((c) => !c.teacher_id);
   out.push({
     id: 'class_no_teacher',
+    groupKeys: uniq(noTeacher.map((c) => c.id)),
     title: '활성 반인데 담당 강사 없음',
     severity: 'critical',
     basis: 'classes.teacher_id is null · 활성 시간표가 있는 반',
@@ -112,6 +114,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   );
   out.push({
     id: 'schedule_invalid',
+    groupKeys: uniq(badSched.map((s) => s.id)),
     title: '활성 시간표의 요일/시간 누락 또는 종료≤시작',
     severity: 'critical',
     basis: 'class_schedules.is_active = true',
@@ -133,6 +136,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   ).filter(([, n]) => n > 1);
   out.push({
     id: 'class_student_duplicate',
+    groupKeys: uniq(dupLinks.map(([k]) => k)),
     title: '학생-반 중복 연결',
     severity: 'critical',
     basis: 'class_students의 (class_id, student_id) 중복 행',
@@ -147,6 +151,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const brokenLessons = lessons.filter((l) => !l.student_id || !l.teacher_id);
   out.push({
     id: 'lesson_missing_ref',
+    groupKeys: uniq(brokenLessons.map((l) => l.id)),
     title: '수업일지의 학생/강사 참조 누락',
     severity: 'critical',
     basis: `${lessonBasis} · student_id 또는 teacher_id is null`,
@@ -164,6 +169,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   );
   out.push({
     id: 'student_no_active_class',
+    groupKeys: uniq(stuNoClass.map((s) => s.id)),
     title: '재원 학생인데 활성 반 0개',
     severity: 'check',
     basis: 'students.enrollment_status in (재학, 재등원) · 활성 시간표가 있는 반 기준',
@@ -184,6 +190,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const dupClassGroups = Array.from(sameKey.values()).filter((g) => g.length > 1);
   out.push({
     id: 'class_duplicate_identical',
+    groupKeys: uniq(dupClassGroups.map((g) => g.map((c) => c.id).sort().join(','))),
     title: '표시명·과목·강사가 모두 같은 활성 반 중복',
     severity: 'check',
     basis: 'classes(name, subject, teacher_id) 동일 · 활성 시간표 보유',
@@ -203,6 +210,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   );
   out.push({
     id: 'class_duplicate_name_only',
+    groupKeys: uniq(nameOnly.map((g) => g.map((c) => c.id).sort().join(','))),
     title: '이름만 같고 과목/강사가 다른 활성 반',
     severity: 'info',
     basis: 'classes.name 동일 + (subject, teacher_id) 상이',
@@ -220,6 +228,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const unclosedNoClass = lessons.filter((l) => !l.class_id && l.submitted === false);
   out.push({
     id: 'lesson_no_class_unclosed',
+    groupKeys: uniq(unclosedNoClass.map((l) => l.id)),
     title: '반 미지정 미마감 수업일지',
     severity: 'check',
     basis: `${lessonBasis} · class_id is null && submitted = false`,
@@ -238,6 +247,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   });
   out.push({
     id: 'lesson_teacher_mismatch',
+    groupKeys: uniq(teacherMismatch.map((l) => l.id)),
     title: '수업일지 강사와 현재 반 담당 강사 불일치',
     severity: 'check',
     basis: `${lessonBasis} · lesson_records.teacher_id ≠ classes.teacher_id`,
@@ -258,6 +268,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   });
   out.push({
     id: 'lesson_student_not_in_class',
+    groupKeys: uniq(notEnrolled.map((l) => l.id)),
     title: '수업일지 학생이 현재 반 명단에 없음',
     severity: 'check',
     basis: `${lessonBasis} · 재원 학생 & class_students 미연결`,
@@ -275,6 +286,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   );
   out.push({
     id: 'withdrawn_in_active_class',
+    groupKeys: uniq(withdrawnInActive.slice()),
     title: '퇴원 학생이 활성 반 명단에 남음',
     severity: 'check',
     basis: 'students.enrollment_status = 퇴원 & 활성 반 연결',
@@ -293,6 +305,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   });
   out.push({
     id: 'user_role_mismatch',
+    groupKeys: uniq([...noRole.map((p) => `np:${p.id}`), ...roleNoProfile.map((r) => `rp:${r.user_id}:${r.role}`)]),
     title: '활성 사용자 역할 불일치',
     severity: 'check',
     basis: 'profiles.is_active & user_roles 대조',
@@ -313,6 +326,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   });
   out.push({
     id: 'subject_teacher_inactive',
+    groupKeys: uniq(sstBad.map((s) => `${s.student_id}:${s.subject}:${s.teacher_id}`)),
     title: '과목 담당 매핑의 강사가 비활성/미존재',
     severity: 'check',
     basis: 'student_subject_teachers.teacher_id ↔ profiles.is_active',
@@ -328,6 +342,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const emptyClasses = activeClasses.filter((c) => !(memberByClass.get(c.id)?.size));
   out.push({
     id: 'active_class_no_student',
+    groupKeys: uniq(emptyClasses.map((c) => c.id)),
     title: '활성 반인데 학생 0명',
     severity: 'info',
     basis: '활성 시간표 보유 반 · class_students 0건',
@@ -342,6 +357,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const archivedClasses = classes.filter((c) => !activeClassIds.has(c.id));
   out.push({
     id: 'class_no_active_schedule',
+    groupKeys: uniq(archivedClasses.map((c) => c.id)),
     title: '활성 시간표가 없는 반(보관 추정)',
     severity: 'info',
     basis: 'class_schedules.is_active 행 없음',
@@ -356,6 +372,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const hwNoLink = homework.filter((h) => !h.lesson_record_id);
   out.push({
     id: 'homework_no_lesson_link',
+    groupKeys: uniq(hwNoLink.map((h) => h.id)),
     title: '수업일지에 연결되지 않은 숙제',
     severity: 'info',
     basis: `homework_assignments · 최근 ${lessonWindowDays}일 · lesson_record_id is null`,
@@ -371,6 +388,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const orphanRep = reports.filter((r) => !r.student_id || !studentById.has(r.student_id));
   out.push({
     id: 'orphan_student_ref',
+    groupKeys: uniq([...orphanHw.map((h) => `hw:${h.id}`), ...orphanRep.map((r) => `wr:${r.id}`)]),
     title: '숙제/주간리포트의 학생 참조 이상',
     severity: orphanHw.length + orphanRep.length > 0 ? 'critical' : 'info',
     basis: `students 미존재 참조 · 숙제 ${lessonWindowDays}일 / 리포트 ${reportWindowDays}일`,
@@ -388,6 +406,7 @@ export function buildFindings(input: DataQualityInput): DQFinding[] {
   const emptyReports = reports.filter((r) => !r.total_lessons);
   out.push({
     id: 'report_zero_lessons',
+    groupKeys: uniq(emptyReports.map((r) => r.id)),
     title: '수업 0건으로 생성된 주간리포트',
     severity: 'info',
     basis: `weekly_reports · 최근 ${reportWindowDays}일 · total_lessons 0/누락`,

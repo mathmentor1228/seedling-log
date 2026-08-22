@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DataQualityNewBadge } from '@/components/admin/DataQualityNewBadge';
 import {
   ALERT_WINDOW_DAYS,
   sumIssues,
@@ -217,6 +218,7 @@ export function PrincipalActionCenter({
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/data-quality')}>
               데이터 점검 열기
+              <DataQualityNewBadge />
             </Button>
           </div>
         )}
