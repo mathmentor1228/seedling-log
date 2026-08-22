@@ -41,8 +41,8 @@ describe('feature map catalog', () => {
   });
 
   it('every feature route exists in App.tsx', () => {
-    const routes = new Set(appRoutePaths());
-    const missing = FEATURE_MAP.map((f) => normalizeRoutePath(f.href)).filter((r) => !routes.has(r));
+    const routes = appRoutePaths();
+    const missing = FEATURE_MAP.map((f) => f.href).filter((h) => !routeExists(normalizeRoutePath(h), routes));
     expect(missing).toEqual([]);
   });
 
@@ -59,8 +59,8 @@ describe('feature map catalog', () => {
 
 describe('sidebar ↔ route mapping', () => {
   it('every sidebar href resolves to a real route', () => {
-    const routes = new Set(appRoutePaths());
-    const broken = navHrefs().filter((h) => !routes.has(normalizeRoutePath(h)) && h !== '/dashboard');
+    const routes = appRoutePaths();
+    const broken = navHrefs().filter((h) => !routeExists(h, routes));
     expect(broken).toEqual([]);
   });
 
