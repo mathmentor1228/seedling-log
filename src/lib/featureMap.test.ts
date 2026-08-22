@@ -15,6 +15,16 @@ function navHrefs(): string[] {
   return [...src.matchAll(/href:\s*'([^']+)'/g)].map((m) => m[1]);
 }
 
+/** 라우트 패턴(:param 포함)과 실제 경로 일치 여부 */
+function routeExists(href: string, patterns: string[]): boolean {
+  const parts = href.split('/');
+  return patterns.some((p) => {
+    const pp = p.split('/');
+    if (pp.length !== parts.length) return false;
+    return pp.every((seg, i) => seg === ':param' || seg === parts[i]);
+  });
+}
+
 describe('feature map catalog', () => {
   it('has unique hrefs', () => {
     const hrefs = FEATURE_MAP.map((f) => f.href);
