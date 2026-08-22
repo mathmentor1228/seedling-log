@@ -7,6 +7,7 @@ import { getTodayKST } from '@/lib/utils';
 import { getCardDisplay, type CardDisplayState } from '@/components/teacher/cardStatus';
 import { isPresent } from '@/lib/attendance';
 import { filterFinishedRecords, getNowMinutesKST, type ClassScheduleRow } from './unclosedScope';
+import { classifyCheckInGaps, type CheckInGapGroup } from './checkInGap';
 
 export const ALERT_WINDOW_DAYS = 14;
 
@@ -32,8 +33,12 @@ export interface PrincipalAlerts {
   inProgress: ClassDayGroup[];
   /** 수업출결 미선택 인원이 있는 반·날짜 */
   attendanceUnset: ClassDayGroup[];
-  /** 수업출결은 출석인데 출입 태그(입실 로그)가 없는 반·날짜 */
-  checkInGap: ClassDayGroup[];
+  /** 입실 태그 부분 누락(같은 반에서 일부만 태그됨) 반·날짜 */
+  checkInPartial: ClassDayGroup[];
+  /** 반 전체가 태그를 쓰지 않은 수업(정보성) */
+  checkInUntagged: ClassDayGroup[];
+  /** 태그 미사용 수업에 포함된 학생 수(참고용) */
+  checkInUntaggedStudents: number;
   /** 주간 리포트 자동 작업 실패 건수 */
   jobFailures: number;
   totalIssues: number;
@@ -54,7 +59,9 @@ export function usePrincipalAlerts(): PrincipalAlerts {
   const [notStarted, setNotStarted] = useState<ClassDayGroup[]>([]);
   const [inProgress, setInProgress] = useState<ClassDayGroup[]>([]);
   const [attendanceUnset, setAttendanceUnset] = useState<ClassDayGroup[]>([]);
-  const [checkInGap, setCheckInGap] = useState<ClassDayGroup[]>([]);
+  const [checkInPartial, setCheckInPartial] = useState<ClassDayGroup[]>([]);
+  const [checkInUntagged, setCheckInUntagged] = useState<ClassDayGroup[]>([]);
+  const [checkInUntaggedStudents, setCheckInUntaggedStudents] = useState(0);
   const [jobFailures, setJobFailures] = useState(0);
 
   const load = useCallback(async () => {
@@ -122,8 +129,6 @@ export function usePrincipalAlerts(): PrincipalAlerts {
         if (hasContent) acc.recorded += 1;
         if (r.submitted) acc.submitted += 1;
         if (!r.submitted && !hasAttendance) acc.unsetAttendance += 1;
-        const presentish = isPresent(statuses);
-        if (presentish && r.student_id && !checkedIn.has(`${r.student_id}:${r.lesson_date}`)) acc.gap += 1;
         map.set(key, acc);
       });
 
@@ -137,10 +142,19 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       });
 
 
+      const toGroup = (g: CheckInGapGroup): ClassDayGroup => ({
+        key: g.key,
+        classId: g.classId,
+        className: g.classId ? classNames.get(g.classId) || '이름 없는 반' : '(반 미지정)',
+        date: g.date,
+        studentCount: g.target,
+        issueCount: g.missing,
+      });
+      const gaps = classifyCheckInGaps(scopedRecords as any[], checkedIn);
+
       const ns: ClassDayGroup[] = [];
       const ip: ClassDayGroup[] = [];
       const au: ClassDayGroup[] = [];
-      const gap: ClassDayGroup[] = [];
 
       for (const a of map.values()) {
         const state: CardDisplayState = getCardDisplay({
@@ -152,7 +166,6 @@ export function usePrincipalAlerts(): PrincipalAlerts {
         if (state === 'not_started' && openCount > 0) ns.push(mk(a, openCount));
         else if (state === 'in_progress' && openCount > 0) ip.push(mk(a, openCount));
         if (a.unsetAttendance > 0) au.push(mk(a, a.unsetAttendance));
-        if (a.gap > 0) gap.push(mk(a, a.gap));
       }
 
       const byDateDesc = (x: ClassDayGroup, y: ClassDayGroup) =>
@@ -160,12 +173,13 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       ns.sort(byDateDesc);
       ip.sort(byDateDesc);
       au.sort(byDateDesc);
-      gap.sort(byDateDesc);
 
       setNotStarted(ns);
       setInProgress(ip);
       setAttendanceUnset(au);
-      setCheckInGap(gap);
+      setCheckInPartial(gaps.partial.map(toGroup));
+      setCheckInUntagged(gaps.untagged.map(toGroup));
+      setCheckInUntaggedStudents(gaps.untaggedStudents);
       setJobFailures(
         (jobRes.data || []).filter((j: any) => j.status && j.status !== 'completed').length
       );
@@ -181,7 +195,7 @@ export function usePrincipalAlerts(): PrincipalAlerts {
 
   const sum = (g: ClassDayGroup[]) => g.reduce((n, x) => n + x.issueCount, 0);
   const totalIssues =
-    sum(notStarted) + sum(inProgress) + sum(attendanceUnset) + sum(checkInGap) + jobFailures;
+    sum(notStarted) + sum(inProgress) + sum(attendanceUnset) + sum(checkInPartial) + jobFailures;
 
   return {
     from,
@@ -192,7 +206,9 @@ export function usePrincipalAlerts(): PrincipalAlerts {
     notStarted,
     inProgress,
     attendanceUnset,
-    checkInGap,
+    checkInPartial,
+    checkInUntagged,
+    checkInUntaggedStudents,
     jobFailures,
     totalIssues,
   };
