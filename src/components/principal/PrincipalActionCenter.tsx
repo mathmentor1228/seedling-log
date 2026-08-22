@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DataQualityNewBadge } from '@/components/admin/DataQualityNewBadge';
 import {
   ALERT_WINDOW_DAYS,
   sumIssues,
