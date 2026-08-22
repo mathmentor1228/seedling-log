@@ -18,7 +18,7 @@ function QuickMenu() {
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '조교';
 
   const menuItems = [
-    { icon: ClipboardList, label: '업무 목록', desc: '오늘의 할 일', path: '/assistant-requests', color: 'text-emerald-600 bg-emerald-50' },
+    { icon: ClipboardList, label: '조교 요청·업무', desc: '받은 업무·요청 처리', path: '/assistant-requests', color: 'text-emerald-600 bg-emerald-50' },
     
     { icon: Users, label: '출결 관리', desc: '입퇴실 체크', path: '/timetable?tab=attendance', color: 'text-blue-600 bg-blue-50' },
     { icon: Calendar, label: '시간표', desc: '오늘의 시간표', path: '/timetable', color: 'text-amber-600 bg-amber-50' },
