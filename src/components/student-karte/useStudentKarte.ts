@@ -124,7 +124,7 @@ export function useStudentKarte(studentId: string | undefined): KarteState {
           seen.add(id);
           classRows.push({ id, name: c.name, teacherId: c.teacher_id || null });
         });
-        setClassNames(classRows.map((c) => c.name));
+        setClassNames([...new Set(classRows.map((c) => c.name))]);
       }
 
       // 담당 강사: 매핑 → 실패/공백이면 반 담당·최근 수업일지로 fallback (읽기 전용)
