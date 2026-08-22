@@ -1,10 +1,13 @@
-// LESSON-CLOSEOUT-V1
+// LESSON-CLOSEOUT-V1 / CLOSEOUT-FLOW-V1
 // 개인·그룹 공용 '오늘 수업 마감' 화면.
 // 저장 경로는 기존 안전 경로만 사용한다:
 //   - lesson_records → safeUpsertLessonRecord
 //   - homework_assignments → reconcileLessonHomework (RPC, 삭제 후 재삽입 금지)
 // 새 테이블/새 스키마/새 저장 방식은 만들지 않는다.
+// CLOSEOUT-FLOW-V1: 화면 구획을 ① 출결 확인 → ② 수업·숙제 기록 → ③ 마감으로 재배치했다.
+//   저장 payload/컬럼 구조는 변경하지 않는다(원장 조회 화면 호환 유지).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -19,8 +22,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Loader2, ChevronDown, ChevronRight, Save, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CLOSEOUT_STEPS, computeCloseoutProgress } from './closeoutProgress';
 
 const ATT_OPTIONS = ['정상등원', '지각', '조퇴', '인정결석', '무단결석', '보충불가'] as const;
+const RISK_ATT = ['인정결석', '무단결석', '보충불가'];
 const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
 const DISABLE_SCORE_LESSON_TYPES = ['테스트방문', '휴강'];
 const LESSON_TYPE_OPTIONS = ['정규수업', '보충수업', '테스트방문', '휴강'];
@@ -29,7 +34,7 @@ const HW_STATUS_OPTIONS: { key: string; label: string }[] = [
   { key: 'completed', label: '완료' },
   { key: 'partial', label: '부분' },
   { key: 'not_done', label: '미완' },
-  { key: 'none_assigned', label: '없음' },
+  { key: 'none_assigned', label: '숙제 없음' },
 ];
 
 function scoreDisabled(lessonTypes: string[], attendance: string[]) {
@@ -48,7 +53,7 @@ interface StudentState {
   recordId: string | null;
   submitted: boolean;
   attendance: string[];
-  understanding: string;
+  understanding: string;          // '' = 미선택 (임의 기본값 저장 금지)
   homeworkStatus: string;
   lessonRange: string;
   nextHomework: string;      // 줄 단위 텍스트
@@ -80,6 +85,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<'draft' | 'finalized' | null>(null);
   const savingRef = useRef(false);
 
   // 공통값
@@ -161,7 +167,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
           recordId: rec?.id ?? null,
           submitted: !!rec?.submitted,
           attendance: rec?.attendance_status ? normalizeAttendanceStatuses(rec.attendance_status).filter((v) => v !== 'legacy_absent') : [],
-          understanding: rec?.understanding_score != null ? String(rec.understanding_score) : '3',
+          understanding: rec?.understanding_score != null ? String(rec.understanding_score) : '',
           homeworkStatus: rec?.homework_status || 'none_assigned',
           lessonRange: rec?.lesson_range || '',
           nextHomework: hw.map((h) => h.content).join('\n'),
@@ -210,6 +216,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
   const patch = (id: string, next: Partial<StudentState>) => {
     setStudents((prev) => prev.map((s) => (s.id === id ? { ...s, ...next } : s)));
     setDirty(true);
+    setLastResult(null);
   };
 
   const applyCommonRange = () => {
@@ -235,12 +242,26 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     submitted: students.filter((s) => s.submitted).length,
   }), [students]);
 
+  // CLOSEOUT-FLOW-V1: 단계/완료 조건은 순수 함수로 계산
+  const progress = useMemo(
+    () =>
+      computeCloseoutProgress(
+        students.map((s) => ({
+          hasAttendance: s.attendance.length > 0,
+          recordExempt: scoreDisabled(lessonTypes, s.attendance),
+          hasProgress: !!(s.lessonRange.trim() || commonRange.trim()),
+          submitted: s.submitted,
+        }))
+      ),
+    [students, lessonTypes, commonRange]
+  );
+
   // CLOSEOUT-ATT-GATE-V1: 수업출결 미선택은 정상등원으로 암묵 처리하지 않는다.
   const unmarkedStudents = useMemo(
     () => students.filter((s) => s.attendance.length === 0),
     [students]
   );
-  const finalizeBlocked = unmarkedStudents.length > 0;
+  const finalizeBlocked = unmarkedStudents.length > 0 || students.length === 0;
 
   const persist = async (finalize: boolean) => {
     if (savingRef.current) return;
@@ -259,6 +280,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
+    setLastResult(null);
 
     let ok = 0;
     try {
@@ -273,7 +295,8 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
           subject,
           lesson_date: date,
           lesson_range: (s.lessonRange || commonRange || '').trim(),
-          understanding_score: disabled ? null : parseInt(s.understanding, 10),
+          // 이해도 미선택은 임의 기본값(3)으로 저장하지 않는다.
+          understanding_score: disabled || !s.understanding ? null : parseInt(s.understanding, 10),
           homework_status: s.homeworkStatus,
           learning_issues_note: s.learningIssuesNote.trim() || null,
           next_lesson_goal: commonGoal.trim() || null,
@@ -313,12 +336,16 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
         description: `${ok}명 저장했습니다.`,
       });
       setDirty(false);
+      setLastResult(finalize ? 'finalized' : 'draft');
       await load();
     } catch (e: any) {
-      setSaveError(e?.message || '저장 중 오류가 발생했습니다. 입력값은 유지됩니다.');
+      // 부분 실패를 성공처럼 보이지 않게 한다.
+      setSaveError(
+        `${e?.message || '저장 중 오류가 발생했습니다.'} — ${ok}/${students.length}명만 저장되었고 나머지는 저장되지 않았습니다. 입력값은 화면에 유지됩니다.`
+      );
       toast({
-        title: '저장 실패',
-        description: `${ok}명 저장 후 중단되었습니다. 다시 시도해 주세요.`,
+        title: '저장 실패 (부분 저장)',
+        description: `${ok}/${students.length}명 저장 후 중단되었습니다. 다시 시도해 주세요.`,
         variant: 'destructive',
       });
     } finally {
@@ -335,18 +362,61 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
   }
 
   return (
-    <div className="space-y-3 pb-28">
-      {/* 헤더 */}
+    <div className="space-y-3 pb-32">
+      {/* 상단 고정 단계 요약 */}
+      <div
+        data-testid="closeout-step-summary"
+        className="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 py-2 bg-background/95 backdrop-blur border-b border-border"
+      >
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          {CLOSEOUT_STEPS.map((st) => {
+            const active = progress.currentStep === st.id;
+            const done =
+              (st.id === 'attendance' && progress.attendanceRemaining === 0 && progress.total > 0) ||
+              (st.id === 'record' && progress.attendanceRemaining === 0 && progress.progressRemaining === 0) ||
+              (st.id === 'finalize' && progress.allFinalized);
+            return (
+              <span
+                key={st.id}
+                className={cn(
+                  'shrink-0 text-[11px] px-2 py-1 rounded-full border font-medium',
+                  active
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : done
+                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                      : 'text-muted-foreground border-border'
+                )}
+              >
+                {st.label}
+                {done && ' ✓'}
+              </span>
+            );
+          })}
+        </div>
+        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {progress.requiredRemaining > 0
+            ? `남은 필수 항목 ${progress.requiredRemaining}건 (수업출결 미선택)`
+            : progress.progressRemaining > 0
+              ? `필수 항목 완료 · 진도 미기록 ${progress.progressRemaining}명 (권장)`
+              : progress.allFinalized
+                ? '모든 학생 마감 완료'
+                : '필수 항목 완료 — 마감할 수 있습니다'}
+          {' · '}수업출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
+        </p>
+      </div>
+
+      {/* 헤더 — 시간표/반 정보는 읽기 전용 요약 */}
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-base font-bold">{classInfo?.name}</h1>
+            <h1 className="text-base font-bold break-all">{classInfo?.name}</h1>
             {subject && <Badge variant="outline" className="text-[10px]">{subject}</Badge>}
             <Badge variant="secondary" className="text-[10px] tabular-nums">{date}</Badge>
-            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
-              수업출결 {counts.marked}/{counts.total} · 마감 {counts.submitted}/{counts.total}
-            </span>
+            <Badge variant="outline" className="text-[10px] tabular-nums">학생 {counts.total}명</Badge>
           </div>
+          <p className="text-[10px] text-muted-foreground">
+            반·과목·명단·날짜는 시간표에서 자동으로 가져온 값입니다 (여기서 수정하지 않습니다).
+          </p>
 
           <div className="flex flex-wrap gap-1.5">
             {LESSON_TYPE_OPTIONS.map((t) => {
@@ -359,7 +429,7 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                     setDirty(true);
                   }}
                   className={cn(
-                    'text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors',
+                    'text-[11px] px-2.5 py-1.5 rounded-full border font-medium transition-colors',
                     active ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
                   )}
                 >
@@ -367,15 +437,21 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                 </button>
               );
             })}
-            <Button size="sm" variant="outline" className="h-7 text-[11px] ml-auto" onClick={applyAllPresent}>
-              미기록 전원 정상등원
-            </Button>
           </div>
         </CardContent>
       </Card>
 
+      {/* ① 출결 확인 */}
+      <div className="flex items-center gap-2 pt-1">
+        <h2 className="text-xs font-bold text-foreground">① 출결 확인</h2>
+        <span className="text-[10px] text-muted-foreground">완료 조건: 전원 수업출결 선택</span>
+        <Button size="sm" variant="outline" className="h-7 text-[11px] ml-auto" onClick={applyAllPresent}>
+          미기록 전원 정상등원
+        </Button>
+      </div>
+
       {/* CLOSEOUT-ATT-GATE-V1: 수업출결 미선택 안내 */}
-      {finalizeBlocked && (
+      {unmarkedStudents.length > 0 && (
         <div
           data-testid="closeout-unmarked-banner"
           className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2"
@@ -398,7 +474,11 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
         </div>
       )}
 
-
+      {/* ② 수업·숙제 기록 */}
+      <div className="flex items-center gap-2 pt-1">
+        <h2 className="text-xs font-bold text-foreground">② 수업·숙제 기록</h2>
+        <span className="text-[10px] text-muted-foreground">진도·숙제는 공통값을 재사용할 수 있습니다</span>
+      </div>
 
       {/* 공통 진도 / 숙제 */}
       <Card>
@@ -407,24 +487,28 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
           <div className="space-y-1.5">
             <Label className="text-[11px]">진도 / 수업 내용</Label>
             <div className="flex gap-2">
-              <Input value={commonRange} onChange={(e) => { setCommonRange(e.target.value); setDirty(true); }} placeholder="예: 수학1 p.42~55" className="h-9 text-sm" />
+              <Input value={commonRange} onChange={(e) => { setCommonRange(e.target.value); setDirty(true); }} placeholder="예: 수학1 p.42~55" className="h-9 text-sm min-w-0" />
               <Button size="sm" variant="outline" onClick={applyCommonRange} className="shrink-0">전체 적용</Button>
             </div>
+            <p className="text-[10px] text-muted-foreground">비워두면 학생별 진도가 없을 때 이 값이 저장됩니다.</p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[11px]">다음 숙제 (줄바꿈으로 여러 건)</Label>
+            <Label className="text-[11px]">다음 숙제 (줄바꿈으로 여러 건 · 배정일 {date})</Label>
             <div className="flex gap-2">
-              <Textarea value={commonHomework} onChange={(e) => { setCommonHomework(e.target.value); setDirty(true); }} rows={2} placeholder="예: 워크북 p.20~24" className="text-sm" />
+              <Textarea value={commonHomework} onChange={(e) => { setCommonHomework(e.target.value); setDirty(true); }} rows={2} placeholder="예: 워크북 p.20~24" className="text-sm min-w-0" />
               <Button size="sm" variant="outline" onClick={applyCommonHomework} className="shrink-0">전체 적용</Button>
             </div>
+            <p className="text-[10px] text-muted-foreground">
+              대상: 이 반 재원 학생 {counts.total}명 · 비워두면 숙제를 배정하지 않습니다(‘숙제 없음’과 다름).
+            </p>
           </div>
 
           <button
             onClick={() => setOptionalOpen((v) => !v)}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground"
+            className="flex items-center gap-1 text-[11px] text-muted-foreground py-1"
           >
             {optionalOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            선택 항목 (다음 수업 목표)
+            추가 기록 (다음 수업 목표)
           </button>
           {optionalOpen && (
             <div className="space-y-1.5">
@@ -443,25 +527,34 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
             <Card key={s.id} className={cn(s.submitted && 'border-emerald-500/30')}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">{s.name}</span>
+                  <span className="text-sm font-semibold break-all">{s.name}</span>
                   {(s.school || s.grade) && (
-                    <span className="text-[10px] text-muted-foreground">{s.school || ''} {s.grade || ''}</span>
+                    <span className="text-[10px] text-muted-foreground break-all">{s.school || ''} {s.grade || ''}</span>
                   )}
-                  {s.submitted && <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30" variant="outline">마감됨</Badge>}
+                  {s.submitted
+                    ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 border-emerald-500/30" variant="outline">마감됨</Badge>
+                    : <Badge variant="outline" className="text-[10px] text-muted-foreground">미마감</Badge>}
                 </div>
 
                 {/* 수업출결 (교사 판단) — 저장 컬럼은 attendance_status 그대로 */}
-                <p className="text-[10px] font-semibold text-muted-foreground">수업출결 <span className="font-normal">(교사 판단 · 출입 태그와 별개)</span></p>
+                <p className="text-[10px] font-semibold text-muted-foreground">수업출결 <span className="font-normal">(교사 판단 · 출입 태그와 별개 · 필수)</span></p>
                 <div className="flex flex-wrap gap-1">
                   {ATT_OPTIONS.map((opt) => {
                     const active = s.attendance.includes(opt);
+                    const risk = RISK_ATT.includes(opt);
                     return (
                       <button
                         key={opt}
                         onClick={() => patch(s.id, { attendance: active ? [] : [opt] })}
                         className={cn(
-                          'text-[11px] px-2 py-1 rounded-lg border font-medium transition-colors',
-                          active ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
+                          'text-[11px] px-2.5 py-1.5 rounded-lg border font-medium transition-colors',
+                          active
+                            ? risk
+                              ? 'bg-destructive text-destructive-foreground border-destructive'
+                              : 'bg-primary text-primary-foreground border-primary'
+                            : risk
+                              ? 'bg-transparent text-destructive/80 border-destructive/40'
+                              : 'bg-transparent text-muted-foreground border-border'
                         )}
                       >
                         {opt}
@@ -471,16 +564,16 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                 </div>
 
                 {/* 이해도 */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] text-muted-foreground w-12">이해도</span>
                   <div className={cn('flex gap-1', disabled && 'opacity-40 pointer-events-none')}>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
                         key={n}
                         disabled={disabled}
-                        onClick={() => patch(s.id, { understanding: String(n) })}
+                        onClick={() => patch(s.id, { understanding: s.understanding === String(n) ? '' : String(n) })}
                         className={cn(
-                          'w-7 h-7 rounded-lg border text-[11px] font-bold',
+                          'w-8 h-8 rounded-lg border text-[11px] font-bold',
                           s.understanding === String(n) && !disabled
                             ? 'bg-primary text-primary-foreground border-primary'
                             : 'text-muted-foreground border-border'
@@ -490,7 +583,9 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                       </button>
                     ))}
                   </div>
-                  {disabled && <span className="text-[10px] text-muted-foreground">결석·휴강은 이해도 미기록</span>}
+                  {disabled
+                    ? <span className="text-[10px] text-muted-foreground">결석·휴강은 이해도 미기록</span>
+                    : !s.understanding && <span className="text-[10px] text-muted-foreground">미선택 (선택 안 하면 저장하지 않음)</span>}
                 </div>
 
                 {/* 지난 숙제 */}
@@ -498,21 +593,23 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                   <span className="text-[11px] text-muted-foreground w-12 pt-1.5 shrink-0">지난 숙제</span>
                   <div className="flex-1 min-w-0 space-y-1">
                     {s.prevHomework.length > 0 ? (
-                      <p className="text-[11px] text-muted-foreground truncate">
+                      <p className="text-[11px] text-muted-foreground break-words line-clamp-2">
                         {s.prevHomework.map((h) => h.content).join(' / ')}
                       </p>
                     ) : (
-                      <p className="text-[11px] text-muted-foreground">기록 없음</p>
+                      <p className="text-[11px] text-muted-foreground">배정 기록 없음</p>
                     )}
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap gap-1">
                       {HW_STATUS_OPTIONS.map((o) => (
                         <button
                           key={o.key}
                           onClick={() => patch(s.id, { homeworkStatus: o.key })}
                           className={cn(
-                            'text-[11px] px-2 py-1 rounded-lg border font-medium',
+                            'text-[11px] px-2.5 py-1.5 rounded-lg border font-medium',
                             s.homeworkStatus === o.key
-                              ? 'bg-primary text-primary-foreground border-primary'
+                              ? o.key === 'not_done'
+                                ? 'bg-destructive text-destructive-foreground border-destructive'
+                                : 'bg-primary text-primary-foreground border-primary'
                               : 'text-muted-foreground border-border'
                           )}
                         >
@@ -528,30 +625,45 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                   <Input
                     value={s.lessonRange}
                     onChange={(e) => patch(s.id, { lessonRange: e.target.value })}
-                    placeholder="개별 진도 (비우면 공통값)"
-                    className="h-8 text-xs"
+                    placeholder={commonRange ? `개별 진도 (비우면 "${commonRange}")` : '개별 진도 (비우면 공통값)'}
+                    className="h-9 text-xs min-w-0"
                   />
-                  <Textarea
-                    value={s.nextHomework}
-                    onChange={(e) => patch(s.id, { nextHomework: e.target.value })}
-                    rows={2}
-                    placeholder="개별 다음 숙제"
-                    className="text-xs"
-                  />
+                  <div className="space-y-1 min-w-0">
+                    <Textarea
+                      value={s.nextHomework}
+                      onChange={(e) => patch(s.id, { nextHomework: e.target.value })}
+                      rows={2}
+                      placeholder="개별 다음 숙제 (비우면 배정 없음)"
+                      className="text-xs"
+                    />
+                    {commonHomework.trim() && s.nextHomework !== commonHomework && (
+                      <button
+                        onClick={() => patch(s.id, { nextHomework: commonHomework })}
+                        className="text-[10px] text-primary underline underline-offset-2"
+                      >
+                        공통 숙제 내용 가져오기
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 학부모 전달 메모는 접지 않는다 */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">수업 메모 (학부모 공유)</Label>
+                  <Textarea value={s.notes} onChange={(e) => patch(s.id, { notes: e.target.value })} rows={2} placeholder="학부모에게 전달할 내용" className="text-xs" />
                 </div>
 
                 <button
                   onClick={() => patch(s.id, { expanded: !s.expanded })}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground py-1"
                 >
                   {s.expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  선택 항목 (특이사항·학부모 메모·내부 메모)
+                  추가 기록 (학습 이슈 · 내부 메모)
                 </button>
                 {s.expanded && (
                   <div className="space-y-2">
                     <Textarea value={s.learningIssuesNote} onChange={(e) => patch(s.id, { learningIssuesNote: e.target.value })} rows={2} placeholder="학습 이슈 메모" className="text-xs" />
-                    <Textarea value={s.notes} onChange={(e) => patch(s.id, { notes: e.target.value })} rows={2} placeholder="수업 메모 (학부모 공유)" className="text-xs" />
-                    <Textarea value={s.internalNotes} onChange={(e) => patch(s.id, { internalNotes: e.target.value })} rows={2} placeholder="내부 메모" className="text-xs" />
+                    <Textarea value={s.internalNotes} onChange={(e) => patch(s.id, { internalNotes: e.target.value })} rows={2} placeholder="내부 메모 (학부모 비공개)" className="text-xs" />
                   </div>
                 )}
               </CardContent>
@@ -563,30 +675,55 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
         )}
       </div>
 
+      {/* ③ 마감 후 다음 행동 */}
+      {lastResult === 'finalized' && (
+        <Card data-testid="closeout-next-actions" className="border-emerald-500/30">
+          <CardContent className="p-4 space-y-2">
+            <p className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4" /> 수업 마감 완료 — 다음 행동
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="outline" className="text-[11px]"><Link to="/teacher">다음 수업으로</Link></Button>
+              <Button asChild size="sm" variant="outline" className="text-[11px]"><Link to="/lessons">수업 기록 조회</Link></Button>
+              <Button asChild size="sm" variant="outline" className="text-[11px]"><Link to="/teacher">주간 리포트 확인</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {lastResult === 'draft' && (
+        <p className="text-[11px] text-muted-foreground text-center">
+          임시저장됨 — 아직 마감되지 않았습니다. 원장 보고서에는 미마감으로 집계됩니다.
+        </p>
+      )}
+
       {/* 하단 저장 바 */}
       <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur p-3 z-40">
         <div className="max-w-3xl mx-auto space-y-2">
           {saveError && (
-            <p className="text-[11px] text-destructive flex items-center gap-1">
-              <AlertTriangle className="h-3.5 w-3.5" /> {saveError}
+            <p className="text-[11px] text-destructive flex items-start gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" /> <span className="break-words">{saveError}</span>
             </p>
           )}
+          <p className="text-[10px] text-muted-foreground">
+            임시저장: 기록만 남고 <span className="font-semibold">미마감</span> 유지 · 수업 마감: 제출 처리되어 원장 보고서·주간 리포트에 반영
+            {dirty && <span className="text-amber-600 font-semibold"> · 저장되지 않은 변경 있음</span>}
+          </p>
           <div className="flex gap-2">
             {onClose && (
               <Button variant="ghost" onClick={handleClose} disabled={saving} className="shrink-0">닫기</Button>
             )}
-            <Button variant="outline" onClick={() => persist(false)} disabled={saving || students.length === 0} className="flex-1">
+            <Button variant="outline" onClick={() => persist(false)} disabled={saving || students.length === 0} className="flex-1 min-w-0">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
               임시저장
             </Button>
             <Button
               onClick={() => persist(true)}
               disabled={saving || students.length === 0 || finalizeBlocked}
-              title={finalizeBlocked ? `수업출결 미선택 ${unmarkedStudents.length}명` : undefined}
-              className="flex-1"
+              title={finalizeBlocked ? progress.blockReason || undefined : undefined}
+              className="flex-1 min-w-0"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-              {finalizeBlocked ? `수업 마감 (미선택 ${unmarkedStudents.length}명)` : '수업 마감'}
+              {unmarkedStudents.length > 0 ? `수업 마감 (미선택 ${unmarkedStudents.length}명)` : '수업 마감'}
             </Button>
           </div>
         </div>
