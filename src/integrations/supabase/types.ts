@@ -917,6 +917,39 @@ export type Database = {
           },
         ]
       }
+      data_quality_acks: {
+        Row: {
+          acked_at: string
+          acked_by: string | null
+          acked_keys: string[]
+          created_at: string
+          finding_id: string
+          group_count: number
+          id: string
+          record_count: number
+        }
+        Insert: {
+          acked_at?: string
+          acked_by?: string | null
+          acked_keys?: string[]
+          created_at?: string
+          finding_id: string
+          group_count?: number
+          id?: string
+          record_count?: number
+        }
+        Update: {
+          acked_at?: string
+          acked_by?: string | null
+          acked_keys?: string[]
+          created_at?: string
+          finding_id?: string
+          group_count?: number
+          id?: string
+          record_count?: number
+        }
+        Relationships: []
+      }
       event_acks: {
         Row: {
           acknowledged_at: string
