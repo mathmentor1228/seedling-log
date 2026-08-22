@@ -9,6 +9,7 @@ import { Search, Printer, Eye, EyeOff, Loader2, BookOpen, FileText } from 'lucid
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MathRenderer } from '@/components/math/MathRenderer';
+import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
 
 type AnswerMode = 'hidden' | 'quick' | 'detail';
 
@@ -205,7 +206,10 @@ function QuizLookupContent() {
 export default function QuizLookupPage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+      <div className="space-y-3">
+        <ArchiveNotice to="/materials/math" label="수학 자료실" />
       <QuizLookupContent />
+    </div>
     </ProtectedRoute>
   );
 }

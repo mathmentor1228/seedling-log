@@ -11,6 +11,7 @@ import { Camera, Loader2, Upload, CheckCircle2, AlertCircle, Layers } from 'luci
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 import { compressImage } from '@/lib/imageCompression';
 import { preprocessImageForOCR } from '@/lib/imagePreprocess';
+import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
 
 interface UploadResult {
   fileName: string;
@@ -214,7 +215,10 @@ function BulkUploadContent() {
 export default function QuizBulkUploadPage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
+      <div className="space-y-3">
+        <ArchiveNotice to="/quiz-lookup" label="문제 조회" />
       <BulkUploadContent />
+    </div>
     </ProtectedRoute>
   );
 }

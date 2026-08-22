@@ -11,6 +11,7 @@ import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel'
 import { VocabTestAssignManager } from '@/components/vocab/VocabTestAssignManager';
 import { VocabSelfTestResults } from '@/components/vocab/VocabSelfTestResults';
 import {
+import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
   BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings,
   BookOpen, Languages, CalendarDays, ClipboardList, Send, Zap,
   LayoutDashboard, FilePlus2, Users2, LineChart, Cog,
@@ -212,7 +213,10 @@ function VocabTestContent() {
 export default function VocabTestPage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
+      <div className="space-y-3">
+        <ArchiveNotice to="/lessons/close" label="수업 마감" />
       <VocabTestContent />
+    </div>
     </ProtectedRoute>
   );
 }

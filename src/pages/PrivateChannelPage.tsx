@@ -28,6 +28,7 @@ import {
   HelpCircle, CheckCircle2, Clock, AlertCircle, ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
 
 const PAIR_EMAILS = ['engmentor0201@gmail.com', 'assistanteng99@gmail.com'];
 const TEACHER_EMAIL = 'engmentor0201@gmail.com';
@@ -806,6 +807,8 @@ export default function PrivateChannelPage() {
 
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
+      <div className="space-y-3">
+        <ArchiveNotice to="/admin/office" label="행정 업무" />
       {isAllowed ? (
         <ChannelInner />
       ) : (
@@ -813,6 +816,7 @@ export default function PrivateChannelPage() {
           이 채널은 지정된 두 분(김민희 ↔ 최수린)만 사용할 수 있습니다.
         </div>
       )}
+    </div>
     </ProtectedRoute>
   );
 }
