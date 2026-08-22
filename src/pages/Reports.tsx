@@ -52,6 +52,12 @@ import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportPromptSettings } from '@/components/ReportPromptSettings';
 import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGenerationStatus';
+import { useSearchParams } from 'react-router-dom';
+import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
+import { WeekProgressSummary, type StatusFilter } from '@/components/reports/WeekProgressSummary';
+import {
+  getWriteStatus, getDeliveryStatus, summarizeWeek, nextNeedsReview, WRITE_STATUS_LABEL,
+} from '@/lib/reportStatus';
 
 import {
   AlertDialog,
