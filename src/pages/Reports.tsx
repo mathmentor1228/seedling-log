@@ -784,7 +784,7 @@ export default function Reports() {
     }
   }
 
-  // Filter by search query, quality tag, and week
+  // Filter by search query, quality tag, week, and write-status
   const filteredReports = reports.filter((report) => {
     // Week filter
     if (reportWeekFilter && report.week_start !== reportWeekFilter) return false;
@@ -792,7 +792,16 @@ export default function Reports() {
     // Name filter
     const matchesName = report.student_name?.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesName) return false;
-    
+
+    // REPORT-STATUS-CLARITY-V1: 작성 상태 필터 (표시 전용)
+    if (statusFilter !== 'all') {
+      const ws = getWriteStatus(report);
+      if (statusFilter === 'needs_review' && ws !== 'needs_review') return false;
+      if (statusFilter === 'sendable' && ws !== 'ready') return false;
+      if (statusFilter === 'caution' && ws !== 'zero_lessons') return false;
+      if (statusFilter === 'published' && ws !== 'published') return false;
+    }
+
     // Quality tag filter
     if (qualityFilter === 'sendable') {
       return report.report_quality_tag === 'GREEN' || report.report_quality_tag === 'YELLOW' || !report.report_quality_tag;
@@ -809,6 +818,12 @@ export default function Reports() {
     YELLOW: weekFilteredReports.filter(r => r.report_quality_tag === 'YELLOW').length,
     RED: weekFilteredReports.filter(r => r.report_quality_tag === 'RED').length,
   };
+
+  // REPORT-STATUS-CLARITY-V1: 주차 진행 요약 (대상=활성 학생 수)
+  const weekSummary = summarizeWeek(weekFilteredReports, allStudents.length);
+  const reviewQueueCount = weekSummary.needsReview;
+  const nextReviewTarget = nextNeedsReview(weekFilteredReports, reviewCursorId);
+
 
   // Count selected targets - exclude RED reports
   const selectedStudentCount = [...sendTargets.values()].filter(t => {
