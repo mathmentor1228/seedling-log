@@ -211,9 +211,14 @@ export function PrincipalActionCenter({
         )}
 
         {!alerts.loading && !alerts.error && (
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate(`/admin/unclosed?days=${ALERT_WINDOW_DAYS}`)}>
-            강사별 미마감 관리 열기
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate(`/admin/unclosed?days=${ALERT_WINDOW_DAYS}`)}>
+              강사별 미마감 관리 열기
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/data-quality')}>
+              데이터 점검 열기
+            </Button>
+          </div>
         )}
 
         {!alerts.loading && !alerts.error && problems.length > 0 && (
