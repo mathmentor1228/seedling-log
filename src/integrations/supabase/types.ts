@@ -6667,6 +6667,9 @@ export type Database = {
         Row: {
           body: string | null
           class_id: string | null
+          consult_method: string | null
+          consult_target: string | null
+          consulted_at: string | null
           created_at: string
           created_by: string
           done_at: string | null
@@ -6685,6 +6688,9 @@ export type Database = {
         Insert: {
           body?: string | null
           class_id?: string | null
+          consult_method?: string | null
+          consult_target?: string | null
+          consulted_at?: string | null
           created_at?: string
           created_by: string
           done_at?: string | null
@@ -6703,6 +6709,9 @@ export type Database = {
         Update: {
           body?: string | null
           class_id?: string | null
+          consult_method?: string | null
+          consult_target?: string | null
+          consulted_at?: string | null
           created_at?: string
           created_by?: string
           done_at?: string | null
