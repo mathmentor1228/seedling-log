@@ -319,20 +319,29 @@ export default function ReportStatusPage() {
                   : isMedium
                   ? 'border-warning/40 bg-warning/5'
                   : '';
+                const ws = getWriteStatus(r);
+                const ds = getDeliveryStatus(r);
                 return (
                   <Card key={r.id} className={cardBorder}>
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-foreground">{r.student_name}</h3>
+                      <div className="flex items-start justify-between gap-2 mb-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <h3 className="font-semibold text-foreground break-all">{r.student_name}</h3>
                           {isHigh && <span className="text-2xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">주의</span>}
                           {isMedium && <span className="text-2xs px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium">관찰</span>}
                           {r.teacher_subjects && r.teacher_subjects.length > 0 && r.teacher_subjects.map(subj => (
                             <span key={subj} className="text-2xs px-1.5 py-0.5 rounded bg-accent text-accent-foreground font-medium">{subj}</span>
                           ))}
                         </div>
-                        <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium">작성: {WRITE_STATUS_LABEL[ws]}</span>
+                          <span className="text-2xs px-1.5 py-0.5 rounded border font-medium text-muted-foreground" title={ds.evidence}>
+                            발송: {ds.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
+                        </div>
                       </div>
+
                       <Tabs defaultValue="parent" className="w-full">
                         <TabsList className="grid w-full grid-cols-2 h-8">
                           <TabsTrigger value="parent" className="text-xs">학부모용</TabsTrigger>
