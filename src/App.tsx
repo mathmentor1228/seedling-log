@@ -7,6 +7,7 @@ import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import { StudentAuthProvider } from "@/lib/studentAuth";
+import { CompatRedirect } from "@/components/CompatRedirect";
 
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -41,7 +42,6 @@ const LessonsPage = lazy(() => import("./pages/LessonsPage"));
 const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const UserManagementPage = lazy(() => import("./pages/UserManagementPage"));
 const TimetablePage = lazy(() => import("./pages/TimetablePage"));
-const AssistantRequestsPage = lazy(() => import("./pages/AssistantRequestsPage"));
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
 const AttendanceBookPage = lazy(() => import("./pages/AttendanceBookPage"));
@@ -194,8 +194,9 @@ const App = () => (
                 
                 <Route path="/admin/users" element={<UserManagementPage />} />
                 <Route path="/timetable" element={<TimetablePage />} />
-                <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
-                <Route path="/assistant-tasks" element={<AssistantPage />} />
+                {/* ASSISTANT-MERGE-V1: 대표 URL = /assistant-requests, /assistant-tasks 는 호환 주소 */}
+                <Route path="/assistant-requests" element={<AssistantPage />} />
+                <Route path="/assistant-tasks" element={<CompatRedirect to="/assistant-requests" />} />
                 <Route path="/stats" element={<StatsPage />} />
                 <Route path="/admin/attendance-book" element={<AttendanceBookPage />} />
                 <Route path="/admin/briefing" element={<AdminBriefingPage />} />

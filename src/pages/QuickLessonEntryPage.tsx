@@ -40,6 +40,7 @@ import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceD
 
 import { UnifiedLessonRow } from '@/components/lessons/UnifiedLessonRow';
 import { LinkedRecordsChip, LinkedRecordsState, LinkedChoices } from '@/components/lessons/LinkedRecordsChip';
+import { ArchiveNotice } from '@/components/layout/ArchiveNotice';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
@@ -756,7 +757,10 @@ function QuickLessonEntryContent() {
 export default function QuickLessonEntryPage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
+      <div className="space-y-3">
+        <ArchiveNotice to="/lessons/close" label="수업 마감" />
       <QuickLessonEntryContent />
+    </div>
     </ProtectedRoute>
   );
 }

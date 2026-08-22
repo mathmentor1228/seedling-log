@@ -25,6 +25,15 @@ function routeExists(href: string, patterns: string[]): boolean {
   });
 }
 
+
+/** 역할별 네비게이션 소스 조각 (teacher / admin) */
+function roleNavParts(): string[] {
+  const src = readSrc('components/layout/AppLayout.tsx');
+  const teacher = src.slice(src.indexOf('TEACHER-NAV-FLOW-V2'), src.indexOf('ADMIN-NAV-FLOW-V2'));
+  const admin = src.slice(src.indexOf('ADMIN-NAV-FLOW-V2'));
+  return [teacher, admin];
+}
+
 describe('feature map catalog', () => {
   it('has unique hrefs', () => {
     const hrefs = FEATURE_MAP.map((f) => f.href);
@@ -69,5 +78,92 @@ describe('sidebar ↔ route mapping', () => {
     const dynamic = ['/principal', '/teacher', '/assistant', '/dashboard'];
     const undocumented = navHrefs().filter((h) => !documented.has(h) && !dynamic.includes(h));
     expect(undocumented).toEqual([]);
+  });
+});
+
+describe('assistant feature merge (ASSISTANT-MERGE-V1)', () => {
+  const appSrc = readSrc('App.tsx');
+  const layoutSrc = readSrc('components/layout/AppLayout.tsx');
+
+  it('keeps /assistant-tasks route as a query-preserving compat redirect', () => {
+    expect(appSrc).toMatch(/path="\/assistant-tasks" element=\{<CompatRedirect to="\/assistant-requests" \/>\}/);
+    const redirectSrc = readSrc('components/CompatRedirect.tsx');
+    expect(redirectSrc).toContain('location.search');
+    expect(redirectSrc).toContain('location.hash');
+  });
+
+  it('representative screen is /assistant-requests and renders the role-split page', () => {
+    expect(appSrc).toMatch(/path="\/assistant-requests" element=\{<AssistantPage \/>\}/);
+    const page = readSrc('pages/AssistantPage.tsx');
+    expect(page).toContain('AssistantDashboard');
+    expect(page).toContain('TeacherAssistantRequestsView');
+  });
+
+  it('deprecated AssistantRequestsPage has zero references', () => {
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (/\.(ts|tsx)$/.test(e.name) && !full.endsWith('AssistantRequestsPage.tsx') && !full.endsWith('featureMap.test.ts')) files.push(full);
+      }
+    };
+    walk(path.resolve(__dirname, '..'));
+    const refs = files.filter((f) => fs.readFileSync(f, 'utf8').includes('AssistantRequestsPage'));
+    expect(refs).toEqual([]);
+  });
+
+  it('sidebar exposes only one assistant entry point per role', () => {
+    expect([...layoutSrc.matchAll(/href: '\/assistant-tasks'/g)].length).toBe(0);
+    const catalog = FEATURE_MAP.filter((f) => f.href.startsWith('/assistant-'));
+    expect(catalog.map((f) => f.href)).toEqual(['/assistant-requests']);
+    expect(catalog[0].compatHrefs).toContain('/assistant-tasks');
+  });
+
+  it('no duplicate hrefs within each role sidebar', () => {
+    for (const part of roleNavParts()) {
+      const hrefs = [...part.matchAll(/href: '([^']+)'/g)].map((m) => m[1]);
+      expect(new Set(hrefs).size).toBe(hrefs.length);
+    }
+  });
+});
+
+describe('archive group (ARCHIVE-FINALIZE-V1)', () => {
+  const layoutSrc = readSrc('components/layout/AppLayout.tsx');
+
+  it('archive groups are flagged and never auto-open', () => {
+    expect([...layoutSrc.matchAll(/archive: true/g)].length).toBe(2);
+    expect(layoutSrc).toContain('if (group.archive) return false;');
+  });
+
+  it('archive features only appear inside the archive groups', () => {
+    const archiveHrefs = FEATURE_MAP.filter((f) => f.tier === 'archive').map((f) => f.href);
+    const leaked: string[] = [];
+    for (const part of roleNavParts()) {
+      const beforeArchive = part.split("label: '기타/보관 기능'")[0];
+      for (const href of archiveHrefs) {
+        if (beforeArchive.includes(`href: '${href}'`)) leaked.push(href);
+      }
+    }
+    expect(leaked).toEqual([]);
+  });
+
+  it('every archive feature declares a representative replacement', () => {
+    const missing = FEATURE_MAP.filter((f) => f.tier === 'archive' && !f.supersededBy).map((f) => f.href);
+    expect(missing).toEqual([]);
+  });
+
+  it('archive pages render the archive notice', () => {
+    const pages = [
+      'pages/VocabTestPage.tsx',
+      'pages/VocabTestGeneratorPage.tsx',
+      'pages/MathConceptPage.tsx',
+      'pages/QuizLookupPage.tsx',
+      'pages/QuizBulkUploadPage.tsx',
+      'pages/StudySessionPage.tsx',
+      'pages/QuickLessonEntryPage.tsx',
+      'pages/PrivateChannelPage.tsx',
+    ];
+    for (const p of pages) expect(readSrc(p)).toContain('<ArchiveNotice');
   });
 });
