@@ -110,11 +110,11 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       const scopedRecords = filterFinishedRecords((recRes.data || []) as any[], scopeCtx);
 
       scopedRecords.forEach((r: any) => {
-        if (!r.class_id) return;
-        const key = `${r.class_id}|${r.lesson_date}`;
+        const classId: string = r.class_id || '';
+        const key = `${classId || 'noclass'}|${r.lesson_date}`;
         const acc =
           map.get(key) ||
-          { classId: r.class_id, date: r.lesson_date, total: 0, recorded: 0, submitted: 0, unsetAttendance: 0, gap: 0 };
+          { classId, date: r.lesson_date, total: 0, recorded: 0, submitted: 0, unsetAttendance: 0, gap: 0 };
         const statuses: string[] = Array.isArray(r.attendance_status) ? r.attendance_status : [];
         const hasAttendance = statuses.length > 0;
         const hasContent = hasAttendance || !!(r.lesson_range && String(r.lesson_range).trim());
@@ -128,13 +128,14 @@ export function usePrincipalAlerts(): PrincipalAlerts {
       });
 
       const mk = (a: Acc, issueCount: number): ClassDayGroup => ({
-        key: `${a.classId}|${a.date}`,
+        key: `${a.classId || 'noclass'}|${a.date}`,
         classId: a.classId,
-        className: classNames.get(a.classId) || '이름 없는 반',
+        className: a.classId ? classNames.get(a.classId) || '이름 없는 반' : '(반 미지정)',
         date: a.date,
         studentCount: a.total,
         issueCount,
       });
+
 
       const ns: ClassDayGroup[] = [];
       const ip: ClassDayGroup[] = [];
