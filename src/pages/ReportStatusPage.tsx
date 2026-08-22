@@ -75,18 +75,34 @@ export default function ReportStatusPage() {
   const { role, user } = useAuth();
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // REPORT-STATUS-CLARITY-V1: 작성 상태 필터 (발송 상태와 분리)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'needs_review'>('all');
 
   const [weekStart, setWeekStart] = useState(() => {
+    const fromUrl = searchParams.get('week');
+    if (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)) return fromUrl;
     const lastWeek = subWeeks(new Date(), 1);
     const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
     return format(mon, 'yyyy-MM-dd');
   });
   const [weekEnd, setWeekEnd] = useState(() => {
-    const lastWeek = subWeeks(new Date(), 1);
-    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    const fromUrl = searchParams.get('week');
+    const mon = fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl)
+      ? new Date(fromUrl)
+      : startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
     return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    next.set('week', weekStart);
+    if (statusFilter === 'all') next.delete('status'); else next.set('status', statusFilter);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart, statusFilter]);
 
   function shiftWeek(dir: -1 | 1) {
     const fn = dir === -1 ? subWeeks : addWeeks;
@@ -100,20 +116,23 @@ export default function ReportStatusPage() {
 
   async function fetchReports() {
     setLoading(true);
+    setLoadError(null);
     try {
       const { data, error } = await supabase
         .from('weekly_reports')
         .select(`
           id, student_id, week_start, week_end, total_lessons,
           student_message, parent_message, generated_at, risk_level,
+          parent_visible, report_quality_tag,
+          student_sent_status, parent_sent_status, student_sent_at, parent_sent_at,
           students:student_id (name)
         `)
         .gte('week_start', weekStart)
         .lte('week_end', weekEnd)
-        .eq('parent_visible', true)
         .order('generated_at', { ascending: false });
 
       if (error) throw error;
+
 
       let rows: ReportRow[] = (data || []).map((r: any) => ({
         ...r,
