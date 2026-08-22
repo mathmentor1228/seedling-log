@@ -8222,6 +8222,8 @@ export type Database = {
         }
         Returns: Json
       }
+      dq_base36: { Args: { n: number }; Returns: string }
+      dq_sign: { Args: { k: string }; Returns: string }
       format_student_grade_label: {
         Args: { _grade_year: number; _school_level: string }
         Returns: string
