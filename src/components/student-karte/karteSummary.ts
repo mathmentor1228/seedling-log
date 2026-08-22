@@ -207,3 +207,116 @@ export function buildTimeline(params: {
 
   return items.sort((a, b) => b.date.localeCompare(a.date) || a.kind.localeCompare(b.kind));
 }
+
+// ── STUDENT-KARTE-V2: 기간·과목 필터와 12주 변화 추이 (순수 함수) ─────────────
+
+export type KartePeriod = '4w' | '12w' | 'term';
+
+export const PERIOD_DAYS: Record<KartePeriod, number> = {
+  '4w': 28,
+  '12w': 84,
+  term: 182,
+};
+
+export const PERIOD_LABEL: Record<KartePeriod, string> = {
+  '4w': '최근 4주',
+  '12w': '최근 12주',
+  term: '이번 학기(최근 26주)',
+};
+
+export function parsePeriod(raw: string | null | undefined): KartePeriod {
+  return raw === '4w' || raw === '12w' || raw === 'term' ? raw : '12w';
+}
+
+/** 'YYYY-MM-DD' 기준 n일 이동 (KST 고정, 시간대 흔들림 없음) */
+export function shiftIsoDate(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 해당 날짜가 속한 주의 월요일 (ISO) */
+export function mondayOf(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const dow = d.getUTCDay(); // 0=일
+  const back = dow === 0 ? 6 : dow - 1;
+  return shiftIsoDate(date, -back);
+}
+
+export function matchesSubject(subject: string | null | undefined, filter: string): boolean {
+  if (!filter || filter === 'all') return true;
+  return (subject || '') === filter;
+}
+
+export interface TrendWeek {
+  weekStart: string;
+  lessonCount: number;
+  /** 출결이 기록된 수업만 분모. 분모 0이면 null (= 데이터 없음) */
+  attendanceRate: number | null;
+  attendanceDenom: number;
+  /** 결과가 기록된 숙제만 분모. 분모 0이면 null */
+  homeworkRate: number | null;
+  homeworkDenom: number;
+  /** 이해도 평균. 입력 0건이면 null */
+  understandingAvg: number | null;
+  understandingDenom: number;
+}
+
+const DONE_RESULTS = ['completed', 'low_effort_completed'];
+
+/** 주 단위 변화 추이. 데이터가 없는 주도 buckets에 포함하고 값은 null로 둔다. */
+export function buildTrend(params: {
+  lessons: KarteLesson[];
+  homework: KarteHomework[];
+  /** 마지막 주(오늘 기준) */
+  today: string;
+  weeks: number;
+}): TrendWeek[] {
+  const { lessons, homework, today, weeks } = params;
+  const lastMonday = mondayOf(today);
+  const buckets = new Map<string, TrendWeek>();
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const ws = shiftIsoDate(lastMonday, -7 * i);
+    buckets.set(ws, {
+      weekStart: ws, lessonCount: 0,
+      attendanceRate: null, attendanceDenom: 0,
+      homeworkRate: null, homeworkDenom: 0,
+      understandingAvg: null, understandingDenom: 0,
+    });
+  }
+  const attHit = new Map<string, number>();
+  const hwHit = new Map<string, number>();
+  const undSum = new Map<string, number>();
+
+  for (const l of lessons) {
+    const ws = mondayOf(l.lesson_date);
+    const b = buckets.get(ws);
+    if (!b) continue;
+    b.lessonCount += 1;
+    const statuses = l.attendance_status || [];
+    if (!isUnrecorded(statuses)) {
+      b.attendanceDenom += 1;
+      if (!isAbsent(statuses)) attHit.set(ws, (attHit.get(ws) || 0) + 1);
+    }
+    if (typeof l.understanding_score === 'number') {
+      b.understandingDenom += 1;
+      undSum.set(ws, (undSum.get(ws) || 0) + l.understanding_score);
+    }
+  }
+
+  for (const h of homework) {
+    const ws = mondayOf(h.assigned_date);
+    const b = buckets.get(ws);
+    if (!b || !h.result) continue;
+    b.homeworkDenom += 1;
+    if (DONE_RESULTS.includes(h.result)) hwHit.set(ws, (hwHit.get(ws) || 0) + 1);
+  }
+
+  for (const b of buckets.values()) {
+    if (b.attendanceDenom > 0) b.attendanceRate = Math.round(((attHit.get(b.weekStart) || 0) / b.attendanceDenom) * 100);
+    if (b.homeworkDenom > 0) b.homeworkRate = Math.round(((hwHit.get(b.weekStart) || 0) / b.homeworkDenom) * 100);
+    if (b.understandingDenom > 0) b.understandingAvg = Math.round(((undSum.get(b.weekStart) || 0) / b.understandingDenom) * 10) / 10;
+  }
+
+  return [...buckets.values()];
+}

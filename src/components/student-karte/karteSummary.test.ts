@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, summarizeKarte, type KarteHomework, type KarteLesson } from './karteSummary';
+import { buildTimeline, buildTrend, matchesSubject, mondayOf, parsePeriod, summarizeKarte, type KarteHomework, type KarteLesson } from './karteSummary';
 
 const lesson = (over: Partial<KarteLesson>): KarteLesson => ({
   id: Math.random().toString(36).slice(2),
@@ -101,5 +101,61 @@ describe('buildTimeline', () => {
 
   it('데이터가 없으면 빈 배열', () => {
     expect(buildTimeline({ lessons: [], homework: [], reports: [], notes: [], attendanceDates: [] })).toEqual([]);
+  });
+});
+
+describe('buildTrend / 기간·과목 필터', () => {
+  it('분모 0이면 null(데이터 없음)로 둔다', () => {
+    const t = buildTrend({ lessons: [], homework: [], today: '2026-08-22', weeks: 4 });
+    expect(t).toHaveLength(4);
+    expect(t.every((w) => w.attendanceRate === null && w.homeworkRate === null && w.understandingAvg === null)).toBe(true);
+  });
+
+  it('출결·숙제·이해도 분모는 기록된 값만 센다', () => {
+    const t = buildTrend({
+      lessons: [
+        lesson({ lesson_date: '2026-08-18', attendance_status: ['정상등원'], understanding_score: 4 }),
+        lesson({ lesson_date: '2026-08-19', attendance_status: ['무단결석'], understanding_score: null }),
+        lesson({ lesson_date: '2026-08-20', attendance_status: [], understanding_score: null }),
+      ],
+      homework: [
+        hw({ assigned_date: '2026-08-18', result: 'completed' }),
+        hw({ assigned_date: '2026-08-19', result: 'not_done' }),
+        hw({ assigned_date: '2026-08-20', result: null }),
+      ],
+      today: '2026-08-22',
+      weeks: 1,
+    });
+    const w = t[0];
+    expect(w.weekStart).toBe('2026-08-17');
+    expect(w.lessonCount).toBe(3);
+    expect(w.attendanceDenom).toBe(2);
+    expect(w.attendanceRate).toBe(50);
+    expect(w.homeworkDenom).toBe(2);
+    expect(w.homeworkRate).toBe(50);
+    expect(w.understandingDenom).toBe(1);
+    expect(w.understandingAvg).toBe(4);
+  });
+
+  it('기간 경계 밖 주는 buckets에 들어가지 않는다', () => {
+    const t = buildTrend({
+      lessons: [lesson({ lesson_date: '2026-01-05' })],
+      homework: [],
+      today: '2026-08-22',
+      weeks: 2,
+    });
+    expect(t.reduce((a, w) => a + w.lessonCount, 0)).toBe(0);
+  });
+
+  it('mondayOf / parsePeriod / matchesSubject', () => {
+    expect(mondayOf('2026-08-22')).toBe('2026-08-17');
+    expect(mondayOf('2026-08-17')).toBe('2026-08-17');
+    expect(mondayOf('2026-08-23')).toBe('2026-08-17');
+    expect(parsePeriod(null)).toBe('12w');
+    expect(parsePeriod('4w')).toBe('4w');
+    expect(parsePeriod('bogus')).toBe('12w');
+    expect(matchesSubject('수학', 'all')).toBe(true);
+    expect(matchesSubject('수학', '영어')).toBe(false);
+    expect(matchesSubject(null, '영어')).toBe(false);
   });
 });
