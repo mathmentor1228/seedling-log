@@ -105,7 +105,7 @@ describe('assistant feature merge (ASSISTANT-MERGE-V1)', () => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) walk(full);
-        else if (/\.(ts|tsx)$/.test(e.name) && !full.endsWith('AssistantRequestsPage.tsx')) files.push(full);
+        else if (/\.(ts|tsx)$/.test(e.name) && !full.endsWith('AssistantRequestsPage.tsx') && !full.endsWith('featureMap.test.ts')) files.push(full);
       }
     };
     walk(path.resolve(__dirname, '..'));
