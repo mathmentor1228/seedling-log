@@ -79,6 +79,11 @@ export default function ReportStatusPage() {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // REPORT-DELIVERY-CONFIRM-V1: 발송 확인 이력 (append-only)
+  const [eventsByReport, setEventsByReport] = useState<Record<string, DeliveryEvent[]>>({});
+  const [actorNames, setActorNames] = useState<Record<string, string>>({});
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   // REPORT-STATUS-CLARITY-V1: 작성 상태 필터 (발송 상태와 분리)
