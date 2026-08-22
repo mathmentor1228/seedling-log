@@ -183,7 +183,7 @@ function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upc
         {total === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-1">배정된 학생 없음</p>
         ) : (
-          <div className="flex flex-wrap gap-x-2 gap-y-0.5 max-h-28 overflow-y-auto">
+          <div className="flex flex-wrap gap-x-2 gap-y-1 max-h-28 overflow-y-auto">
             {slot.students.map(s => {
               const isLateStudent = isLate(s.status);
               const isPresentStudent = isPresent(s.status) && !isLateStudent;
@@ -196,17 +196,21 @@ function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upc
                   key={s.id}
                   title={info?.label || '수업 전'}
                   className={cn(
-                    'text-[11px] font-medium',
+                    'inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap',
                     isPresentStudent && 'text-emerald-600',
                     isLateStudent && 'text-amber-600',
-                    isAbsentStudent && 'text-muted-foreground line-through',
+                    isAbsentStudent && 'text-muted-foreground',
                     !s.status && state === 'active' && 'text-foreground',
                     !s.status && state !== 'active' && 'text-muted-foreground',
                   )}
                 >
-                  {s.name}
-                  {isLate && <span className="text-[9px] ml-0.5">지각</span>}
-                  {isAbsent && <span className="text-[9px] ml-0.5">결</span>}
+                  <span className={cn(isAbsentStudent && 'line-through')}>{s.name}</span>
+                  {isLateStudent && (
+                    <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-amber-500/15 text-amber-600">지각</span>
+                  )}
+                  {isAbsentStudent && (
+                    <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-muted text-muted-foreground">결석</span>
+                  )}
                 </span>
               );
             })}
