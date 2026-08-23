@@ -65,7 +65,7 @@ export const FEATURE_MAP: FeatureEntry[] = [
   // ── 소통·리포트 ─────────────────────────────────────────
   { href: '/reports', label: '주간 리포트 생성', description: '주차별 학생·학부모 리포트 초안 생성/검수', tier: 'core', roles: ['admin'], hasEntryPoint: true, signalTable: 'weekly_reports', signalColumn: 'generated_at' },
   { href: '/reports/status', label: '리포트 발송 현황', description: '생성된 리포트의 주차별 작성·발송 상태 확인', tier: 'core', roles: ['admin', 'teacher'], hasEntryPoint: true, signalTable: 'weekly_reports', signalColumn: 'generated_at' },
-  { href: '/school-analysis', label: '학교분석·상담자료', description: '학교알리미 공개 통계(정적 데이터) 기반 상담자료·인쇄', tier: 'as-needed', roles: ['admin', 'teacher'], hasEntryPoint: true },
+  { href: '/school-analysis', label: '학교분석·상담자료', description: '학교알리미 공개 통계(정적 데이터) 기반 상담자료·인쇄', tier: 'asNeeded', roles: ['admin', 'teacher'], hasEntryPoint: true },
   { href: '/admin/parent-learning-feedback', label: '학부모 설문', description: '학습정보 전달 설문 발송·응답 확인', tier: 'asNeeded', roles: ['admin'], hasEntryPoint: true, signalTable: 'parent_learning_feedback', signalColumn: 'submitted_at', audit: { c90: 0, lastAt: null }, note: '응답 0건이지만 최근 도입한 발송 기능 · 삭제 검토 대상 아님(재확인 필요)' },
   { href: '/private-channel', label: '영어팀 채널', description: '영어팀 전용 메시지 채널', tier: 'archive', roles: ['admin'], hasEntryPoint: true, signalTable: 'private_messages', signalColumn: 'created_at', audit: { c90: 0, lastAt: null }, note: '메시지 0건', accessPath: '/private-channel 직접 URL 유지', supersededBy: { href: '/admin/office', label: '행정 업무' } },
 
