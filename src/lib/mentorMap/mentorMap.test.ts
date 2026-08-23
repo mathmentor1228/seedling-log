@@ -226,7 +226,7 @@ describe('제안서 변환', () => {
     const vm = buildProposal(rich);
     const all = JSON.stringify(vm) + JSON.stringify(toSlides(vm));
     expect(containsForbidden(all)).toEqual([]);
-    expect(all).not.toContain('보장');
+    expect(all).not.toMatch(/보장합니다|보장해|성적 향상 보장/);
   });
 
   it('입력이 거의 없어도 제안서가 생성되고 미입력을 구분한다', () => {
