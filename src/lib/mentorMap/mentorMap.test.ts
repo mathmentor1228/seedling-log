@@ -183,12 +183,16 @@ describe('소통 선호', () => {
 });
 
 describe('학교 공개 통계 연결', () => {
-  it('정확히 일치할 때만 연결한다', () => {
-    expect(resolveSchoolRef('신길고등학교', 'high').linked).toBe(false);
+  it('정확히 일치할 때만 연결하고 한계를 명시한다', () => {
+    const hit = resolveSchoolRef('신길고등학교', 'high');
+    expect(hit.linked).toBe(true);
+    expect(hit.limitation).toContain('보장하지 않습니다');
+    expect(resolveSchoolRef('신길고등학교', 'middle').linked).toBe(false);
     expect(resolveSchoolRef('', 'high').linked).toBe(false);
     expect(resolveSchoolRef('없는학교', 'middle').message).toContain('준비 중');
   });
 });
+
 
 describe('제안서 변환', () => {
   const rich = base({
