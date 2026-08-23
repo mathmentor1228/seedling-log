@@ -24,6 +24,8 @@ const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const PayInfo = lazy(() => import("./pages/PayInfo"));
 const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
 const ParentSurveyPage = lazy(() => import("./pages/ParentSurveyPage"));
+const MentorMapPublicPage = lazy(() => import("./pages/MentorMapPublicPage"));
+const AdminMentorMapPage = lazy(() => import("./pages/AdminMentorMapPage"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
 );
@@ -121,6 +123,7 @@ const App = () => (
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/parent/survey" element={<ParentSurveyPage />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
+          <Route path="/mentor-map" element={<MentorMapPublicPage />} />
           <Route path="/pay-info" element={<PayInfo />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
@@ -205,6 +208,7 @@ const App = () => (
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
                 <Route path="/admin/office" element={<AdminOfficePage />} />
                 <Route path="/admin/parent-learning-feedback" element={<ParentLearningFeedbackPage />} />
+                <Route path="/admin/mentor-map" element={<AdminMentorMapPage />} />
                 <Route path="/admin/tuition" element={<TuitionPage />} />
                 <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />

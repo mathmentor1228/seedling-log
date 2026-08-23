@@ -3062,6 +3062,134 @@ export type Database = {
         }
         Relationships: []
       }
+      mentor_map_request_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          from_value: string | null
+          id: string
+          memo: string | null
+          request_id: string
+          to_value: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          from_value?: string | null
+          id?: string
+          memo?: string | null
+          request_id: string
+          to_value?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          from_value?: string | null
+          id?: string
+          memo?: string | null
+          request_id?: string
+          to_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentor_map_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "mentor_map_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mentor_map_requests: {
+        Row: {
+          assigned_at: string | null
+          assigned_teacher_id: string | null
+          author_type: string
+          comm_pref: Json
+          consent_at: string
+          contact_owner: string
+          contact_phone: string
+          created_at: string
+          free_note: string | null
+          grade: string | null
+          id: string
+          parent_answers: Json
+          preferred_method: string | null
+          preferred_time: string | null
+          priority_subjects: string[]
+          school_level: string
+          school_name: string | null
+          score_info: Json
+          source: string
+          status: string
+          student_answers: Json
+          student_name: string
+          subject_answers: Json
+          subjects: string[]
+          submission_hash: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_teacher_id?: string | null
+          author_type: string
+          comm_pref?: Json
+          consent_at?: string
+          contact_owner?: string
+          contact_phone: string
+          created_at?: string
+          free_note?: string | null
+          grade?: string | null
+          id?: string
+          parent_answers?: Json
+          preferred_method?: string | null
+          preferred_time?: string | null
+          priority_subjects?: string[]
+          school_level: string
+          school_name?: string | null
+          score_info?: Json
+          source?: string
+          status?: string
+          student_answers?: Json
+          student_name: string
+          subject_answers?: Json
+          subjects?: string[]
+          submission_hash?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_teacher_id?: string | null
+          author_type?: string
+          comm_pref?: Json
+          consent_at?: string
+          contact_owner?: string
+          contact_phone?: string
+          created_at?: string
+          free_note?: string | null
+          grade?: string | null
+          id?: string
+          parent_answers?: Json
+          preferred_method?: string | null
+          preferred_time?: string | null
+          priority_subjects?: string[]
+          school_level?: string
+          school_name?: string | null
+          score_info?: Json
+          source?: string
+          status?: string
+          student_answers?: Json
+          student_name?: string
+          subject_answers?: Json
+          subjects?: string[]
+          submission_hash?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ops_changelog: {
         Row: {
           author_id: string | null

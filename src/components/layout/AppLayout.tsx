@@ -34,6 +34,7 @@ import {
   MessageCircle,
   Clock,
   AlertTriangle,
+  Compass,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -215,6 +216,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '주간 리포트 생성', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, description: '주차별 리포트 초안 생성·검수', adminOnly: true },
         { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '작성·발송 확인 기록', allowedRoles: ['admin', 'teacher'] },
         { label: '학교분석·상담자료', href: '/school-analysis', icon: <School className="w-4 h-4" />, description: '학교알리미 공개 통계 기반 상담자료', allowedRoles: ['admin', 'teacher'] },
+        { label: '멘토맵 상담관리', href: '/admin/mentor-map', icon: <Compass className="w-4 h-4" />, description: '신규 상담 신청·맞춤 학습방향 제안서', allowedRoles: ['admin', 'teacher'] },
         { label: '학부모 설문', href: '/admin/parent-learning-feedback', icon: <ClipboardList className="w-4 h-4" />, description: '학습정보 전달 설문 발송·응답', adminOnly: true },
         { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, description: '행정 업무 게시판·팀 메모', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
       ],
