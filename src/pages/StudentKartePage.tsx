@@ -400,9 +400,15 @@ function KarteContent() {
               ? ` · 후속조치 미완료 ${consultSummary.openFollowUps}건${consultSummary.overdue ? ` (기한 지남 ${consultSummary.overdue})` : ''}`
               : ' · 후속조치 미완료 없음'}
           </p>
-          <Button size="sm" className="h-7 text-xs" onClick={() => setConsultOpen(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" /> 상담 기록 추가
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {/* SCHOOL-ANALYSIS-V1: 개인정보/학생ID를 URL에 넣지 않는 단순 링크 */}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => navigate('/school-analysis')}>
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> 학교분석 상담자료 열기
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={() => setConsultOpen(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 상담 기록 추가
+            </Button>
+          </div>
         </div>
 
         {k.notesUnavailable ? (
