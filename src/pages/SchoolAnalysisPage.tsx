@@ -95,13 +95,17 @@ function SchoolAnalysisContent() {
     <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto print-root">
       <style>{`
         @media print {
-          .no-print { display: none !important; }
-          .print-root { max-width: none; padding: 0; }
+          body * { visibility: hidden !important; }
+          .print-root, .print-root * { visibility: visible !important; }
+          .print-root { position: absolute !important; left: 0; top: 0; width: 100%; max-width: none; padding: 0; margin: 0; }
+          .no-print, .no-print * { display: none !important; visibility: hidden !important; }
           .print-block { break-inside: avoid; border: 1px solid #999 !important; }
           .print-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { background: #fff; }
+          @page { size: A4 portrait; margin: 12mm; }
         }
       `}</style>
+
 
       <header className="space-y-1">
         <h1 className="text-xl md:text-2xl font-bold">학교분석 · 상담자료</h1>
