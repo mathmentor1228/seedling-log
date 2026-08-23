@@ -24,6 +24,8 @@ const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const PayInfo = lazy(() => import("./pages/PayInfo"));
 const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
 const ParentSurveyPage = lazy(() => import("./pages/ParentSurveyPage"));
+const MentorMapPublicPage = lazy(() => import("./pages/MentorMapPublicPage"));
+const AdminMentorMapPage = lazy(() => import("./pages/AdminMentorMapPage"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
 );
