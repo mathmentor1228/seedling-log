@@ -123,6 +123,7 @@ const App = () => (
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/parent/survey" element={<ParentSurveyPage />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
+          <Route path="/mentor-map" element={<MentorMapPublicPage />} />
           <Route path="/pay-info" element={<PayInfo />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
