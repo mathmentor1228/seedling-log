@@ -209,6 +209,7 @@ const App = () => (
                 <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
+                <Route path="/school-analysis" element={<SchoolAnalysisPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/plan" element={<PlanPage />} />
                 <Route path="/plan/overview" element={<PlanOverviewPage />} />
