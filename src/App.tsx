@@ -26,6 +26,7 @@ const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
 const ParentSurveyPage = lazy(() => import("./pages/ParentSurveyPage"));
 const MentorMapPublicPage = lazy(() => import("./pages/MentorMapPublicPage"));
 const AdminMentorMapPage = lazy(() => import("./pages/AdminMentorMapPage"));
+const ConsultationReservationPage = lazy(() => import("./pages/ConsultationReservationPage"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
 );
@@ -37,6 +38,7 @@ const AssistantDashboardPage = lazy(() => import("./pages/AssistantDashboardPage
 const ParentDashboardPage = lazy(() => import("./pages/ParentDashboardPage"));
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const StudentKartePage = lazy(() => import("./pages/StudentKartePage"));
+const AdmissionsPipelinePage = lazy(() => import("./pages/AdmissionsPipelinePage"));
 const UnclosedLessonsPage = lazy(() => import("./pages/UnclosedLessonsPage"));
 const DataQualityPage = lazy(() => import("./pages/DataQualityPage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
@@ -129,6 +131,7 @@ const App = () => (
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
           <Route path="/quiz-print" element={<QuizPrintPage />} />
           <Route path="/quiz-submit" element={<QuizSubmitPage />} />
+          <Route path="/consultation" element={<ConsultationReservationPage />} />
 
           {/* All authenticated routes */}
           <Route path="/*" element={
@@ -184,6 +187,7 @@ const App = () => (
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/students" element={<StudentsPage />} />
                 <Route path="/students/:studentId/karte" element={<StudentKartePage />} />
+                <Route path="/admin/admissions" element={<AdmissionsPipelinePage />} />
                 <Route path="/admin/unclosed" element={<UnclosedLessonsPage />} />
                 <Route path="/admin/data-quality" element={<DataQualityPage />} />
                 <Route path="/admin/feature-map" element={<AdminFeatureMapPage />} />

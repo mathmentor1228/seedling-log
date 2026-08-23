@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -19,14 +19,26 @@ import { cn } from '@/lib/utils';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { SUBJECTS, SCHOOL_LEVELS, TEACHERS, getGradeYearsForLevel, STUDENT_STATUSES } from '@/lib/constants';
 
+export interface NewStudentInitialData {
+  student_name: string;
+  school_level: string | null;
+  grade_year: number | null;
+  school: string | null;
+  subjects: string[];
+  student_phone?: string | null;
+  guardian_phone: string;
+  learning_concern?: string | null;
+}
+
 interface NewStudentRegistrationProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userName: string;
-  onCreated: () => void;
+  onCreated: (studentId?: string) => void;
+  initialData?: NewStudentInitialData;
 }
 
-export function NewStudentRegistration({ open, onOpenChange, userName, onCreated }: NewStudentRegistrationProps) {
+export function NewStudentRegistration({ open, onOpenChange, userName, onCreated, initialData }: NewStudentRegistrationProps) {
   const { user } = useAuth();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
@@ -46,6 +58,18 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [studentPhone, setStudentPhone] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (!open || !initialData) return;
+    setStudentName(initialData.student_name || '');
+    setSchoolLevel(initialData.school_level || '중');
+    setGradeYear(initialData.grade_year || 1);
+    setSchool(initialData.school || '');
+    setSelectedSubjects(initialData.subjects || []);
+    setStudentPhone(initialData.student_phone || '');
+    setParentPhone(initialData.guardian_phone || '');
+    setNotes(initialData.learning_concern ? `상담 확인사항: ${initialData.learning_concern}` : '');
+  }, [open, initialData]);
 
   const resetForm = () => {
     setStudentName('');
@@ -252,7 +276,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
 
     setCreated(true);
     setCreating(false);
-    onCreated();
+    onCreated((studentData as any)?.id);
   };
 
   const generateParentMessage = () => {

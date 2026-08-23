@@ -53,6 +53,7 @@ export const FEATURE_MAP: FeatureEntry[] = [
   { href: '/admin/data-quality', label: '데이터 점검', description: '학생-반 연결·중복 반 등 구조 이상 점검(확인 기준선 기반)', tier: 'technical', roles: ['admin'], hasEntryPoint: true, signalTable: 'data_quality_acks', signalColumn: 'created_at', audit: { c90: 18, lastAt: '2026-08-22' }, note: '기술 전용 · 원장(admin)만 사용하는 구조 감사 화면' },
 
   // ── 학생·수업 ───────────────────────────────────────────
+  { href: '/admin/admissions', label: '상담·등록', description: '상담 예약·사전정보·상담 결과·등록 전환 파이프라인', tier: 'core', roles: ['admin'], hasEntryPoint: true, signalTable: 'consultation_leads', signalColumn: 'created_at' },
   { href: '/students', label: '학생 관리', description: '학생 등록·수정·반 배정', tier: 'core', roles: ['admin'], hasEntryPoint: true, signalTable: 'class_students', signalColumn: 'created_at' },
   { href: '/classes', label: '반 관리', description: '반 생성·명단·시간표 연결', tier: 'core', roles: ['admin'], hasEntryPoint: true, signalTable: 'classes', signalColumn: 'created_at' },
   { href: '/plan', label: '수업 계획(커리큘럼)', description: '반별 진도 설계와 학생별 시작 진도 관리', tier: 'core', roles: ['admin', 'teacher'], hasEntryPoint: true, signalTable: 'plan_sessions', signalColumn: 'created_at' },

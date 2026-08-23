@@ -195,6 +195,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     {
       label: '학생·반',
       items: [
+        { label: '상담·등록', href: '/admin/admissions', icon: <UserCheck className="w-4 h-4" />, description: '상담 예약·사전정보·등록 전환·인계 흐름', allowedRoles: ['admin'] },
         { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, description: '학생 등록·수정·반 배정 · 학생 카르테 진입', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
         { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, description: '반 생성·명단·시간표 연결', allowedRoles: ['admin'] },
         { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도', allowedRoles: ['admin', 'teacher'] },
