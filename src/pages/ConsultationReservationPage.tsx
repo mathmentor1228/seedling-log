@@ -10,9 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  CONSULTATION_SCHEDULE_LABEL,
+  consultationSlotsForDate,
+  isValidConsultationSlot,
+} from '@/lib/consultationSchedule';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
-const TIME_OPTIONS = ['오전 협의', '14:00~16:00', '16:00~18:00', '18:00 이후'];
 
 export default function ConsultationReservationPage() {
   const [params] = useSearchParams();
@@ -29,6 +33,7 @@ export default function ConsultationReservationPage() {
   });
 
   const title = useMemo(() => intakeMode ? '상담 전 학생정보 입력' : '더멘토학원 상담 예약', [intakeMode]);
+  const timeOptions = useMemo(() => consultationSlotsForDate(form.preferredDate), [form.preferredDate]);
   const set = (key: string, value: string | string[]) => setForm((v) => ({ ...v, [key]: value }));
   const toggleSubject = (subject: string) => set('subjects', form.subjects.includes(subject)
     ? form.subjects.filter((v) => v !== subject) : [...form.subjects, subject]);
@@ -51,7 +56,10 @@ export default function ConsultationReservationPage() {
   }, [token]);
 
   async function submit() {
-    if (!intakeMode && (!form.studentName.trim() || form.guardianPhone.replace(/\D/g, '').length < 10 || !form.preferredDate)) return;
+    if (!intakeMode && (!form.studentName.trim() || form.guardianPhone.replace(/\D/g, '').length < 10 || !form.preferredDate || !isValidConsultationSlot(form.preferredDate, form.preferredTime))) {
+      toast.error('학생 이름·연락처와 예약 가능한 날짜·시간을 확인해주세요.');
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('consultation-intake', {
@@ -106,10 +114,14 @@ export default function ConsultationReservationPage() {
           <Field label="상담 과목"><div className="flex gap-4 flex-wrap">{SUBJECTS.map(s => <label key={s} className="flex items-center gap-2 text-sm"><Checkbox checked={form.subjects.includes(s)} onCheckedChange={() => toggleSubject(s)} />{s}</label>)}</div></Field>
           <Field label="현재 가장 고민되는 점"><Textarea rows={4} value={form.learningConcern} onChange={(e) => set('learningConcern', e.target.value)} placeholder="성적, 학습습관, 과제 수행 등 상담에서 확인하고 싶은 내용을 적어주세요." /></Field>
           {!intakeMode && <>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="희망 날짜 *"><Input type="date" value={form.preferredDate} onChange={(e) => set('preferredDate', e.target.value)} /></Field>
-              <Field label="희망 시간대"><Select value={form.preferredTime} onValueChange={(v) => set('preferredTime', v)}><SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger><SelectContent>{TIME_OPTIONS.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></Field>
+            <div className="rounded-lg border bg-primary/5 px-3 py-2 text-sm">
+              <b>상담 가능 시간</b><br />{CONSULTATION_SCHEDULE_LABEL}
             </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="희망 날짜 *"><Input type="date" value={form.preferredDate} min={new Date().toLocaleDateString('sv-SE')} onChange={(e) => setForm((v) => ({ ...v, preferredDate: e.target.value, preferredTime: '' }))} /></Field>
+              <Field label="희망 시간 *"><Select value={form.preferredTime} onValueChange={(v) => set('preferredTime', v)} disabled={!form.preferredDate || timeOptions.length === 0}><SelectTrigger><SelectValue placeholder={form.preferredDate && timeOptions.length === 0 ? '선택한 요일은 상담 불가' : '시간 선택'} /></SelectTrigger><SelectContent>{timeOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></Field>
+            </div>
+            {form.preferredDate && timeOptions.length === 0 && <p className="text-xs text-destructive">상담은 월·화·수·목요일에만 예약할 수 있습니다.</p>}
             <Field label="학원을 알게 된 경로"><Input value={form.referralSource} onChange={(e) => set('referralSource', e.target.value)} placeholder="소개, 네이버, 인스타그램 등" /></Field>
           </>}
           <Button className="w-full" onClick={submit} disabled={loading}>{loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />처리 중</> : intakeMode ? '학생정보 제출' : '상담 신청'}</Button>

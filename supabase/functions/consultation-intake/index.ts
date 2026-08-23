@@ -10,6 +10,21 @@ const clean = (value: unknown, max = 500) =>
 
 const normalizePhone = (value: unknown) => clean(value, 30).replace(/[^0-9]/g, '');
 
+const allowedTimesForDate = (date: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+  const [year, month, day] = date.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  const weekday = parsed.getUTCDay();
+  if (weekday === 1 || weekday === 3) return ['21:00', '21:30'];
+  if (weekday === 2 || weekday === 4) {
+    return Array.from({ length: 16 }, (_, index) => {
+      const totalMinutes = 10 * 60 + index * 30;
+      return `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
+    });
+  }
+  return [];
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -25,7 +40,8 @@ Deno.serve(async (req) => {
       const studentName = clean(body.studentName, 60);
       const guardianPhone = normalizePhone(body.guardianPhone);
       const preferredDate = clean(body.preferredDate, 10);
-      if (studentName.length < 2 || guardianPhone.length < 10 || !preferredDate) {
+      const preferredTime = clean(body.preferredTime, 5);
+      if (studentName.length < 2 || guardianPhone.length < 10 || !allowedTimesForDate(preferredDate).includes(preferredTime)) {
         return Response.json({ error: '필수 정보를 확인해주세요.' }, { status: 400, headers: corsHeaders });
       }
 
@@ -43,7 +59,7 @@ Deno.serve(async (req) => {
         learning_concern: clean(body.learningConcern, 1200) || null,
         referral_source: clean(body.referralSource, 100) || null,
         preferred_date: preferredDate,
-        preferred_time: clean(body.preferredTime, 40) || null,
+        preferred_time: preferredTime,
       }).select('id, public_token, student_name, school_level, grade_year, preferred_date, preferred_time, guardian_name, guardian_phone, subjects').single();
       if (error) throw error;
 
