@@ -142,6 +142,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       { label: '수업 마감', href: '/lessons/close', icon: <ClipboardCheck className="w-4 h-4" />, description: '출결·이해도·숙제를 한 번에 마감' },
       { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회 · 학생 카르테 진입' },
       { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '주간 리포트 작성·발송 확인' },
+      { label: '학교분석·상담자료', href: '/school-analysis', icon: <School className="w-4 h-4" />, description: '학교알리미 공개 통계 기반 상담자료' },
       { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
       {
         label: '학생·수업 준비',
@@ -213,6 +214,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '주간 리포트 생성', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, description: '주차별 리포트 초안 생성·검수', adminOnly: true },
         { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '작성·발송 확인 기록', allowedRoles: ['admin', 'teacher'] },
+        { label: '학교분석·상담자료', href: '/school-analysis', icon: <School className="w-4 h-4" />, description: '학교알리미 공개 통계 기반 상담자료', allowedRoles: ['admin', 'teacher'] },
         { label: '학부모 설문', href: '/admin/parent-learning-feedback', icon: <ClipboardList className="w-4 h-4" />, description: '학습정보 전달 설문 발송·응답', adminOnly: true },
         { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, description: '행정 업무 게시판·팀 메모', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
       ],

@@ -55,6 +55,7 @@ const TuitionPage = lazy(() => import("./pages/TuitionPage"));
 const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
 const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
+const SchoolAnalysisPage = lazy(() => import("./pages/SchoolAnalysisPage"));
 const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
 const VocabTestGeneratorPage = lazy(() => import("./pages/VocabTestGeneratorPage"));
 const SchoolExamArchivePage = lazy(() => import("./pages/SchoolExamArchivePage"));
@@ -208,6 +209,7 @@ const App = () => (
                 <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
+                <Route path="/school-analysis" element={<SchoolAnalysisPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/plan" element={<PlanPage />} />
                 <Route path="/plan/overview" element={<PlanOverviewPage />} />
