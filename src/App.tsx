@@ -55,6 +55,7 @@ const TuitionPage = lazy(() => import("./pages/TuitionPage"));
 const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
 const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
+const SchoolAnalysisPage = lazy(() => import("./pages/SchoolAnalysisPage"));
 const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
 const VocabTestGeneratorPage = lazy(() => import("./pages/VocabTestGeneratorPage"));
 const SchoolExamArchivePage = lazy(() => import("./pages/SchoolExamArchivePage"));
