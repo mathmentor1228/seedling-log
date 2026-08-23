@@ -129,6 +129,8 @@ export type Database = {
           created_by_name: string
           description: string | null
           id: string
+          source_id: string | null
+          source_type: string | null
           status: string
           title: string
           updated_at: string
@@ -143,6 +145,8 @@ export type Database = {
           created_by_name: string
           description?: string | null
           id?: string
+          source_id?: string | null
+          source_type?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -157,6 +161,8 @@ export type Database = {
           created_by_name?: string
           description?: string | null
           id?: string
+          source_id?: string | null
+          source_type?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -731,6 +737,89 @@ export type Database = {
           prediction_date?: string
         }
         Relationships: []
+      }
+      consultation_leads: {
+        Row: {
+          appointment_at: string | null
+          consultation_summary: string | null
+          converted_student_id: string | null
+          created_at: string
+          grade_year: number | null
+          guardian_name: string | null
+          guardian_phone: string
+          id: string
+          intake_submitted_at: string | null
+          learning_concern: string | null
+          outcome_note: string | null
+          preferred_date: string | null
+          preferred_time: string | null
+          public_token: string
+          referral_source: string | null
+          school: string | null
+          school_level: string | null
+          status: string
+          student_name: string
+          student_phone: string | null
+          subjects: string[]
+          updated_at: string
+        }
+        Insert: {
+          appointment_at?: string | null
+          consultation_summary?: string | null
+          converted_student_id?: string | null
+          created_at?: string
+          grade_year?: number | null
+          guardian_name?: string | null
+          guardian_phone: string
+          id?: string
+          intake_submitted_at?: string | null
+          learning_concern?: string | null
+          outcome_note?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          public_token?: string
+          referral_source?: string | null
+          school?: string | null
+          school_level?: string | null
+          status?: string
+          student_name: string
+          student_phone?: string | null
+          subjects?: string[]
+          updated_at?: string
+        }
+        Update: {
+          appointment_at?: string | null
+          consultation_summary?: string | null
+          converted_student_id?: string | null
+          created_at?: string
+          grade_year?: number | null
+          guardian_name?: string | null
+          guardian_phone?: string
+          id?: string
+          intake_submitted_at?: string | null
+          learning_concern?: string | null
+          outcome_note?: string | null
+          preferred_date?: string | null
+          preferred_time?: string | null
+          public_token?: string
+          referral_source?: string | null
+          school?: string | null
+          school_level?: string | null
+          status?: string
+          student_name?: string
+          student_phone?: string | null
+          subjects?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultation_leads_converted_student_id_fkey"
+            columns: ["converted_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       course_policies: {
         Row: {
