@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, FileEdit, Eye } from 'lucide-react';
 import { getTodayKST } from '@/lib/utils';
+import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 function LessonRecordPageContent() {
   const { recordId } = useParams();
@@ -47,12 +48,12 @@ function LessonRecordPageContent() {
     try {
       const [studentsRes, classesRes, profilesRes] = await Promise.all([
         supabase.from('students').select('id, name').order('name'),
-        supabase.from('classes').select('id, name, subject').order('name'),
+        supabase.from('classes').select('id, name, subject, teacher_id').order('name'),
         supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       ]);
 
       setStudents(studentsRes.data || []);
-      setClasses(classesRes.data || []);
+      setClasses(filterActiveTeacherClasses(classesRes.data as any, await fetchRetiredTeacherIds()) as any);
       setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
       if (!isNew && recordId) {

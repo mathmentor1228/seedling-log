@@ -8,6 +8,7 @@ import {
 import { LessonRecordForm, LessonFormContext } from './LessonRecordForm';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
+import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 interface LessonModalProps {
   open: boolean;
@@ -71,7 +72,7 @@ export function LessonModal({
     try {
       const [studentsRes, classesRes, profilesRes] = await Promise.all([
         supabase.from('students').select('id, name').order('name'),
-        supabase.from('classes').select('id, name, subject').order('name'),
+        supabase.from('classes').select('id, name, subject, teacher_id').order('name'),
         supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       ]);
 
@@ -85,7 +86,7 @@ export function LessonModal({
       }
 
       setStudents(studentsRes.data || []);
-      setClasses(classesRes.data || []);
+      setClasses(filterActiveTeacherClasses(classesRes.data as any, await fetchRetiredTeacherIds()) as any);
       setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
       

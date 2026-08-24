@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.block_retired_teacher_lesson_records() FROM PUBLIC, anon, authenticated;
