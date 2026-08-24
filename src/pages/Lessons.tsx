@@ -40,6 +40,7 @@ import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
 import MathQuestionAnalytics from '@/components/lessons/MathQuestionAnalytics';
 import { TeacherLessonRecords } from '@/components/lessons/TeacherLessonRecords';
+import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 interface Teacher {
   id: string;
@@ -466,11 +467,11 @@ export default function Lessons() {
     try {
       const { data, error } = await supabase
         .from('classes')
-        .select('id, name, subject')
+        .select('id, name, subject, teacher_id')
         .order('name');
 
       if (error) throw error;
-      setClasses(data || []);
+      setClasses(filterActiveTeacherClasses(data as any, await fetchRetiredTeacherIds()) as any);
     } catch (error) {
       console.error('Error fetching classes:', error);
     }

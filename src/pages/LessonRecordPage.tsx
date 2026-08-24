@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, FileEdit, Eye } from 'lucide-react';
 import { getTodayKST } from '@/lib/utils';
+import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 function LessonRecordPageContent() {
   const { recordId } = useParams();
@@ -52,7 +53,7 @@ function LessonRecordPageContent() {
       ]);
 
       setStudents(studentsRes.data || []);
-      setClasses(classesRes.data || []);
+      setClasses(filterActiveTeacherClasses(classesRes.data as any, await fetchRetiredTeacherIds()) as any);
       setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
       if (!isNew && recordId) {

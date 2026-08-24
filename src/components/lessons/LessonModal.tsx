@@ -8,6 +8,7 @@ import {
 import { LessonRecordForm, LessonFormContext } from './LessonRecordForm';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
+import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 interface LessonModalProps {
   open: boolean;
@@ -85,7 +86,7 @@ export function LessonModal({
       }
 
       setStudents(studentsRes.data || []);
-      setClasses(classesRes.data || []);
+      setClasses(filterActiveTeacherClasses(classesRes.data as any, await fetchRetiredTeacherIds()) as any);
       setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
       
