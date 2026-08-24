@@ -63,7 +63,7 @@ const SUBJECTS = ['수학', '영어', '국어', '과학'];
 const GRADES = ['초등', '중1', '중2', '중3', '고1', '고2', '고3'];
 const CATEGORIES = ['내신', '문법', '개념', '유형', '심화', '독해', '단어', '기타'];
 // 자체제작(원내 제작) 교재의 제작 선생님 후보
-const INHOUSE_AUTHORS = ['이재진', '김민희', '최윤기', '함유빈', '조준희', '이나연', '황은지'];
+const INHOUSE_AUTHORS = ['이재진', '김민희', '김은수', '최윤기', '함유빈', '조준희', '이나연', '황은지'];
 const ORDER_STATUSES = ['교재신청', '주문중', '입고완료'] as const;
 const TEXTBOOK_TYPES = [
   { value: 'student', label: '학생용', icon: GraduationCap },
