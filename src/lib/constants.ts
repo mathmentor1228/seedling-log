@@ -48,7 +48,7 @@ export const TEACHERS = [
   { name: '함유빈', room: '3층 7강의실' },
   { name: '조준희', room: '3층 8강의실' },
   { name: '김민희', room: '3층 9강의실' },
-  { name: '김은수', room: '' }, // 영어(임시 근무) — 고정 강의실 미지정
+  { name: '김은수', room: '4층 3강의실' }, // 영어(임시 근무)
 ] as const;
 
 // 주간 핵심 코멘트를 학부모 리포트에 원문 그대로 노출하는 선생님 (원장 방침 2026-07-29).
@@ -71,7 +71,7 @@ export function getTeacherRoom(teacherName: string, subject?: string): string {
 
 /** 강의실 이름 → 층 매핑 */
 export const CLASSROOM_FLOORS: Record<string, string> = {
-  '2강': '4층', '4강': '4층', '5강': '5층',
+  '2강': '4층', '3강': '4층', '4강': '4층', '5강': '5층',
   '6강': '3층', '7강': '3층', '8강': '3층', '9강': '3층', '10강': '3층',
   '유리문': '3층',
 };
