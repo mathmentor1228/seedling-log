@@ -17,6 +17,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import HolidayManagement from '@/components/HolidayManagement';
 import { 
@@ -92,6 +93,7 @@ interface DailyBriefing {
 interface Filters {
   subject: string;
   grade: string;
+  studentName: string;
   teacherId: string;
   testsOnly: boolean;
   commentsOnly: boolean;
@@ -125,6 +127,7 @@ export function AdminBriefing() {
   const [filters, setFilters] = useState<Filters>({
     subject: 'all',
     grade: 'all',
+    studentName: '',
     teacherId: 'all',
     testsOnly: false,
     commentsOnly: false,
@@ -300,11 +303,18 @@ export function AdminBriefing() {
 
   // Apply filters to records
   const filteredRecords = useMemo(() => {
+    const nameQuery = filters.studentName.trim().toLowerCase();
     return lessonRecords.filter(record => {
       // Exclude admin lessons unless toggled
       if (!filters.includeAdminLessons && adminTeacherId && record.teacher_id === adminTeacherId) {
         return false;
       }
+
+      // Student name search (AND with other filters)
+      if (nameQuery && !(record.student_name || '').toLowerCase().includes(nameQuery)) {
+        return false;
+      }
+
 
       // Subject filter
       if (filters.subject !== 'all' && record.subject !== filters.subject) {
@@ -607,6 +617,7 @@ export function AdminBriefing() {
   }
 
   const hasActiveFilters = filters.subject !== 'all' || filters.grade !== 'all' || filters.teacherId !== 'all' ||
+    filters.studentName.trim() !== '' ||
     filters.testsOnly || filters.commentsOnly || filters.attendanceIssuesOnly ||
     filters.homeworkIssuesOnly || filters.unsubmittedOnly || filters.includeAdminLessons;
 
@@ -706,6 +717,26 @@ export function AdminBriefing() {
               </Card>
             ))}
           </div>
+
+          {/* Student name search (always visible) */}
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="studentSearch" className="text-xs shrink-0">학생 검색</Label>
+              <Input
+                id="studentSearch"
+                value={filters.studentName}
+                onChange={(e) => setFilters(f => ({ ...f, studentName: e.target.value }))}
+                placeholder="학생 이름 입력"
+                className="h-8 flex-1"
+              />
+              {filters.studentName.trim() && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setFilters(f => ({ ...f, studentName: '' }))}>
+                  지우기
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground shrink-0">{filteredRecords.length}건</span>
+            </div>
+          </Card>
 
           {/* Collapsible filters */}
           <Collapsible defaultOpen={false}>
