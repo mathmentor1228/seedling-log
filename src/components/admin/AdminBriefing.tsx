@@ -93,6 +93,7 @@ interface DailyBriefing {
 interface Filters {
   subject: string;
   grade: string;
+  studentName: string;
   teacherId: string;
   testsOnly: boolean;
   commentsOnly: boolean;
