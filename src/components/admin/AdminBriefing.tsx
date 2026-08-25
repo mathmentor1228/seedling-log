@@ -718,6 +718,26 @@ export function AdminBriefing() {
             ))}
           </div>
 
+          {/* Student name search (always visible) */}
+          <Card className="p-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="studentSearch" className="text-xs shrink-0">학생 검색</Label>
+              <Input
+                id="studentSearch"
+                value={filters.studentName}
+                onChange={(e) => setFilters(f => ({ ...f, studentName: e.target.value }))}
+                placeholder="학생 이름 입력"
+                className="h-8 flex-1"
+              />
+              {filters.studentName.trim() && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setFilters(f => ({ ...f, studentName: '' }))}>
+                  지우기
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground shrink-0">{filteredRecords.length}건</span>
+            </div>
+          </Card>
+
           {/* Collapsible filters */}
           <Collapsible defaultOpen={false}>
             <Card>
