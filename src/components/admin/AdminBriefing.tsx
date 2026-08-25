@@ -617,6 +617,7 @@ export function AdminBriefing() {
   }
 
   const hasActiveFilters = filters.subject !== 'all' || filters.grade !== 'all' || filters.teacherId !== 'all' ||
+    filters.studentName.trim() !== '' ||
     filters.testsOnly || filters.commentsOnly || filters.attendanceIssuesOnly ||
     filters.homeworkIssuesOnly || filters.unsubmittedOnly || filters.includeAdminLessons;
 
