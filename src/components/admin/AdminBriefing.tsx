@@ -303,11 +303,18 @@ export function AdminBriefing() {
 
   // Apply filters to records
   const filteredRecords = useMemo(() => {
+    const nameQuery = filters.studentName.trim().toLowerCase();
     return lessonRecords.filter(record => {
       // Exclude admin lessons unless toggled
       if (!filters.includeAdminLessons && adminTeacherId && record.teacher_id === adminTeacherId) {
         return false;
       }
+
+      // Student name search (AND with other filters)
+      if (nameQuery && !(record.student_name || '').toLowerCase().includes(nameQuery)) {
+        return false;
+      }
+
 
       // Subject filter
       if (filters.subject !== 'all' && record.subject !== filters.subject) {
