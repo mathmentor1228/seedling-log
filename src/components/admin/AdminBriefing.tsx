@@ -127,6 +127,7 @@ export function AdminBriefing() {
   const [filters, setFilters] = useState<Filters>({
     subject: 'all',
     grade: 'all',
+    studentName: '',
     teacherId: 'all',
     testsOnly: false,
     commentsOnly: false,
