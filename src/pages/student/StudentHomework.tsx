@@ -105,6 +105,20 @@ export default function StudentHomework() {
   const [uploadImages, setUploadImages] = useState<ImageItem[]>([]);
   const [submissionNote, setSubmissionNote] = useState('');
   const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
+
+  // STUDENT-UPLOAD-V2: private bucket → resolve signed URLs for submitted photos
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const raw = selectedHomework?.submission_image_url;
+    if (!raw) return;
+    const urls = raw.split(',').map(u => u.trim()).filter(Boolean);
+    const missing = urls.filter(u => !signedUrls[u]);
+    if (missing.length === 0) return;
+    studentApi.signUrls(missing).then(({ data }) => {
+      if (data?.signed) setSignedUrls(prev => ({ ...prev, ...data.signed }));
+    });
+  }, [selectedHomework?.submission_image_url]);
+
   
   // COUNTDOWN-V1: Live countdown ticker
   const [, setTick] = useState(0);
