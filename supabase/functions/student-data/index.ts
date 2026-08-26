@@ -582,6 +582,33 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // STUDENT-UPLOAD-V2: students are anonymous, so signed URLs are issued here
+      case 'sign_urls': {
+        const { urls } = params;
+        if (!Array.isArray(urls)) {
+          return new Response(
+            JSON.stringify({ error: 'urls must be an array' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const signed: Record<string, string> = {};
+        for (const raw of urls.slice(0, 60)) {
+          if (typeof raw !== 'string' || !raw) continue;
+          const m = raw.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/([^?#]+)/);
+          if (!m) continue;
+          const bucket = m[1];
+          const path = decodeURIComponent(m[2]);
+          // Students may only read their own files
+          if (!path.startsWith(`${student_id}/`)) continue;
+          const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+          if (data?.signedUrl) signed[raw] = data.signedUrl;
+        }
+
+        result = { signed };
+        break;
+      }
+
       case 'submit_homework': {
 
         const { homework_id, image_url, submission_text, audio_url } = params;
