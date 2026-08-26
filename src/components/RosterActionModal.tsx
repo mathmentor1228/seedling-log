@@ -1049,10 +1049,8 @@ export function RosterActionModal({
                   <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
                     🎤 음성 제출
                   </p>
-                  <StorageAudio src={audioUrl} />
-                  <audio controls className="w-full" src={undefined} hidden>
-                    브라우저에서 오디오를 지원하지 않습니다.
-                  </audio>
+                  <StorageAudio src={audioUrl} className="w-full" />
+
                 </div>
               )}
               {imageUrls.length === 0 && !audioUrl && (
