@@ -1,7 +1,7 @@
 // STUDENT-APP-V1: Student homework list and submission page
 import { useEffect, useState, useCallback } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
-import { studentApi } from '@/lib/studentApi';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
