@@ -19,18 +19,19 @@ import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 
+// STUDENT-UPLOAD-V2: private bucket → upload through the secure student endpoint
 const uploadStudentQuizImage = async (file: File, studentId: string, quizId: string, index: number, prefix = '') => {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${studentId}/${quizId}/${prefix}${Date.now()}_${index}_${safeName}`;
-  const { error } = await supabase.storage
-    .from('quiz-submissions')
-    .upload(path, file, { upsert: false });
-  if (error) throw error;
-
-  const { data } = supabase.storage
-    .from('quiz-submissions')
-    .getPublicUrl(path);
-  return data.publicUrl;
+  const ext = file.name.split('.').pop() || 'jpg';
+  const content = await fileToBase64(file);
+  const { data, error } = await studentApi.uploadFile({
+    bucket: 'quiz-submissions',
+    homework_id: quizId,
+    content,
+    content_type: file.type || 'image/jpeg',
+    ext,
+  });
+  if (error || !data?.url) throw new Error(error || 'UPLOAD_FAILED');
+  return data.url;
 };
 
 interface Quiz {
