@@ -89,6 +89,9 @@ export const studentApi = {
     ext?: string;
   }) => studentApiCall<{ path: string; url: string; bucket: string }>('upload_file', params),
 
+  signUrls: (urls: string[]) =>
+    studentApiCall<{ signed: Record<string, string> }>('sign_urls', { urls }),
+
 
   getDashboard: () => studentApiCall<{
     total_points: number;

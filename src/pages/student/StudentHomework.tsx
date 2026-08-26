@@ -497,9 +497,9 @@ export default function StudentHomework() {
                 <p className="text-xs text-muted-foreground">📷 제출한 사진</p>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedHomework.submission_image_url.split(',').map((url, idx) => (
-                    <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden border">
+                    <a key={idx} href={signedUrls[url.trim()] || url.trim()} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden border">
                       <img
-                        src={url.trim()}
+                        src={signedUrls[url.trim()] || ''}
                         alt={`제출 사진 ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
