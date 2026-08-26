@@ -527,7 +527,90 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // STUDENT-UPLOAD-V2: buckets are private; students upload via service role here
+      case 'upload_file': {
+        const { bucket, homework_id, content, content_type, ext } = params;
+        const ALLOWED_BUCKETS = ['homework-submissions', 'math-questions', 'quiz-submissions', 'vocab-submissions'];
+        if (!bucket || !ALLOWED_BUCKETS.includes(bucket) || !content || !content_type) {
+          return new Response(
+            JSON.stringify({ error: 'Invalid upload request' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Decode base64 payload (accepts raw base64 or data URL)
+        let bytes: Uint8Array;
+        try {
+          const b64 = content.includes(',') ? content.split(',').pop()! : content;
+          const binary = atob(b64);
+          bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        } catch {
+          return new Response(
+            JSON.stringify({ error: 'Invalid file content' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const MAX_BYTES = 15 * 1024 * 1024;
+        if (bytes.length > MAX_BYTES) {
+          return new Response(
+            JSON.stringify({ error: 'FILE_TOO_LARGE' }),
+            { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const safeExt = String(ext || 'jpg').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'jpg';
+        const folder = String(homework_id || 'misc').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || 'misc';
+        const path = `${student_id}/${folder}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${safeExt}`;
+
+        const { error: upErr } = await supabase.storage
+          .from(bucket)
+          .upload(path, bytes, { contentType: content_type, upsert: false });
+
+        if (upErr) {
+          console.error('[upload_file] error:', upErr.message);
+          return new Response(
+            JSON.stringify({ error: 'UPLOAD_FAILED' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Keep the historical public-URL string shape so existing parsers/UI keep working
+        const url = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+        result = { path, url, bucket };
+        break;
+      }
+
+      // STUDENT-UPLOAD-V2: students are anonymous, so signed URLs are issued here
+      case 'sign_urls': {
+        const { urls } = params;
+        if (!Array.isArray(urls)) {
+          return new Response(
+            JSON.stringify({ error: 'urls must be an array' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const signed: Record<string, string> = {};
+        for (const raw of urls.slice(0, 60)) {
+          if (typeof raw !== 'string' || !raw) continue;
+          const m = raw.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/([^?#]+)/);
+          if (!m) continue;
+          const bucket = m[1];
+          const path = decodeURIComponent(m[2]);
+          // Students may only read their own files
+          if (!path.startsWith(`${student_id}/`)) continue;
+          const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
+          if (data?.signedUrl) signed[raw] = data.signedUrl;
+        }
+
+        result = { signed };
+        break;
+      }
+
       case 'submit_homework': {
+
         const { homework_id, image_url, submission_text, audio_url } = params;
         if (!homework_id) {
           return new Response(

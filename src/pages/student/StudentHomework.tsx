@@ -1,7 +1,7 @@
 // STUDENT-APP-V1: Student homework list and submission page
 import { useEffect, useState, useCallback } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
-import { studentApi } from '@/lib/studentApi';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,6 +105,20 @@ export default function StudentHomework() {
   const [uploadImages, setUploadImages] = useState<ImageItem[]>([]);
   const [submissionNote, setSubmissionNote] = useState('');
   const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
+
+  // STUDENT-UPLOAD-V2: private bucket → resolve signed URLs for submitted photos
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const raw = selectedHomework?.submission_image_url;
+    if (!raw) return;
+    const urls = raw.split(',').map(u => u.trim()).filter(Boolean);
+    const missing = urls.filter(u => !signedUrls[u]);
+    if (missing.length === 0) return;
+    studentApi.signUrls(missing).then(({ data }) => {
+      if (data?.signed) setSignedUrls(prev => ({ ...prev, ...data.signed }));
+    });
+  }, [selectedHomework?.submission_image_url]);
+
   
   // COUNTDOWN-V1: Live countdown ticker
   const [, setTick] = useState(0);
@@ -234,50 +248,45 @@ export default function StudentHomework() {
     try {
       const imageUrls: string[] = [];
       
-      // Upload each image
+      // STUDENT-UPLOAD-V2: buckets are private, upload through the secure student endpoint
       for (const img of uploadImages) {
         const fileExt = img.file.name.split('.').pop() || 'jpg';
-        const fileName = `${student.id}/${selectedHomework.id}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('homework-submissions')
-          .upload(fileName, img.file, { contentType: img.file.type });
-        
-        if (uploadError) {
-          const msg = uploadError.message?.toLowerCase() || '';
-          if (msg.includes('payload too large') || msg.includes('size')) {
-            throw new Error('FILE_TOO_LARGE');
-          }
+        const base64 = await fileToBase64(img.file);
+        const { data: up, error: upErr } = await studentApi.uploadFile({
+          bucket: 'homework-submissions',
+          homework_id: selectedHomework.id,
+          content: base64,
+          content_type: img.file.type || 'image/jpeg',
+          ext: fileExt,
+        });
+
+        if (upErr || !up?.url) {
+          if ((upErr || '').includes('FILE_TOO_LARGE')) throw new Error('FILE_TOO_LARGE');
           throw new Error('NETWORK_ERROR');
         }
-        
-        const { data: urlData } = supabase.storage
-          .from('homework-submissions')
-          .getPublicUrl(fileName);
-        
-        imageUrls.push(urlData.publicUrl);
+        imageUrls.push(up.url);
       }
       
       // VOICE-RECORD-V1: Upload audio if present
       let audioUrl: string | null = null;
       if (recordedAudio) {
         const audioExt = recordedAudio.blob.type.includes('mp4') ? 'mp4' : 'webm';
-        const audioFileName = `${student.id}/${selectedHomework.id}/${Date.now()}-voice.${audioExt}`;
-        
-        const { error: audioUploadError } = await supabase.storage
-          .from('homework-submissions')
-          .upload(audioFileName, recordedAudio.blob, { contentType: recordedAudio.blob.type });
-        
-        if (audioUploadError) {
+        const audioBase64 = await fileToBase64(recordedAudio.blob);
+        const { data: upAudio, error: audioUploadError } = await studentApi.uploadFile({
+          bucket: 'homework-submissions',
+          homework_id: selectedHomework.id,
+          content: audioBase64,
+          content_type: recordedAudio.blob.type || 'audio/webm',
+          ext: audioExt,
+        });
+
+        if (audioUploadError || !upAudio?.url) {
           throw new Error('NETWORK_ERROR');
         }
-        
-        const { data: audioUrlData } = supabase.storage
-          .from('homework-submissions')
-          .getPublicUrl(audioFileName);
-        
-        audioUrl = audioUrlData.publicUrl;
+
+        audioUrl = upAudio.url;
       }
+
 
       // Submit via edge function
       const imageUrl = imageUrls.length > 0 ? imageUrls.join(',') : null;
@@ -502,9 +511,9 @@ export default function StudentHomework() {
                 <p className="text-xs text-muted-foreground">📷 제출한 사진</p>
                 <div className="grid grid-cols-3 gap-2">
                   {selectedHomework.submission_image_url.split(',').map((url, idx) => (
-                    <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden border">
+                    <a key={idx} href={signedUrls[url.trim()] || url.trim()} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden border">
                       <img
-                        src={url.trim()}
+                        src={signedUrls[url.trim()] || ''}
                         alt={`제출 사진 ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {

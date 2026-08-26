@@ -1,7 +1,7 @@
 // MATH-QUESTION-ROOM-V1: 수학질문방 component for student schedule tab
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
-import { studentApi } from '@/lib/studentApi';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -201,17 +201,20 @@ export default function MathQuestionRoom() {
   const uploadPhoto = async (file: File, path: string): Promise<string | null> => {
     try {
       const compressed = await compressImage(file);
-      const { error } = await supabase.storage
-        .from('math-questions')
-        .upload(path, compressed, { upsert: true });
-      if (error) {
+      // STUDENT-UPLOAD-V2: private bucket → upload through the secure student endpoint
+      const content = await fileToBase64(compressed);
+      const { data, error } = await studentApi.uploadFile({
+        bucket: 'math-questions',
+        homework_id: path.split('/')[1] || 'question',
+        content,
+        content_type: compressed.type || 'image/jpeg',
+        ext: 'jpg',
+      });
+      if (error || !data?.url) {
         console.error('Upload error:', error);
         return null;
       }
-      const { data: urlData } = supabase.storage
-        .from('math-questions')
-        .getPublicUrl(path);
-      return urlData.publicUrl;
+      return data.url;
     } catch (err) {
       console.error('Upload failed:', err);
       return null;
