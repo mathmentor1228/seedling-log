@@ -66,8 +66,30 @@ export async function studentApiCall<T = any>(
   }
 }
 
+// STUDENT-UPLOAD-V2: base64 encode a File/Blob for secure server-side upload
+export function fileToBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result as string;
+      resolve(res.includes(',') ? res.split(',')[1] : res);
+    };
+    reader.onerror = () => reject(new Error('READ_ERROR'));
+    reader.readAsDataURL(file);
+  });
+}
+
 // Convenience functions
 export const studentApi = {
+  uploadFile: (params: {
+    bucket: string;
+    homework_id?: string;
+    content: string;
+    content_type: string;
+    ext?: string;
+  }) => studentApiCall<{ path: string; url: string; bucket: string }>('upload_file', params),
+
+
   getDashboard: () => studentApiCall<{
     total_points: number;
     pending_homework: any[];
