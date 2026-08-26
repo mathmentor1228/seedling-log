@@ -234,50 +234,45 @@ export default function StudentHomework() {
     try {
       const imageUrls: string[] = [];
       
-      // Upload each image
+      // STUDENT-UPLOAD-V2: buckets are private, upload through the secure student endpoint
       for (const img of uploadImages) {
         const fileExt = img.file.name.split('.').pop() || 'jpg';
-        const fileName = `${student.id}/${selectedHomework.id}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('homework-submissions')
-          .upload(fileName, img.file, { contentType: img.file.type });
-        
-        if (uploadError) {
-          const msg = uploadError.message?.toLowerCase() || '';
-          if (msg.includes('payload too large') || msg.includes('size')) {
-            throw new Error('FILE_TOO_LARGE');
-          }
+        const base64 = await fileToBase64(img.file);
+        const { data: up, error: upErr } = await studentApi.uploadFile({
+          bucket: 'homework-submissions',
+          homework_id: selectedHomework.id,
+          content: base64,
+          content_type: img.file.type || 'image/jpeg',
+          ext: fileExt,
+        });
+
+        if (upErr || !up?.url) {
+          if ((upErr || '').includes('FILE_TOO_LARGE')) throw new Error('FILE_TOO_LARGE');
           throw new Error('NETWORK_ERROR');
         }
-        
-        const { data: urlData } = supabase.storage
-          .from('homework-submissions')
-          .getPublicUrl(fileName);
-        
-        imageUrls.push(urlData.publicUrl);
+        imageUrls.push(up.url);
       }
       
       // VOICE-RECORD-V1: Upload audio if present
       let audioUrl: string | null = null;
       if (recordedAudio) {
         const audioExt = recordedAudio.blob.type.includes('mp4') ? 'mp4' : 'webm';
-        const audioFileName = `${student.id}/${selectedHomework.id}/${Date.now()}-voice.${audioExt}`;
-        
-        const { error: audioUploadError } = await supabase.storage
-          .from('homework-submissions')
-          .upload(audioFileName, recordedAudio.blob, { contentType: recordedAudio.blob.type });
-        
-        if (audioUploadError) {
+        const audioBase64 = await fileToBase64(recordedAudio.blob);
+        const { data: upAudio, error: audioUploadError } = await studentApi.uploadFile({
+          bucket: 'homework-submissions',
+          homework_id: selectedHomework.id,
+          content: audioBase64,
+          content_type: recordedAudio.blob.type || 'audio/webm',
+          ext: audioExt,
+        });
+
+        if (audioUploadError || !upAudio?.url) {
           throw new Error('NETWORK_ERROR');
         }
-        
-        const { data: audioUrlData } = supabase.storage
-          .from('homework-submissions')
-          .getPublicUrl(audioFileName);
-        
-        audioUrl = audioUrlData.publicUrl;
+
+        audioUrl = upAudio.url;
       }
+
 
       // Submit via edge function
       const imageUrl = imageUrls.length > 0 ? imageUrls.join(',') : null;
