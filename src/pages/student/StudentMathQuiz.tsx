@@ -1,7 +1,7 @@
 // STUDENT-MATH-QUIZ-V3: Student math concept quiz with hints, speech-bubble feedback, enhanced UI
 import { useEffect, useState } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
-import { studentApi } from '@/lib/studentApi';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

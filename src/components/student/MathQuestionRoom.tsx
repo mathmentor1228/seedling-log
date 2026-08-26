@@ -1,7 +1,7 @@
 // MATH-QUESTION-ROOM-V1: 수학질문방 component for student schedule tab
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
-import { studentApi } from '@/lib/studentApi';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
