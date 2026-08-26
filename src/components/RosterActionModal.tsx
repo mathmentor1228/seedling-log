@@ -50,6 +50,9 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { StorageImage } from '@/components/StorageImage';
+import { StorageAudio } from '@/components/StorageAudio';
+import { resolveStorageUrl } from '@/lib/storageUrl';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -1046,7 +1049,8 @@ export function RosterActionModal({
                   <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
                     🎤 음성 제출
                   </p>
-                  <audio controls className="w-full" src={audioUrl}>
+                  <StorageAudio src={audioUrl} />
+                  <audio controls className="w-full" src={undefined} hidden>
                     브라우저에서 오디오를 지원하지 않습니다.
                   </audio>
                 </div>
@@ -1057,8 +1061,8 @@ export function RosterActionModal({
               {imageUrls.length > 0 && imageUrls.length <= 3 ? (
                 <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
-                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" onClick={async (e) => { e.preventDefault(); window.open(await resolveStorageUrl(url), '_blank'); }}>
+                      <StorageImage
                         src={url}
                         alt={`제출 이미지 ${idx + 1}`}
                         className="w-full max-h-[50vh] object-contain rounded-lg border"
@@ -1077,8 +1081,8 @@ export function RosterActionModal({
               ) : imageUrls.length > 3 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
-                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
-                      <img
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all" onClick={async (e) => { e.preventDefault(); window.open(await resolveStorageUrl(url), '_blank'); }}>
+                      <StorageImage
                         src={url}
                         alt={`제출 이미지 ${idx + 1}`}
                         className="w-full h-full object-cover"
@@ -1202,7 +1206,7 @@ function PreviousHomeworkCard({
               title="학생 제출 사진 보기"
             >
               <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
-                <img
+                <StorageImage
                   src={imageUrls[0] || ''}
                   alt="제출 이미지"
                   className="w-full h-full object-cover"
