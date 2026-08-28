@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent, Pencil } from 'lucide-react';
+import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent, Pencil, UserCog, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +53,14 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [feeEditValue, setFeeEditValue] = useState('');
   const [feeSaving, setFeeSaving] = useState(false);
 
+  // 담당 선생님 변경(정산 기준일 포함) state
+  const [teacherChanges, setTeacherChanges] = useState<any[]>([]);
+  const [changeCourse, setChangeCourse] = useState<any | null>(null);
+  const [changeTeacherId, setChangeTeacherId] = useState('');
+  const [changeDate, setChangeDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [changeReason, setChangeReason] = useState('');
+  const [changeSaving, setChangeSaving] = useState(false);
+
   // Quick-add state
   const [selectedPolicyId, setSelectedPolicyId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
@@ -65,7 +73,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
 
   const loadAll = async () => {
     setLoading(true);
-    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes] = await Promise.all([
+    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes, changesRes] = await Promise.all([
       supabase.from('student_courses')
         .select('*, custom_monthly_fee, course_policies(course_name, subject, grade_target, monthly_fee)')
         .eq('student_id', studentId)
@@ -91,7 +99,13 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         .select('sibling_group_id')
         .eq('id', studentId)
         .single(),
+      supabase.from('student_course_teacher_changes')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('effective_date', { ascending: false }),
     ]);
+
+    setTeacherChanges((changesRes.data || []) as any);
 
     setCourses((coursesRes.data || []) as any);
     setBillings((billingsRes.data || []) as any);
@@ -182,6 +196,55 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
     if (error) { toast.error('삭제 실패'); return; }
     toast.success('삭제 완료');
     loadAll();
+  };
+
+  const openTeacherChange = (c: any) => {
+    setChangeCourse(c);
+    setChangeTeacherId('');
+    setChangeDate(format(new Date(), 'yyyy-MM-dd'));
+    setChangeReason('');
+  };
+
+  const saveTeacherChange = async () => {
+    if (!changeCourse) return;
+    if (!changeTeacherId) { toast.error('새 담당 선생님을 선택해주세요'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(changeDate)) { toast.error('적용 시작일을 올바르게 입력해주세요'); return; }
+    if (changeTeacherId === changeCourse.teacher_id) { toast.error('현재 담당 선생님과 동일합니다'); return; }
+
+    setChangeSaving(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const fromName = teachers.find(t => t.id === changeCourse.teacher_id)?.full_name || null;
+      const toName = teachers.find(t => t.id === changeTeacherId)?.full_name || null;
+
+      const { error: histErr } = await supabase.from('student_course_teacher_changes').insert({
+        student_id: studentId,
+        student_course_id: changeCourse.id,
+        subject: (changeCourse as any).course_policies?.subject || null,
+        from_teacher_id: changeCourse.teacher_id || null,
+        to_teacher_id: changeTeacherId,
+        from_teacher_name: fromName,
+        to_teacher_name: toName,
+        effective_date: changeDate,
+        reason: changeReason.trim() || null,
+        changed_by: userRes?.user?.id || null,
+      } as any);
+      if (histErr) throw histErr;
+
+      const { error: updErr } = await supabase
+        .from('student_courses')
+        .update({ teacher_id: changeTeacherId } as any)
+        .eq('id', changeCourse.id);
+      if (updErr) throw updErr;
+
+      toast.success(`${changeDate}부터 ${toName} 선생님으로 정산 기준 변경`);
+      setChangeCourse(null);
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.message || '담당 변경 실패');
+    } finally {
+      setChangeSaving(false);
+    }
   };
 
   const openFeeEdit = (c: any) => {
@@ -306,8 +369,32 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
                             시작: {c.enrollment_date}
                             {c.end_date && ` → 종료: ${c.end_date}`}
                           </div>
+                          <div className="text-xs mt-0.5 flex items-center gap-1">
+                            <UserCog className="w-3 h-3 text-muted-foreground" />
+                            <span className="text-muted-foreground">담당:</span>
+                            <span className="font-medium">
+                              {teachers.find(t => t.id === c.teacher_id)?.full_name || '미배정'}
+                            </span>
+                          </div>
+                          {teacherChanges.filter(h => h.student_course_id === c.id).length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {teacherChanges.filter(h => h.student_course_id === c.id).map(h => (
+                                <div key={h.id} className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                  <History className="w-3 h-3" />
+                                  <span>{h.effective_date}부터</span>
+                                  <span>{h.from_teacher_name || '미배정'} → <span className="font-medium text-foreground">{h.to_teacher_name || '미배정'}</span></span>
+                                  {h.reason && <span className="opacity-70">· {h.reason}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                            onClick={() => openTeacherChange(c)}
+                            title="담당 선생님 변경">
+                            <UserCog className="w-3 h-3" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
                             onClick={() => openFeeEdit(c)}
                             title="수강료 직접지정">
@@ -442,6 +529,58 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* 담당 선생님 변경 다이얼로그 */}
+      <Dialog open={!!changeCourse} onOpenChange={(o) => { if (!o) setChangeCourse(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>담당 선생님 변경 — {studentName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              과정: <span className="font-medium text-foreground">
+                {(changeCourse as any)?.course_policies?.course_name || '-'}
+              </span>
+              <span className="ml-2">
+                현재 담당: {teachers.find(t => t.id === (changeCourse as any)?.teacher_id)?.full_name || '미배정'}
+              </span>
+            </div>
+            <div>
+              <Label className="text-sm">새 담당 선생님</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {teachers.map(t => (
+                  <Button
+                    key={t.id}
+                    size="sm"
+                    variant={changeTeacherId === t.id ? 'default' : 'outline'}
+                    className={cn("h-8 text-xs", changeTeacherId === t.id && "ring-2 ring-primary")}
+                    onClick={() => setChangeTeacherId(t.id)}
+                  >
+                    {t.full_name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm">정산 적용 시작일</Label>
+              <Input type="date" value={changeDate} onChange={e => setChangeDate(e.target.value)} className="h-9" />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                * 이 날짜부터 새 선생님 기준으로 수업료가 정산됩니다. 이전 기록은 그대로 보존됩니다.
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm">사유 (선택)</Label>
+              <Input value={changeReason} onChange={e => setChangeReason(e.target.value)} placeholder="예: 영어 담당 교사 인계" className="h-9" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setChangeCourse(null)}>취소</Button>
+            <Button onClick={saveTeacherChange} disabled={changeSaving}>
+              {changeSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}변경 기록 저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 수강료 직접지정 다이얼로그 */}
       <Dialog open={!!feeEditCourse} onOpenChange={(o) => { if (!o) setFeeEditCourse(null); }}>
