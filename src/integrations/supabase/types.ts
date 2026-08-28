@@ -5792,6 +5792,90 @@ export type Database = {
           },
         ]
       }
+      student_course_teacher_changes: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          effective_date: string
+          from_teacher_id: string | null
+          from_teacher_name: string | null
+          id: string
+          reason: string | null
+          student_course_id: string | null
+          student_id: string
+          subject: string | null
+          to_teacher_id: string | null
+          to_teacher_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          effective_date: string
+          from_teacher_id?: string | null
+          from_teacher_name?: string | null
+          id?: string
+          reason?: string | null
+          student_course_id?: string | null
+          student_id: string
+          subject?: string | null
+          to_teacher_id?: string | null
+          to_teacher_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          effective_date?: string
+          from_teacher_id?: string | null
+          from_teacher_name?: string | null
+          id?: string
+          reason?: string | null
+          student_course_id?: string | null
+          student_id?: string
+          subject?: string | null
+          to_teacher_id?: string | null
+          to_teacher_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_course_teacher_changes_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_course_teacher_changes_from_teacher_id_fkey"
+            columns: ["from_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_course_teacher_changes_student_course_id_fkey"
+            columns: ["student_course_id"]
+            isOneToOne: false
+            referencedRelation: "student_courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_course_teacher_changes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_course_teacher_changes_to_teacher_id_fkey"
+            columns: ["to_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_courses: {
         Row: {
           course_policy_id: string
