@@ -1,7 +1,8 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   LayoutDashboard, 
   Users, 
@@ -35,6 +36,8 @@ import {
   Clock,
   AlertTriangle,
   Compass,
+  Search,
+  X as XIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
