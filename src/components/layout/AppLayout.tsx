@@ -360,6 +360,28 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const filteredEntries = getFilteredEntries();
 
+  // Flat list for quick search across all visible menu items
+  const searchableItems = useMemo(() => {
+    const items: (NavItem & { groupLabel?: string })[] = [];
+    filteredEntries.forEach((entry) => {
+      if (isGroup(entry)) {
+        entry.items.forEach((item) => items.push({ ...item, groupLabel: entry.label }));
+      } else {
+        items.push(entry);
+      }
+    });
+    return items;
+  }, [filteredEntries]);
+
+  const normalizedQuery = navQuery.trim().toLowerCase().replace(/\s+/g, '');
+  const searchResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+    return searchableItems.filter(item => {
+      const hay = (item.label + (item.description || '') + (item.groupLabel || '')).toLowerCase().replace(/\s+/g, '');
+      return hay.includes(normalizedQuery);
+    });
+  }, [searchableItems, normalizedQuery]);
+
   // Check if a group contains the active route (for auto-open)
   const groupContainsActive = (group: NavGroup) =>
     group.items.some(item => location.pathname === item.href);
