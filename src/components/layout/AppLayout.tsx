@@ -275,6 +275,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [navQuery, setNavQuery] = useState('');
 
   const handleSignOut = async () => {
     await signOut();
