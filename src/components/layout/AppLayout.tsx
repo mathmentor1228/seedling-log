@@ -1,7 +1,8 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   LayoutDashboard, 
   Users, 
@@ -35,6 +36,8 @@ import {
   Clock,
   AlertTriangle,
   Compass,
+  Search,
+  X as XIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -272,6 +275,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [navQuery, setNavQuery] = useState('');
 
   const handleSignOut = async () => {
     await signOut();
@@ -355,6 +359,28 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const filteredEntries = getFilteredEntries();
+
+  // Flat list for quick search across all visible menu items
+  const searchableItems = useMemo(() => {
+    const items: (NavItem & { groupLabel?: string })[] = [];
+    filteredEntries.forEach((entry) => {
+      if (isGroup(entry)) {
+        entry.items.forEach((item) => items.push({ ...item, groupLabel: entry.label }));
+      } else {
+        items.push(entry);
+      }
+    });
+    return items;
+  }, [filteredEntries]);
+
+  const normalizedQuery = navQuery.trim().toLowerCase().replace(/\s+/g, '');
+  const searchResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+    return searchableItems.filter(item => {
+      const hay = (item.label + (item.description || '') + (item.groupLabel || '')).toLowerCase().replace(/\s+/g, '');
+      return hay.includes(normalizedQuery);
+    });
+  }, [searchableItems, normalizedQuery]);
 
   // Check if a group contains the active route (for auto-open)
   const groupContainsActive = (group: NavGroup) =>
@@ -446,7 +472,62 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-            {filteredEntries.map((entry) => {
+            {/* Menu search */}
+            {!sidebarCollapsed && (
+              <div className="px-1 pb-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-sidebar-foreground/40" />
+                  <Input
+                    type="text"
+                    placeholder="메뉴 검색"
+                    value={navQuery}
+                    onChange={(e) => setNavQuery(e.target.value)}
+                    className={cn(
+                      "h-8 pl-8 pr-7 text-xs bg-sidebar-accent/40 border-sidebar-border/30 text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus-visible:ring-primary/60 focus-visible:ring-1 focus-visible:ring-offset-0"
+                    )}
+                  />
+                  {navQuery && (
+                    <button
+                      onClick={() => setNavQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-sidebar-foreground/40 hover:text-sidebar-foreground"
+                      aria-label="검색어 지우기"
+                    >
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {navQuery && (
+                  <div className="mt-1 space-y-0.5">
+                    {searchResults.length === 0 ? (
+                      <p className="px-2 py-2 text-[11px] text-sidebar-foreground/50 text-center">
+                        검색 결과 없음
+                      </p>
+                    ) : (
+                      searchResults.map((item) => (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          onClick={() => { setSidebarOpen(false); setNavQuery(''); }}
+                          title={item.description}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                            location.pathname === item.href
+                              ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          )}
+                        >
+                          {item.icon}
+                          <span className="flex-1 truncate">{item.label}</span>
+                        </Link>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!navQuery && filteredEntries.map((entry) => {
               if (isGroup(entry)) {
                 const open = isGroupOpen(entry);
                 if (sidebarCollapsed) {
