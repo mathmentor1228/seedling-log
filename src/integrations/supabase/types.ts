@@ -5634,6 +5634,135 @@ export type Database = {
           },
         ]
       }
+      signup_entries: {
+        Row: {
+          created_at: string
+          grade: string | null
+          id: string
+          memo: string | null
+          phone: string | null
+          slot_id: string
+          student_name: string
+        }
+        Insert: {
+          created_at?: string
+          grade?: string | null
+          id?: string
+          memo?: string | null
+          phone?: string | null
+          slot_id: string
+          student_name: string
+        }
+        Update: {
+          created_at?: string
+          grade?: string | null
+          id?: string
+          memo?: string | null
+          phone?: string | null
+          slot_id?: string
+          student_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_entries_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "signup_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signup_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_open: boolean
+          share_token: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_open?: boolean
+          share_token?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_open?: boolean
+          share_token?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signup_slots: {
+        Row: {
+          capacity: number
+          created_at: string
+          end_time: string | null
+          event_id: string
+          id: string
+          is_active: boolean
+          note: string | null
+          slot_date: string
+          sort_order: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          capacity?: number
+          created_at?: string
+          end_time?: string | null
+          event_id: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          slot_date: string
+          sort_order?: number
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          end_time?: string | null
+          event_id?: string
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          slot_date?: string
+          sort_order?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_slots_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "signup_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_accounts: {
         Row: {
           created_at: string

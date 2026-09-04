@@ -19,6 +19,8 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const TrialSignup = lazy(() => import("./pages/TrialSignup"));
 const PublicReport = lazy(() => import("./pages/PublicReport"));
 const IntensiveApplyPage = lazy(() => import("./pages/IntensiveApplyPage"));
+const ClassSignupPage = lazy(() => import("./pages/ClassSignupPage"));
+const ClassSignupAdminPage = lazy(() => import("./pages/ClassSignupAdminPage"));
 const IntensiveApplicationsPage = lazy(() => import("./pages/IntensiveApplicationsPage"));
 const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const PayInfo = lazy(() => import("./pages/PayInfo"));
@@ -122,6 +124,7 @@ const App = () => (
           {/* Public route - NO AuthProvider, accessible without login */}
           <Route path="/report/view" element={<PublicReport />} />
           <Route path="/summer-intensive" element={<IntensiveApplyPage />} />
+          <Route path="/class-signup" element={<ClassSignupPage />} />
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/parent/survey" element={<ParentSurveyPage />} />
           <Route path="/parent-notify" element={<ParentNotifications />} />
@@ -226,6 +229,7 @@ const App = () => (
                 <Route path="/exam-board" element={<ExamBoardPage />} />
                 <Route path="/exam-board/principal" element={<ExamDirectionPage />} />
                 <Route path="/admin/intensive-applications" element={<IntensiveApplicationsPage />} />
+                <Route path="/admin/class-signups" element={<ClassSignupAdminPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
                 <Route path="/exam-trends" element={<ExamScoreTrendsPage />} />
