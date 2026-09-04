@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.mentor-map-submit]
 verify_jwt = false
+
+[functions.class-signup]
+verify_jwt = false
