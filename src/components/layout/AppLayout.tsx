@@ -37,7 +37,7 @@ import {
   AlertTriangle,
   Compass,
   Search,
-  X as XIcon,,
+  X as XIcon,
   CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
