@@ -51,16 +51,23 @@ function TeacherHandoverInner() {
     if (!teacherId) { setRows([]); return; }
     setLoading(true);
     setSelected([]);
-    const { data, error } = await supabase
-      .from('student_courses')
-      .select('id, student_id, teacher_id, is_active, students(name, grade, enrollment_status), course_policies(subject, course_name)')
-      .eq('teacher_id', teacherId)
-      .eq('is_active', true);
-    if (error) toast.error('명단을 불러오지 못했습니다');
+    const [{ data: courseData, error }, { data: sstData, error: sstErr }] = await Promise.all([
+      supabase
+        .from('student_courses')
+        .select('id, student_id, teacher_id, is_active, students(name, grade, enrollment_status), course_policies(subject, course_name)')
+        .eq('teacher_id', teacherId)
+        .eq('is_active', true),
+      supabase
+        .from('student_subject_teachers')
+        .select('student_id, subject, teacher_id, students(name, grade, enrollment_status)')
+        .eq('teacher_id', teacherId),
+    ]);
+    if (error || sstErr) toast.error('명단을 불러오지 못했습니다');
     else {
-      setRows((data || [])
+      const list: HandoverRow[] = (courseData || [])
         .filter((r: any) => r.students && r.students.enrollment_status !== '퇴원')
         .map((r: any) => ({
+          key: r.id,
           courseId: r.id,
           studentId: r.student_id,
           studentName: r.students?.name || '(이름 없음)',
@@ -68,11 +75,29 @@ function TeacherHandoverInner() {
           subject: r.course_policies?.subject ?? null,
           courseName: r.course_policies?.course_name ?? null,
           teacherId: r.teacher_id,
-        }))
-        .sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || a.studentName.localeCompare(b.studentName)));
+        }));
+      const seen = new Set(list.map((r) => `${r.studentId}|${r.subject || ''}`));
+      for (const r of (sstData || []) as any[]) {
+        if (!r.students || r.students.enrollment_status === '퇴원') continue;
+        const k = `${r.student_id}|${r.subject || ''}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        list.push({
+          key: `sst:${r.student_id}:${r.subject}`,
+          courseId: null,
+          studentId: r.student_id,
+          studentName: r.students?.name || '(이름 없음)',
+          grade: r.students?.grade ?? null,
+          subject: r.subject ?? null,
+          courseName: null,
+          teacherId: r.teacher_id,
+        });
+      }
+      setRows(list.sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || a.studentName.localeCompare(b.studentName)));
     }
     setLoading(false);
   };
+
 
   useEffect(() => { loadRoster(fromTeacherId); /* eslint-disable-next-line */ }, [fromTeacherId]);
 
