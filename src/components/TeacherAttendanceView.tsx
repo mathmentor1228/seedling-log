@@ -616,8 +616,26 @@ export function TeacherAttendanceView() {
         if (clearLogsError) throw clearLogsError;
       }
 
+      // SIGNUP-ATT-V1: 선착순 수강신청 슬롯은 class_id 없이 학생별 일지에 출결을 기록
+      if (activeSlot.isSignup) {
+        const { data: signupLesson } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['선착순수강신청'])
+          .limit(1);
+        if (signupLesson?.length) {
+          const { error: signupUpdateError } = await supabase
+            .from('lesson_records')
+            .update({ attendance_status: lessonAttendanceStatus })
+            .eq('id', signupLesson[0].id);
+          if (signupUpdateError) console.warn('Signup journal sync skipped:', signupUpdateError);
+        }
+      }
+
       // Skip lesson_records writes for exam-prep slots (no class_id)
-      if (!activeSlot.isExamPrep && activeSlot.classId) {
+      if (!activeSlot.isExamPrep && !activeSlot.isSignup && activeSlot.classId) {
         const { data: existingLesson, error: existingLessonError } = await supabase
           .from('lesson_records')
           .select('id, lesson_range')
