@@ -179,6 +179,12 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
         </Button>
       </div>
 
+      <p className="text-[11px] text-muted-foreground rounded-lg bg-muted/40 border border-border px-2.5 py-2 leading-relaxed">
+        수강과정에서 선생님을 지정하면 이 화면의 담당은 자동으로 함께 반영됩니다. 여기서는 예외적으로 다르게
+        지정해야 할 때만 수정하세요.
+      </p>
+
+
       {enrolledSubjects.length === 0 && (
         <p className="text-xs text-muted-foreground py-2">
           학습과정에 등록된 과목이 없습니다. 먼저 수강 과목을 추가하면 담당 선생님을 지정할 수 있습니다.
