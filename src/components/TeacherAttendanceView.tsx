@@ -329,9 +329,10 @@ export function TeacherAttendanceView() {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && s.classId).map(s => s.classId))];
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && !s.isSignup && s.classId).map(s => s.classId))];
       const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
       const suppIds = [...new Set(slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []))];
+      const signupIds = [...new Set(slots.filter(s => s.isSignup).flatMap(s => s.signupStudentIds || []))];
 
       let cs: { student_id: string; class_id: string }[] = [];
       if (classIds.length > 0) {
@@ -339,7 +340,7 @@ export function TeacherAttendanceView() {
         cs = data || [];
       }
 
-      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds])];
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds, ...signupIds])];
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
@@ -356,11 +357,21 @@ export function TeacherAttendanceView() {
             .contains('lesson_types', ['보충수업'])
         : Promise.resolve({ data: [] as any[] });
 
-      const [studentRes, logRes, lessonRes, suppLessonRes] = await Promise.all([
+      // SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 출결
+      const signupLessonQuery = signupIds.length > 0
+        ? supabase.from('lesson_records')
+            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .in('student_id', signupIds)
+            .eq('lesson_date', today)
+            .contains('lesson_types', ['선착순수강신청'])
+        : Promise.resolve({ data: [] as any[] });
+
+      const [studentRes, logRes, lessonRes, suppLessonRes, signupLessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
         lessonQuery,
         suppLessonQuery,
+        signupLessonQuery,
       ]);
 
       const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
