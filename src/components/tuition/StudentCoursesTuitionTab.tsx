@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent, Pencil, UserCog, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { buildTeacherChangeNote } from '@/lib/teacherChangeLog';
+
 
 interface Props {
   studentId: string;
