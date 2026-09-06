@@ -51,6 +51,9 @@ interface ScheduleSlot {
   examPrepStudentIds?: string[];
   isSupplementary?: boolean;
   supplementaryStudentIds?: string[];
+  /** SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 */
+  isSignup?: boolean;
+  signupStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -162,7 +165,7 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const [schedRes, sessRes, suppRes] = await Promise.all([
+      const [schedRes, sessRes, suppRes, signupRes] = await Promise.all([
         supabase
           .from('class_schedules')
           .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
@@ -182,11 +185,20 @@ export function TeacherAttendanceView() {
           .eq('teacher_id', teacherId)
           .eq('lesson_date', today)
           .contains('lesson_types', ['보충수업']),
+        // SIGNUP-ATT-V1: 오늘 확정된 선착순 수강신청 수업
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, subject, notes, lesson_types, class_id')
+          .eq('teacher_id', teacherId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['선착순수강신청']),
       ]);
 
       const schedules = schedRes.data || [];
       const sessions = sessRes.data || [];
       const suppLessons = suppRes.data || [];
+      const signupLessons = signupRes.data || [];
+
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
@@ -269,7 +281,36 @@ export function TeacherAttendanceView() {
         supplementaryStudentIds: g.studentIds,
       }));
 
-      const all = [...parsed, ...examSlots, ...suppSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      // SIGNUP-ATT-V1: 확정된 선착순 수강신청 수업을 시간대별 슬롯으로 노출
+      const parseSignupTime = (notes: string | null): string => {
+        if (!notes) return '미정';
+        const m = notes.match(/신청\s*시간\s*[:：]\s*([0-9]{1,2}[:：][0-9]{2})/);
+        return m ? m[1].replace('：', ':') : '미정';
+      };
+      const signupGroups = new Map<string, { time: string; subject: string; studentIds: string[] }>();
+      signupLessons.forEach((s: any) => {
+        if (!s.student_id) return;
+        const time = parseSignupTime(s.notes);
+        const subject = s.subject || '';
+        const key = `${time}-${subject}`;
+        if (!signupGroups.has(key)) signupGroups.set(key, { time, subject, studentIds: [] });
+        if (!signupGroups.get(key)!.studentIds.includes(s.student_id)) {
+          signupGroups.get(key)!.studentIds.push(s.student_id);
+        }
+      });
+      const signupSlots: ScheduleSlot[] = Array.from(signupGroups.entries()).map(([k, g]) => ({
+        id: `signup-${k}`,
+        classId: '',
+        className: '선착순 수강신청',
+        subject: g.subject,
+        startTime: g.time === '미정' ? '23:56' : g.time,
+        endTime: g.time === '미정' ? '23:57' : g.time,
+        classroomName: null,
+        isSignup: true,
+        signupStudentIds: g.studentIds,
+      }));
+
+      const all = [...parsed, ...examSlots, ...suppSlots, ...signupSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
       if (all.length === 0) { setSlots([]); setLoading(false); return; }
       setSlots(all);
 
@@ -288,9 +329,10 @@ export function TeacherAttendanceView() {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && s.classId).map(s => s.classId))];
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && !s.isSignup && s.classId).map(s => s.classId))];
       const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
       const suppIds = [...new Set(slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []))];
+      const signupIds = [...new Set(slots.filter(s => s.isSignup).flatMap(s => s.signupStudentIds || []))];
 
       let cs: { student_id: string; class_id: string }[] = [];
       if (classIds.length > 0) {
@@ -298,7 +340,7 @@ export function TeacherAttendanceView() {
         cs = data || [];
       }
 
-      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds])];
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds, ...signupIds])];
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
@@ -315,11 +357,21 @@ export function TeacherAttendanceView() {
             .contains('lesson_types', ['보충수업'])
         : Promise.resolve({ data: [] as any[] });
 
-      const [studentRes, logRes, lessonRes, suppLessonRes] = await Promise.all([
+      // SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 출결
+      const signupLessonQuery = signupIds.length > 0
+        ? supabase.from('lesson_records')
+            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .in('student_id', signupIds)
+            .eq('lesson_date', today)
+            .contains('lesson_types', ['선착순수강신청'])
+        : Promise.resolve({ data: [] as any[] });
+
+      const [studentRes, logRes, lessonRes, suppLessonRes, signupLessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
         lessonQuery,
         suppLessonQuery,
+        signupLessonQuery,
       ]);
 
       const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
@@ -346,6 +398,12 @@ export function TeacherAttendanceView() {
         suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
       });
 
+      const signupLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      ((signupLessonRes as any).data ?? []).forEach((record: any) => {
+        if (!record.student_id) return;
+        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+      });
+
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
       (studentRes.data ?? []).forEach(s => {
         studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, baseStatus: (s as any).status ?? null });
@@ -357,7 +415,9 @@ export function TeacherAttendanceView() {
           ? (slot.examPrepStudentIds || [])
           : slot.isSupplementary
             ? (slot.supplementaryStudentIds || [])
-            : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+            : slot.isSignup
+              ? (slot.signupStudentIds || [])
+              : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
         map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
@@ -368,7 +428,9 @@ export function TeacherAttendanceView() {
               ? null
               : slot.isSupplementary
                 ? (suppLessonMap.get(sid) || null)
-                : lessonMap.get(`${sid}:${slot.classId}`);
+                : slot.isSignup
+                  ? (signupLessonMap.get(sid) || null)
+                  : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
             const isEarly = attendance.includes('조기등원');
 
@@ -554,8 +616,26 @@ export function TeacherAttendanceView() {
         if (clearLogsError) throw clearLogsError;
       }
 
+      // SIGNUP-ATT-V1: 선착순 수강신청 슬롯은 class_id 없이 학생별 일지에 출결을 기록
+      if (activeSlot.isSignup) {
+        const { data: signupLesson } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['선착순수강신청'])
+          .limit(1);
+        if (signupLesson?.length) {
+          const { error: signupUpdateError } = await supabase
+            .from('lesson_records')
+            .update({ attendance_status: lessonAttendanceStatus })
+            .eq('id', signupLesson[0].id);
+          if (signupUpdateError) console.warn('Signup journal sync skipped:', signupUpdateError);
+        }
+      }
+
       // Skip lesson_records writes for exam-prep slots (no class_id)
-      if (!activeSlot.isExamPrep && activeSlot.classId) {
+      if (!activeSlot.isExamPrep && !activeSlot.isSignup && activeSlot.classId) {
         const { data: existingLesson, error: existingLessonError } = await supabase
           .from('lesson_records')
           .select('id, lesson_range')
@@ -585,7 +665,7 @@ export function TeacherAttendanceView() {
           const { error: insertLessonError } = await safeUpsertLessonRecord({
             teacher_id: teacherId,
             student_id: studentId,
-            class_id: activeSlot.classId,
+            class_id: activeSlot.classId || null,
             subject: activeSlot.subject as any,
             lesson_date: today,
             lesson_range: lessonRangeText,
@@ -605,7 +685,7 @@ export function TeacherAttendanceView() {
         const { error: supplementaryInsertError } = await safeUpsertLessonRecord({
           teacher_id: teacherId,
           student_id: studentId,
-          class_id: activeSlot.classId,
+          class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any,
           lesson_date: supplementaryDate,
           lesson_range: '보충수업 예정',
@@ -653,7 +733,11 @@ export function TeacherAttendanceView() {
 
       await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
 
-      const { data: existingLesson } = await supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('class_id', activeSlot.classId).eq('lesson_date', today).eq('subject', activeSlot.subject as any).maybeSingle();
+      // SIGNUP-ATT-V1: 선착순 수강신청 슬롯은 class_id 없이 lesson_types로 찾는다
+      const existingLessonQuery = activeSlot.isSignup
+        ? supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('lesson_date', today).contains('lesson_types', ['선착순수강신청']).limit(1).maybeSingle()
+        : supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('class_id', activeSlot.classId).eq('lesson_date', today).eq('subject', activeSlot.subject as any).maybeSingle();
+      const { data: existingLesson } = await existingLessonQuery;
 
       const mergedRange = existingLesson?.lesson_range?.includes(lessonRangeText)
         ? existingLesson.lesson_range
@@ -664,7 +748,7 @@ export function TeacherAttendanceView() {
         await supabase.from('lesson_records').update(lessonPayload as any).eq('id', existingLesson.id);
       } else {
         await safeUpsertLessonRecord({
-          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any, lesson_date: today,
           lesson_range: lessonRangeText, understanding_score: null,
           homework_status: 'none_assigned', learning_issues: [],
@@ -674,7 +758,7 @@ export function TeacherAttendanceView() {
 
       if (hasSupplementary && supplementaryDate) {
         await safeUpsertLessonRecord({
-          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any, lesson_date: supplementaryDate,
           lesson_range: '보충수업 예정', homework_status: 'none_assigned',
           lesson_types: ['보충수업'], attendance_status: ['정상등원'],
