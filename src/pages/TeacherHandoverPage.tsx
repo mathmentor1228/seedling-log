@@ -241,7 +241,7 @@ function TeacherHandoverInner() {
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox
                 checked={allChecked}
-                onCheckedChange={(v) => setSelected(v ? filtered.map((r) => r.courseId) : [])}
+                onCheckedChange={(v) => setSelected(v ? filtered.map((r) => r.key) : [])}
               />
               전체 선택 ({filtered.length}건 · 선택 {selected.length}건)
             </label>
@@ -252,9 +252,9 @@ function TeacherHandoverInner() {
 
           <div className="space-y-2">
             {filtered.map((r) => (
-              <Card key={r.courseId} className={selected.includes(r.courseId) ? 'border-primary/60' : ''}>
+              <Card key={r.key} className={selected.includes(r.key) ? 'border-primary/60' : ''}>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <Checkbox checked={selected.includes(r.courseId)} onCheckedChange={() => toggle(r.courseId)} />
+                  <Checkbox checked={selected.includes(r.key)} onCheckedChange={() => toggle(r.key)} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-semibold">{r.studentName}</span>
