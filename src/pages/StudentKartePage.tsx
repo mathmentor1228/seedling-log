@@ -386,7 +386,31 @@ function KarteContent() {
         )}
       </SectionCard>
 
+      {/* (마-1) 담당 선생님 변경 이력 */}
+      <SectionCard
+        title="담당 선생님 변경 이력"
+        basis="수강과정에서 담당이 바뀐 기록입니다. 변경 이전 수업 기록의 담당자 표기는 그대로 보존됩니다."
+      >
+        {k.teacherChanges.length === 0 ? (
+          <p className="text-xs text-muted-foreground">담당 선생님 변경 기록이 없습니다.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {k.teacherChanges.map((c) => (
+              <li key={c.id} className="text-xs flex flex-wrap items-center gap-1.5">
+                <span className="font-medium">{c.effective_date}부터</span>
+                {c.subject && <span className="text-muted-foreground">{c.subject}</span>}
+                <span className="text-muted-foreground">
+                  {c.from_teacher_name || '미지정'} → <span className="text-foreground font-medium">{c.to_teacher_name || '미지정'}</span>
+                </span>
+                {c.reason && <span className="text-muted-foreground">· {c.reason}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+
       {/* (마) 상담 기록 */}
+
       <SectionCard
         title="상담 기록"
         basis="기존 팀 메모(학생 연결)를 그대로 사용합니다. 이 화면에서는 추가만 가능하고 수정·삭제는 하지 않습니다. 문자·알림톡은 전송되지 않습니다."
