@@ -5636,38 +5636,68 @@ export type Database = {
       }
       signup_entries: {
         Row: {
+          confirmed_at: string | null
           created_at: string
           grade: string | null
           id: string
+          lesson_record_id: string | null
           memo: string | null
           phone: string | null
           slot_id: string
+          student_id: string | null
           student_name: string
         }
         Insert: {
+          confirmed_at?: string | null
           created_at?: string
           grade?: string | null
           id?: string
+          lesson_record_id?: string | null
           memo?: string | null
           phone?: string | null
           slot_id: string
+          student_id?: string | null
           student_name: string
         }
         Update: {
+          confirmed_at?: string | null
           created_at?: string
           grade?: string | null
           id?: string
+          lesson_record_id?: string | null
           memo?: string | null
           phone?: string | null
           slot_id?: string
+          student_id?: string | null
           student_name?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "signup_entries_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signup_entries_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "signup_entries_slot_id_fkey"
             columns: ["slot_id"]
             isOneToOne: false
             referencedRelation: "signup_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signup_entries_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -5680,6 +5710,8 @@ export type Database = {
           id: string
           is_open: boolean
           share_token: string
+          subject: Database["public"]["Enums"]["subject_type"] | null
+          teacher_id: string | null
           title: string
           updated_at: string
         }
@@ -5690,6 +5722,8 @@ export type Database = {
           id?: string
           is_open?: boolean
           share_token?: string
+          subject?: Database["public"]["Enums"]["subject_type"] | null
+          teacher_id?: string | null
           title: string
           updated_at?: string
         }
@@ -5700,6 +5734,8 @@ export type Database = {
           id?: string
           is_open?: boolean
           share_token?: string
+          subject?: Database["public"]["Enums"]["subject_type"] | null
+          teacher_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -5711,11 +5747,19 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "signup_events_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       signup_slots: {
         Row: {
           capacity: number
+          confirmed_at: string | null
           created_at: string
           end_time: string | null
           event_id: string
@@ -5729,6 +5773,7 @@ export type Database = {
         }
         Insert: {
           capacity?: number
+          confirmed_at?: string | null
           created_at?: string
           end_time?: string | null
           event_id: string
@@ -5742,6 +5787,7 @@ export type Database = {
         }
         Update: {
           capacity?: number
+          confirmed_at?: string | null
           created_at?: string
           end_time?: string | null
           event_id?: string
