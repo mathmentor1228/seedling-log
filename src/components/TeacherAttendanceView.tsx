@@ -398,6 +398,12 @@ export function TeacherAttendanceView() {
         suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
       });
 
+      const signupLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      ((signupLessonRes as any).data ?? []).forEach((record: any) => {
+        if (!record.student_id) return;
+        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+      });
+
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
       (studentRes.data ?? []).forEach(s => {
         studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, baseStatus: (s as any).status ?? null });
@@ -409,7 +415,9 @@ export function TeacherAttendanceView() {
           ? (slot.examPrepStudentIds || [])
           : slot.isSupplementary
             ? (slot.supplementaryStudentIds || [])
-            : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+            : slot.isSignup
+              ? (slot.signupStudentIds || [])
+              : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
         map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
@@ -420,7 +428,9 @@ export function TeacherAttendanceView() {
               ? null
               : slot.isSupplementary
                 ? (suppLessonMap.get(sid) || null)
-                : lessonMap.get(`${sid}:${slot.classId}`);
+                : slot.isSignup
+                  ? (signupLessonMap.get(sid) || null)
+                  : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
             const isEarly = attendance.includes('조기등원');
 
