@@ -51,6 +51,9 @@ interface ScheduleSlot {
   examPrepStudentIds?: string[];
   isSupplementary?: boolean;
   supplementaryStudentIds?: string[];
+  /** SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 */
+  isSignup?: boolean;
+  signupStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
