@@ -195,6 +195,8 @@ const App = () => (
                 <Route path="/admin/admissions" element={<AdmissionsPipelinePage />} />
                 <Route path="/admin/unclosed" element={<UnclosedLessonsPage />} />
                 <Route path="/admin/data-quality" element={<DataQualityPage />} />
+                <Route path="/admin/teacher-changes" element={<TeacherChangesPage />} />
+
                 <Route path="/admin/feature-map" element={<AdminFeatureMapPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
