@@ -51,16 +51,23 @@ function TeacherHandoverInner() {
     if (!teacherId) { setRows([]); return; }
     setLoading(true);
     setSelected([]);
-    const { data, error } = await supabase
-      .from('student_courses')
-      .select('id, student_id, teacher_id, is_active, students(name, grade, enrollment_status), course_policies(subject, course_name)')
-      .eq('teacher_id', teacherId)
-      .eq('is_active', true);
-    if (error) toast.error('명단을 불러오지 못했습니다');
+    const [{ data: courseData, error }, { data: sstData, error: sstErr }] = await Promise.all([
+      supabase
+        .from('student_courses')
+        .select('id, student_id, teacher_id, is_active, students(name, grade, enrollment_status), course_policies(subject, course_name)')
+        .eq('teacher_id', teacherId)
+        .eq('is_active', true),
+      supabase
+        .from('student_subject_teachers')
+        .select('student_id, subject, teacher_id, students(name, grade, enrollment_status)')
+        .eq('teacher_id', teacherId),
+    ]);
+    if (error || sstErr) toast.error('명단을 불러오지 못했습니다');
     else {
-      setRows((data || [])
+      const list: HandoverRow[] = (courseData || [])
         .filter((r: any) => r.students && r.students.enrollment_status !== '퇴원')
         .map((r: any) => ({
+          key: r.id,
           courseId: r.id,
           studentId: r.student_id,
           studentName: r.students?.name || '(이름 없음)',
@@ -68,16 +75,34 @@ function TeacherHandoverInner() {
           subject: r.course_policies?.subject ?? null,
           courseName: r.course_policies?.course_name ?? null,
           teacherId: r.teacher_id,
-        }))
-        .sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || a.studentName.localeCompare(b.studentName)));
+        }));
+      const seen = new Set(list.map((r) => `${r.studentId}|${r.subject || ''}`));
+      for (const r of (sstData || []) as any[]) {
+        if (!r.students || r.students.enrollment_status === '퇴원') continue;
+        const k = `${r.student_id}|${r.subject || ''}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        list.push({
+          key: `sst:${r.student_id}:${r.subject}`,
+          courseId: null,
+          studentId: r.student_id,
+          studentName: r.students?.name || '(이름 없음)',
+          grade: r.students?.grade ?? null,
+          subject: r.subject ?? null,
+          courseName: null,
+          teacherId: r.teacher_id,
+        });
+      }
+      setRows(list.sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || a.studentName.localeCompare(b.studentName)));
     }
     setLoading(false);
   };
 
+
   useEffect(() => { loadRoster(fromTeacherId); /* eslint-disable-next-line */ }, [fromTeacherId]);
 
   const filtered = useMemo(() => rows.filter((r) => matchesHandoverQuery(r, query)), [rows, query]);
-  const allChecked = filtered.length > 0 && filtered.every((r) => selected.includes(r.courseId));
+  const allChecked = filtered.length > 0 && filtered.every((r) => selected.includes(r.key));
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -100,7 +125,7 @@ function TeacherHandoverInner() {
       const actor = userRes?.user?.id || null;
       const fromName = teachers.find((t) => t.id === fromTeacherId)?.name || null;
       const toName = teachers.find((t) => t.id === toTeacherId)?.name || null;
-      const targets = rows.filter((r) => selected.includes(r.courseId));
+      const targets = rows.filter((r) => selected.includes(r.key));
 
       let ok = 0;
       const failed: string[] = [];
@@ -120,9 +145,12 @@ function TeacherHandoverInner() {
           } as any);
           if (hErr) throw hErr;
 
-          const { error: uErr } = await supabase.from('student_courses')
-            .update({ teacher_id: toTeacherId } as any).eq('id', row.courseId);
-          if (uErr) throw uErr;
+          if (row.courseId) {
+            const { error: uErr } = await supabase.from('student_courses')
+              .update({ teacher_id: toTeacherId } as any).eq('id', row.courseId);
+            if (uErr) throw uErr;
+          }
+
 
           if (row.subject) {
             await supabase.from('student_subject_teachers').delete()
@@ -213,7 +241,7 @@ function TeacherHandoverInner() {
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Checkbox
                 checked={allChecked}
-                onCheckedChange={(v) => setSelected(v ? filtered.map((r) => r.courseId) : [])}
+                onCheckedChange={(v) => setSelected(v ? filtered.map((r) => r.key) : [])}
               />
               전체 선택 ({filtered.length}건 · 선택 {selected.length}건)
             </label>
@@ -224,9 +252,9 @@ function TeacherHandoverInner() {
 
           <div className="space-y-2">
             {filtered.map((r) => (
-              <Card key={r.courseId} className={selected.includes(r.courseId) ? 'border-primary/60' : ''}>
+              <Card key={r.key} className={selected.includes(r.key) ? 'border-primary/60' : ''}>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <Checkbox checked={selected.includes(r.courseId)} onCheckedChange={() => toggle(r.courseId)} />
+                  <Checkbox checked={selected.includes(r.key)} onCheckedChange={() => toggle(r.key)} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-semibold">{r.studentName}</span>
