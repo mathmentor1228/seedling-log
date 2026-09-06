@@ -665,7 +665,7 @@ export function TeacherAttendanceView() {
           const { error: insertLessonError } = await safeUpsertLessonRecord({
             teacher_id: teacherId,
             student_id: studentId,
-            class_id: activeSlot.classId,
+            class_id: activeSlot.classId || null,
             subject: activeSlot.subject as any,
             lesson_date: today,
             lesson_range: lessonRangeText,
@@ -685,7 +685,7 @@ export function TeacherAttendanceView() {
         const { error: supplementaryInsertError } = await safeUpsertLessonRecord({
           teacher_id: teacherId,
           student_id: studentId,
-          class_id: activeSlot.classId,
+          class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any,
           lesson_date: supplementaryDate,
           lesson_range: '보충수업 예정',
@@ -748,7 +748,7 @@ export function TeacherAttendanceView() {
         await supabase.from('lesson_records').update(lessonPayload as any).eq('id', existingLesson.id);
       } else {
         await safeUpsertLessonRecord({
-          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any, lesson_date: today,
           lesson_range: lessonRangeText, understanding_score: null,
           homework_status: 'none_assigned', learning_issues: [],
@@ -758,7 +758,7 @@ export function TeacherAttendanceView() {
 
       if (hasSupplementary && supplementaryDate) {
         await safeUpsertLessonRecord({
-          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId || null,
           subject: activeSlot.subject as any, lesson_date: supplementaryDate,
           lesson_range: '보충수업 예정', homework_status: 'none_assigned',
           lesson_types: ['보충수업'], attendance_status: ['정상등원'],
