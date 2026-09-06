@@ -281,7 +281,36 @@ export function TeacherAttendanceView() {
         supplementaryStudentIds: g.studentIds,
       }));
 
-      const all = [...parsed, ...examSlots, ...suppSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      // SIGNUP-ATT-V1: 확정된 선착순 수강신청 수업을 시간대별 슬롯으로 노출
+      const parseSignupTime = (notes: string | null): string => {
+        if (!notes) return '미정';
+        const m = notes.match(/신청\s*시간\s*[:：]\s*([0-9]{1,2}[:：][0-9]{2})/);
+        return m ? m[1].replace('：', ':') : '미정';
+      };
+      const signupGroups = new Map<string, { time: string; subject: string; studentIds: string[] }>();
+      signupLessons.forEach((s: any) => {
+        if (!s.student_id) return;
+        const time = parseSignupTime(s.notes);
+        const subject = s.subject || '';
+        const key = `${time}-${subject}`;
+        if (!signupGroups.has(key)) signupGroups.set(key, { time, subject, studentIds: [] });
+        if (!signupGroups.get(key)!.studentIds.includes(s.student_id)) {
+          signupGroups.get(key)!.studentIds.push(s.student_id);
+        }
+      });
+      const signupSlots: ScheduleSlot[] = Array.from(signupGroups.entries()).map(([k, g]) => ({
+        id: `signup-${k}`,
+        classId: '',
+        className: '선착순 수강신청',
+        subject: g.subject,
+        startTime: g.time === '미정' ? '23:56' : g.time,
+        endTime: g.time === '미정' ? '23:57' : g.time,
+        classroomName: null,
+        isSignup: true,
+        signupStudentIds: g.studentIds,
+      }));
+
+      const all = [...parsed, ...examSlots, ...suppSlots, ...signupSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
       if (all.length === 0) { setSlots([]); setLoading(false); return; }
       setSlots(all);
 
