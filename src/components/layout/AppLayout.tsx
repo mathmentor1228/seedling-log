@@ -248,6 +248,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '특강 신청 현황', href: '/admin/intensive-applications', icon: <ClipboardList className="w-4 h-4" />, description: '방학 특강 신청 접수', adminOnly: true },
         { label: '운영 통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, description: '학생·수업·숙제 지표 통계', adminOnly: true },
         { label: '원장 KPI 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, description: 'KPI·운영 변경 이력·학부모 열람 현황', adminOnly: true },
+        { label: '담당 인계', href: '/admin/teacher-handover', icon: <UserCog className="w-4 h-4" />, description: '선생님별 담당 학생 조회 후 일괄 인계', adminOnly: true },
         { label: '담당 변경 이력', href: '/admin/teacher-changes', icon: <UserCog className="w-4 h-4" />, description: '수강과정 담당 선생님 변경 검색', allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '데이터 점검', href: '/admin/data-quality', icon: <AlertTriangle className="w-4 h-4" />, description: '기술 전용 · 학생-반 연결 등 구조 이상 감사', adminOnly: true },
 

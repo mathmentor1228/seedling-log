@@ -44,6 +44,7 @@ const AdmissionsPipelinePage = lazy(() => import("./pages/AdmissionsPipelinePage
 const UnclosedLessonsPage = lazy(() => import("./pages/UnclosedLessonsPage"));
 const DataQualityPage = lazy(() => import("./pages/DataQualityPage"));
 const TeacherChangesPage = lazy(() => import("./pages/TeacherChangesPage"));
+const TeacherHandoverPage = lazy(() => import("./pages/TeacherHandoverPage"));
 
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const LessonsPage = lazy(() => import("./pages/LessonsPage"));
@@ -196,6 +197,7 @@ const App = () => (
                 <Route path="/admin/unclosed" element={<UnclosedLessonsPage />} />
                 <Route path="/admin/data-quality" element={<DataQualityPage />} />
                 <Route path="/admin/teacher-changes" element={<TeacherChangesPage />} />
+                <Route path="/admin/teacher-handover" element={<TeacherHandoverPage />} />
 
                 <Route path="/admin/feature-map" element={<AdminFeatureMapPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
