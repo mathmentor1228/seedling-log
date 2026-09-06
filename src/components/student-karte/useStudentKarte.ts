@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getTodayKST } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import type { DeliveryEvent } from '@/lib/reportDelivery';
+import type { TeacherChangeRow } from '@/lib/teacherChangeLog';
 import {
   buildTimeline, buildTrend, matchesSubject, PERIOD_DAYS, shiftIsoDate, summarizeKarte,
   type KarteHomework, type KarteLesson, type KarteNote, type KartePeriod, type KarteReport,
@@ -53,6 +54,7 @@ export interface KarteState {
   notesUnavailable: boolean;
   subjects: string[];
   attendanceDates: { date: string; checkedIn: boolean; checkedOut: boolean }[];
+  teacherChanges: TeacherChangeRow[];
   fromPeriod: string;
   from90: string;
   from30: string;
@@ -89,6 +91,7 @@ export function useStudentKarte(
   const [notesUnavailable, setNotesUnavailable] = useState(false);
   const [deliveryEvents, setDeliveryEvents] = useState<Record<string, DeliveryEvent[]>>({});
   const [attendanceDates, setAttendanceDates] = useState<{ date: string; checkedIn: boolean; checkedOut: boolean }[]>([]);
+  const [teacherChanges, setTeacherChanges] = useState<TeacherChangeRow[]>([]);
 
   const load = useCallback(async () => {
     if (!studentId) { setNotFound(true); setLoading(false); return; }
@@ -106,7 +109,7 @@ export function useStudentKarte(
       if (sErr) throw sErr;
       if (!s) { setNotFound(true); setLoading(false); return; }
 
-      const [csRes, stRes, lrRes, hwRes, wrRes, tnRes, alRes] = await Promise.all([
+      const [csRes, stRes, lrRes, hwRes, wrRes, tnRes, alRes, tcRes] = await Promise.all([
         supabase.from('class_students').select('class_id, classes(id, name, teacher_id)').eq('student_id', studentId),
         supabase.from('student_subject_teachers').select('subject, teacher_id').eq('student_id', studentId),
         supabase.from('lesson_records')
@@ -128,7 +131,14 @@ export function useStudentKarte(
         supabase.from('attendance_logs')
           .select('date, checked_in_at, checked_out_at')
           .eq('student_id', studentId).gte('date', fromFetch).lte('date', today),
+        supabase.from('student_course_teacher_changes')
+          .select('id, student_id, subject, from_teacher_name, to_teacher_name, effective_date, reason, created_at')
+          .eq('student_id', studentId)
+          .order('effective_date', { ascending: false }),
       ]);
+
+      if (tcRes.error) errs.push('담당 변경 이력');
+      else setTeacherChanges((tcRes.data || []) as any);
 
       // 담당 반: class_id 기준 dedupe
       const classRows: { id: string; name: string; teacherId: string | null }[] = [];
@@ -314,7 +324,7 @@ export function useStudentKarte(
     loading, notFound, forbidden, partialErrors, fatalError, reload: load,
     student, classNames, teachers, lastNoteDate, lastLessonDate, lastReportDate,
     summary, timeline, trend, lessons, homework, reports, notes,
-    deliveryEvents, notesUnavailable, subjects, attendanceDates,
+    deliveryEvents, notesUnavailable, subjects, attendanceDates, teacherChanges,
     fromPeriod, from90, from30, today,
   };
 }
