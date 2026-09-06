@@ -165,7 +165,7 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const [schedRes, sessRes, suppRes] = await Promise.all([
+      const [schedRes, sessRes, suppRes, signupRes] = await Promise.all([
         supabase
           .from('class_schedules')
           .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
@@ -185,11 +185,20 @@ export function TeacherAttendanceView() {
           .eq('teacher_id', teacherId)
           .eq('lesson_date', today)
           .contains('lesson_types', ['보충수업']),
+        // SIGNUP-ATT-V1: 오늘 확정된 선착순 수강신청 수업
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, subject, notes, lesson_types, class_id')
+          .eq('teacher_id', teacherId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['선착순수강신청']),
       ]);
 
       const schedules = schedRes.data || [];
       const sessions = sessRes.data || [];
       const suppLessons = suppRes.data || [];
+      const signupLessons = signupRes.data || [];
+
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
