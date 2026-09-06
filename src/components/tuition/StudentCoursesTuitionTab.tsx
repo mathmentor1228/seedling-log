@@ -237,9 +237,38 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         .eq('id', changeCourse.id);
       if (updErr) throw updErr;
 
-      toast.success(`${changeDate}부터 ${toName} 선생님으로 정산 기준 변경`);
+      // 수업관리 반영: 과목별 담당 매핑 교체 (과거 수업 기록의 담당자 표기는 그대로 보존)
+      const subject = (changeCourse as any).course_policies?.subject || null;
+      if (subject) {
+        if (changeCourse.teacher_id) {
+          await supabase.from('student_subject_teachers').delete()
+            .eq('student_id', studentId).eq('subject', subject).eq('teacher_id', changeCourse.teacher_id);
+        }
+        await supabase.from('student_subject_teachers').upsert(
+          { student_id: studentId, subject, teacher_id: changeTeacherId } as any,
+          { onConflict: 'student_id,subject,teacher_id' }
+        );
+      }
+
+      // 학생 수업관리 기록(카르테 상담·메모)에 담당 변경 이력 남기기 — 추가만, 기존 기록 변경 없음
+      if (userRes?.user?.id) {
+        const { error: noteErr } = await supabase.from('team_notes').insert(
+          buildTeacherChangeNote({
+            studentId,
+            subject,
+            fromTeacherName: fromName,
+            toTeacherName: toName,
+            effectiveDate: changeDate,
+            reason: changeReason,
+          }, userRes.user.id) as any
+        );
+        if (noteErr) console.warn('[teacher-change note]', noteErr.message);
+      }
+
+      toast.success(`${changeDate}부터 ${toName} 선생님으로 변경 · 수업관리에 기록됨`);
       setChangeCourse(null);
       loadAll();
+
     } catch (err: any) {
       toast.error(err.message || '담당 변경 실패');
     } finally {
