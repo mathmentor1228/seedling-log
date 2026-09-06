@@ -2,7 +2,10 @@
 import type { TeacherChangeInfo } from './teacherChangeLog';
 
 export interface HandoverRow {
-  courseId: string;
+  /** 고유 선택 키 (수강과정 id 또는 sst:학생:과목) */
+  key: string;
+  /** 수강과정이 없는 과목 담당은 null */
+  courseId: string | null;
   studentId: string;
   studentName: string;
   grade: string | null;
@@ -10,6 +13,7 @@ export interface HandoverRow {
   courseName: string | null;
   teacherId: string | null;
 }
+
 
 /** 이름·과목·학년 통합 검색 */
 export function matchesHandoverQuery(row: HandoverRow, query: string): boolean {
