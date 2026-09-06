@@ -125,7 +125,7 @@ function TeacherHandoverInner() {
       const actor = userRes?.user?.id || null;
       const fromName = teachers.find((t) => t.id === fromTeacherId)?.name || null;
       const toName = teachers.find((t) => t.id === toTeacherId)?.name || null;
-      const targets = rows.filter((r) => selected.includes(r.courseId));
+      const targets = rows.filter((r) => selected.includes(r.key));
 
       let ok = 0;
       const failed: string[] = [];
@@ -145,9 +145,12 @@ function TeacherHandoverInner() {
           } as any);
           if (hErr) throw hErr;
 
-          const { error: uErr } = await supabase.from('student_courses')
-            .update({ teacher_id: toTeacherId } as any).eq('id', row.courseId);
-          if (uErr) throw uErr;
+          if (row.courseId) {
+            const { error: uErr } = await supabase.from('student_courses')
+              .update({ teacher_id: toTeacherId } as any).eq('id', row.courseId);
+            if (uErr) throw uErr;
+          }
+
 
           if (row.subject) {
             await supabase.from('student_subject_teachers').delete()
