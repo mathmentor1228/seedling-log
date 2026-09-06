@@ -173,8 +173,10 @@ function ClassSignupAdmin() {
         lesson_date: slot.slot_date,
         lesson_range: ev.title,
         homework_status: 'none_assigned',
+        lesson_types: ['선착순수강신청'],
         submitted: false,
-        notes: [`[선착순 수강신청] ${ev.title} ${hhmm(slot.start_time)}`, slot.note, en.memo].filter(Boolean).join(' · '),
+        // SIGNUP-ATT-V1: 대시보드 출결 슬롯에서 시간을 파싱할 수 있도록 표준 표기 포함
+        notes: [`[선착순 수강신청] ${ev.title} [신청 시간: ${hhmm(slot.start_time)}]`, slot.note, en.memo].filter(Boolean).join(' · '),
       });
       if (res.error) { console.error(res.error); continue; }
       await db.from('signup_entries').update({
