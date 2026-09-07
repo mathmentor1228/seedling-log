@@ -223,7 +223,12 @@ export default function Lessons() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const PAGE_SIZE = 50;
+  const [pageSizeOption, setPageSizeOption] = useState<'50' | '100' | '200' | 'all'>('50');
+  const PAGE_SIZE = pageSizeOption === 'all' ? 5000 : Number(pageSizeOption);
+  const SUMMARY_CAP = 5000;
+  const [summaryLessons, setSummaryLessons] = useState<SummaryLesson[]>([]);
+  const [summaryTruncated, setSummaryTruncated] = useState(false);
+  
   
   const { toast } = useToast();
   
