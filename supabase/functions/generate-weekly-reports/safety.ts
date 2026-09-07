@@ -216,7 +216,10 @@ export function factualParentTemplate(header: string, facts: ReportFacts): strin
     homeworkSentence(facts.homeworkRate),
     testSentence(facts.testAvgScore, facts.hasTestRecords),
   ].filter(Boolean) as string[];
-  if (body.length === 0) return null;
+  if (body.length === 0 && (facts.subjects || []).length === 0) return null;
+  if (body.length === 0) {
+    body.push('수업 기록상 진행 흐름은 이어졌고, 세부 이해 정도와 과제 흐름은 조금 더 살펴볼 부분으로 두고 있습니다.');
+  }
 
   const subjects = (facts.subjects || []).filter(Boolean);
   const lead = subjects.length > 0
