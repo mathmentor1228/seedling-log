@@ -40,6 +40,8 @@ import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
 import MathQuestionAnalytics from '@/components/lessons/MathQuestionAnalytics';
 import { TeacherLessonRecords } from '@/components/lessons/TeacherLessonRecords';
+import { LessonPeriodSummary } from '@/components/lessons/LessonPeriodSummary';
+import type { SummaryLesson } from '@/components/lessons/lessonSummary';
 import { fetchRetiredTeacherIds, filterActiveTeacherClasses } from '@/lib/activeClasses';
 
 interface Teacher {
