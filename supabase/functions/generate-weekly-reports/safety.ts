@@ -170,6 +170,86 @@ export function neutralStudentTemplate(hasLessonData: boolean): string {
     : '이번 주에는 확인된 학습 기록이 많지 않았어요. 다음 수업에서 함께 상황을 정리해 봐요.';
 }
 
+// ============================================================
+// WEEKLY-REPORT-NEUTRAL-FACTS-V1
+// 중립 문안도 비어 보이지 않도록, 해당 기간의 숙제 이행률·테스트 결과·이해도를
+// 숫자 노출 없이 정성 표현으로 담는다. 짧게(3~5문장) 유지한다.
+// ============================================================
+export interface ReportFacts {
+  hasLessonData: boolean;
+  subjects?: string[];
+  homeworkRate?: number | null;   // 0~100
+  understandingAvg?: number | null; // 1~5
+  testAvgScore?: number | null;   // 0~100
+  hasTestRecords?: boolean;
+}
+
+function homeworkSentence(rate: number | null | undefined): string | null {
+  if (rate === null || rate === undefined) return null;
+  if (rate >= 90) return '과제는 기한에 맞춰 대체로 잘 챙겨 온 흐름이 확인됩니다.';
+  if (rate >= 70) return '과제는 대체로 이행되었고, 일부 회차에서는 마무리가 조금 덜 된 부분이 남았습니다.';
+  if (rate >= 40) return '과제 이행은 절반 남짓 확인되어, 꾸준함이 이어지는지 조금 더 지켜볼 부분입니다.';
+  return '기록상 과제가 남는 경우가 잦아, 학습 리듬이 자리 잡는지 유의 깊게 살필 부분으로 두고 있습니다.';
+}
+
+function testSentence(avg: number | null | undefined, hasTests?: boolean): string | null {
+  if (avg === null || avg === undefined) {
+    return hasTests ? '수업 중 확인 테스트는 진행되었으나 점수로 남은 기록은 제한적이었습니다.' : null;
+  }
+  if (avg >= 85) return '확인 테스트에서는 안정적인 결과가 이어졌습니다.';
+  if (avg >= 70) return '확인 테스트는 대체로 기준선을 지켰고, 일부 단원은 보완이 필요한 모습이었습니다.';
+  return '확인 테스트에서는 기준선에 못 미친 부분이 있어, 해당 단원은 반복해서 살펴볼 지점으로 두고 있습니다.';
+}
+
+function understandingSentence(avg: number | null | undefined): string | null {
+  if (avg === null || avg === undefined) return null;
+  if (avg >= 4) return '수업 중 이해 정도는 비교적 안정적으로 유지되었습니다.';
+  if (avg >= 3) return '수업 중 이해 정도는 무난한 편이었고, 단원에 따라 편차가 보였습니다.';
+  return '수업 중 이해 정도는 단원에 따라 어려움이 보여, 기본 개념을 다시 짚어 볼 부분이 있습니다.';
+}
+
+/** 사실 기반 중립 학부모 문안. 근거가 하나도 없으면 null → 기존 중립 템플릿 사용. */
+export function factualParentTemplate(header: string, facts: ReportFacts): string | null {
+  if (!facts.hasLessonData) return null;
+  const body = [
+    understandingSentence(facts.understandingAvg),
+    homeworkSentence(facts.homeworkRate),
+    testSentence(facts.testAvgScore, facts.hasTestRecords),
+  ].filter(Boolean) as string[];
+  if (body.length === 0) return null;
+
+  const subjects = (facts.subjects || []).filter(Boolean);
+  const lead = subjects.length > 0
+    ? `이번 기간에는 ${subjects.join('·')} 수업 기록을 바탕으로 학습 흐름을 정리했습니다.`
+    : '이번 기간에 남은 수업 기록을 바탕으로 학습 흐름을 정리했습니다.';
+  const tail = '전반적인 흐름이 안정적으로 이어지는지 조금 더 지켜보며, 필요한 부분은 수업 중에 함께 짚어 보려 합니다.';
+
+  return `${header}\n\n${lead} ${body.join(' ')}\n\n${tail}`;
+}
+
+/** 사실 기반 중립 학생 문안(짧게). */
+export function factualStudentTemplate(facts: ReportFacts): string | null {
+  if (!facts.hasLessonData) return null;
+  const parts: string[] = [];
+  if (typeof facts.homeworkRate === 'number') {
+    parts.push(
+      facts.homeworkRate >= 70
+        ? '과제는 대체로 잘 챙겼어요.'
+        : '과제를 챙기는 리듬을 조금만 더 붙여 보면 좋겠어요.'
+    );
+  }
+  if (typeof facts.testAvgScore === 'number') {
+    parts.push(
+      facts.testAvgScore >= 85
+        ? '확인 테스트 결과도 안정적으로 이어졌어요.'
+        : '확인 테스트에서 아쉬웠던 단원은 다음 수업에서 다시 짚어 봐요.'
+    );
+  }
+  if (parts.length === 0) return null;
+  return parts.join(' ');
+}
+
+
 // generate-ai-report에 함께 전달하는 생성 규칙(프롬프트 강화용)
 export const CONTENT_SAFETY_RULES = [
   '학부모/학생 문안과 subject_breakdown 등 외부 노출 텍스트에 실제 수업 횟수, 일지 수, 기록 수를 숫자로 쓰지 말 것.',
