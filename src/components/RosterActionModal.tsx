@@ -228,15 +228,16 @@ export function RosterActionModal({
       let recordId = context.existingRecordId;
       
       if (!recordId) {
-        // Check if record exists
-        const { data: existing, error: existingError } = await supabase
+        // HW-VISIBILITY-FIX-V1: class_id 조건을 빼고 학생·날짜·과목 기준으로 조회(중복 방지 규칙과 동일)
+        const { data: existingList, error: existingError } = await supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', context.student_id)
-          .eq('class_id', context.class_id)
           .eq('lesson_date', context.date)
           .eq('subject', context.subject as SubjectType)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const existing = existingList?.[0] || null;
         
         if (existingError) {
           console.error('[fetchData] lesson_records SELECT failed:', existingError.code, existingError.message);
