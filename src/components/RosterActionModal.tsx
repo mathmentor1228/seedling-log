@@ -715,19 +715,22 @@ export function RosterActionModal({
       });
       
       // HW-VISIBILITY-FIX-V1: 저장 직후 DB에서 다시 읽어 화면에 실제 저장 결과를 표시
-      const { data: savedHw } = await supabase
+      const { data: savedHw, error: savedHwError } = await supabase
         .from('homework_assignments')
         .select('id, content')
         .eq('lesson_record_id', recordId)
         .order('created_at', { ascending: true });
-      
-      if (savedHw && savedHw.length > 0) {
-        setNewHomeworkItems(savedHw.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
+
+      if (savedHwError) throw savedHwError;
+      if (!savedHw || savedHw.length !== validItems.length) {
+        throw new Error('숙제 저장 결과를 확인하지 못했습니다. 다시 저장해주세요.');
       }
+      
+      setNewHomeworkItems(savedHw.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
       
       toast({
         title: '저장 완료',
-        description: `숙제 ${savedHw?.length ?? validItems.length}개가 저장되었습니다`,
+        description: `숙제 ${savedHw.length}개가 실제 저장되었습니다`,
       });
       
       onSaved?.();
