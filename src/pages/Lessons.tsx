@@ -345,55 +345,74 @@ export default function Lessons() {
     }
   }
 
+  function applyLessonFilters(query: any) {
+    if (filterStartDate) query = query.gte('lesson_date', filterStartDate);
+    if (filterEndDate) query = query.lte('lesson_date', filterEndDate);
+
+    if (filterStatus === 'submitted') {
+      query = query.eq('submitted', true);
+    } else if (filterStatus === 'draft') {
+      query = query.eq('submitted', false);
+    }
+
+    if (filterHomeworkStatus !== 'all' && filterHomeworkStatus !== 'pending_verification') {
+      query = query.eq('homework_status', filterHomeworkStatus);
+    }
+
+    if (filterSubject !== 'all') {
+      query = query.eq('subject', filterSubject as SubjectType);
+    }
+
+    if ((isAdmin || isAssistant) && filterTeacherId !== 'all') {
+      query = query.eq('teacher_id', filterTeacherId);
+    } else if (role === 'teacher') {
+      query = query.eq('teacher_id', user!.id);
+    }
+
+    return query.order('lesson_date', { ascending: false }).order('created_at', { ascending: false });
+  }
+
+  function matchesSearch(row: any) {
+    if (!searchQuery) return true;
+    const lower = searchQuery.toLowerCase();
+    return (
+      row.student_name?.toLowerCase().includes(lower) ||
+      row.subject?.toLowerCase().includes(lower)
+    );
+  }
+
   async function fetchLessons() {
     if (!user) return;
 
     try {
-      let query = supabase
-        .from('lesson_records')
-        .select(`
-          *,
-          students:student_id (name)
-        `, { count: 'exact' });
+      const CHUNK = 1000;
+      const rows: any[] = [];
+      let count = 0;
 
-      if (filterStartDate) {
-        query = query.gte('lesson_date', filterStartDate);
-      }
-      if (filterEndDate) {
-        query = query.lte('lesson_date', filterEndDate);
-      }
-
-      if (filterStatus === 'submitted') {
-        query = query.eq('submitted', true);
-      } else if (filterStatus === 'draft') {
-        query = query.eq('submitted', false);
-      }
-
-      if (filterHomeworkStatus !== 'all' && filterHomeworkStatus !== 'pending_verification') {
-        query = query.eq('homework_status', filterHomeworkStatus);
-      }
-
-      if (filterSubject !== 'all') {
-        query = query.eq('subject', filterSubject as SubjectType);
-      }
-
-      if ((isAdmin || isAssistant) && filterTeacherId !== 'all') {
-        query = query.eq('teacher_id', filterTeacherId);
-      } else if (role === 'teacher') {
-        query = query.eq('teacher_id', user.id);
+      if (pageSizeOption === 'all') {
+        // 전체 보기: 1,000건 단위로 이어서 모두 불러온다 (상한 5,000건)
+        for (let offset = 0; offset < PAGE_SIZE; offset += CHUNK) {
+          const q = applyLessonFilters(
+            supabase.from('lesson_records').select(`*, students:student_id (name)`, { count: 'exact' })
+          ).range(offset, Math.min(offset + CHUNK, PAGE_SIZE) - 1);
+          const { data, error, count: c } = await q;
+          if (error) throw error;
+          if (typeof c === 'number') count = c;
+          rows.push(...(data || []));
+          if (!data || data.length < CHUNK) break;
+        }
+      } else {
+        const from = (currentPage - 1) * PAGE_SIZE;
+        const q = applyLessonFilters(
+          supabase.from('lesson_records').select(`*, students:student_id (name)`, { count: 'exact' })
+        ).range(from, from + PAGE_SIZE - 1);
+        const { data, error, count: c } = await q;
+        if (error) throw error;
+        count = c || 0;
+        rows.push(...(data || []));
       }
 
-      query = query.order('lesson_date', { ascending: false }).order('created_at', { ascending: false });
-
-      const from = (currentPage - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      query = query.range(from, to);
-
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      const teacherIds = [...new Set((data || []).map((l: any) => l.teacher_id).filter(Boolean))];
+      const teacherIds = [...new Set(rows.map((l: any) => l.teacher_id).filter(Boolean))];
       let teacherNameMap: Record<string, string> = {};
       if (teacherIds.length > 0) {
         const { data: profiles } = await supabase
@@ -403,22 +422,21 @@ export default function Lessons() {
         teacherNameMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || '알 수 없음']));
       }
 
-      let formattedLessons = (data || []).map((l: any) => ({
+      const formattedLessons = rows.map((l: any) => ({
         ...l,
         student_name: l.students?.name,
         teacher_name: l.teacher_display_name || teacherNameMap[l.teacher_id] || '',
-      }));
-
-      if (searchQuery) {
-        const lowerSearch = searchQuery.toLowerCase();
-        formattedLessons = formattedLessons.filter(lesson =>
-          lesson.student_name?.toLowerCase().includes(lowerSearch) ||
-          lesson.subject?.toLowerCase().includes(lowerSearch)
-        );
-      }
+      })).filter(matchesSearch);
 
       setLessons(formattedLessons);
       setTotalCount(count || 0);
+
+      if (pageSizeOption === 'all') {
+        setSummaryLessons(formattedLessons as SummaryLesson[]);
+        setSummaryTruncated((count || 0) > PAGE_SIZE);
+      } else {
+        void fetchSummary();
+      }
     } catch (error: any) {
       console.error('Error fetching lessons:', error);
       const statusCode = error?.code || error?.status || 'UNKNOWN';
@@ -426,6 +444,36 @@ export default function Lessons() {
       setLoadError(`수업 기록 로드 실패 (${statusCode}/${message}). 새로고침 후에도 동일하면 관리자에게 문의하세요.`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** 페이지와 무관하게 조회 조건 전체 기간을 요약하기 위한 경량 조회 */
+  async function fetchSummary() {
+    if (!user) return;
+    try {
+      const CHUNK = 1000;
+      const rows: any[] = [];
+      let truncated = false;
+      for (let offset = 0; offset < SUMMARY_CAP; offset += CHUNK) {
+        const q = applyLessonFilters(
+          supabase
+            .from('lesson_records')
+            .select('id, student_id, subject, lesson_date, submitted, attendance_status, understanding_score, homework_status, students:student_id (name)')
+        ).range(offset, offset + CHUNK - 1);
+        const { data, error } = await q;
+        if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < CHUNK) break;
+        if (offset + CHUNK >= SUMMARY_CAP) truncated = true;
+      }
+      setSummaryLessons(
+        rows.map((l: any) => ({ ...l, student_name: l.students?.name })).filter(matchesSearch) as SummaryLesson[]
+      );
+      setSummaryTruncated(truncated);
+    } catch (error) {
+      console.error('Error building lesson summary:', error);
+      setSummaryLessons([]);
+      setSummaryTruncated(false);
     }
   }
 
