@@ -8,6 +8,8 @@ import {
   scanGroundedness,
   stripUngroundedSentences,
   softenExternalText,
+  factualParentTemplate,
+  factualStudentTemplate,
 } from './safety.ts';
 
 // WEEKLY-REPORT-TEACHER-EXCLUDE-V2 (과목 단위 제외)
@@ -782,8 +784,8 @@ Deno.serve(async (req) => {
             safetyViolations = safety.violations as string[];
             validationFallbackCount++;
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
-            finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, hasLessonData)}`;
+            finalStudentMessageToSave = neutralStudent(hasLessonData);
             qualityTag = 'YELLOW';
             draftStatusToSave = 'ready';
             console.warn(`[generate-weekly-reports] SAFETY_FALLBACK: ${safetyViolations.join(';')}`);
@@ -793,8 +795,8 @@ Deno.serve(async (req) => {
             safetyViolations = ['NO_LESSON_DATA'];
             validationFallbackCount++;
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, false)}`;
-            finalStudentMessageToSave = neutralStudentTemplate(false);
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, false)}`;
+            finalStudentMessageToSave = neutralStudent(false);
             qualityTag = 'YELLOW';
             draftStatusToSave = 'ready';
           }
@@ -857,12 +859,12 @@ Deno.serve(async (req) => {
               if (strippedParent && scanSafety(strippedParent, { hasLessonData }).pass) {
                 finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${strippedParent}`;
               } else {
-                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+                finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, hasLessonData)}`;
               }
               finalStudentMessageToSave =
                 strippedStudent && scanSafety(strippedStudent, { hasLessonData }).pass
                   ? strippedStudent
-                  : neutralStudentTemplate(hasLessonData);
+                  : neutralStudent(hasLessonData);
 
               console.warn(
                 `[generate-weekly-reports] GROUNDEDNESS_FALLBACK: parent=${gParent.ungroundedSentences.length} student=${gStudent.ungroundedSentences.length} breakdown=${gBreakdown.ungroundedSentences.length}`
@@ -897,14 +899,14 @@ Deno.serve(async (req) => {
             const parentOk =
               parentBodyFinal.length > 0 && scanSafety(parentBodyFinal, { hasLessonData }).pass;
             if (!parentOk) {
-              finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, hasLessonData)}`;
+              finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, hasLessonData)}`;
               qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
             }
             const studentBodyFinal = (finalStudentMessageToSave || '').trim();
             const studentOk =
               studentBodyFinal.length > 0 && scanSafety(studentBodyFinal, { hasLessonData }).pass;
             if (!studentOk) {
-              finalStudentMessageToSave = neutralStudentTemplate(hasLessonData);
+              finalStudentMessageToSave = neutralStudent(hasLessonData);
               qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
             }
             if (qualityTag === 'RED') qualityTag = 'YELLOW';
