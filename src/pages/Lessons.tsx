@@ -1157,9 +1157,38 @@ export default function Lessons() {
         </CardHeader>
         
         <CardContent>
-          <div className="text-sm text-muted-foreground mb-3">
-            총 {totalCount}개 기록
+          <div className="mb-4">
+            <LessonPeriodSummary
+              lessons={summaryLessons}
+              periodLabel={periodLabel}
+              truncated={summaryTruncated}
+            />
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="text-sm text-muted-foreground">
+              총 {totalCount}개 기록
+              {pageSizeOption === 'all' && ` · ${lessons.length}개 표시 중`}
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">한 페이지</Label>
+              <Select
+                value={pageSizeOption}
+                onValueChange={(v) => { setPageSizeOption(v as any); setCurrentPage(1); }}
+              >
+                <SelectTrigger className="h-8 w-[120px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                  <SelectItem value="200">200개</SelectItem>
+                  <SelectItem value="all">전체 보기</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
           
           {lessons.length === 0 ? (
             <div className="text-center py-12">
