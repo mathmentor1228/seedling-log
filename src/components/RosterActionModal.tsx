@@ -311,7 +311,8 @@ export function RosterActionModal({
           const { data: homework, error: hwError } = await supabase
             .from('homework_assignments')
             .select('*')
-            .eq('lesson_record_id', record.id);
+            .eq('lesson_record_id', record.id)
+            .order('created_at', { ascending: true });
           
           if (hwError) {
             console.error('[fetchData] homework_assignments SELECT failed:', hwError.code, hwError.message);
@@ -319,6 +320,8 @@ export function RosterActionModal({
           
           if (homework && homework.length > 0) {
             setNewHomeworkItems(homework.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
+          } else {
+            setNewHomeworkItems([{ content: '' }]);
           }
         }
       }
