@@ -896,8 +896,15 @@ Deno.serve(async (req) => {
               .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
               .join('\n')
               .trim();
+            // WEEKLY-REPORT-NEUTRAL-FACTS-V2: AI가 "추가 관찰/코멘트 필요" 자리표시 문안만 돌려준 경우,
+            // 수업기록이 있으면 숙제 이행/테스트/이해도 기반 사실 중립 문안으로 대체한다.
+            const isPlaceholderParent =
+              parentBodyFinal.includes('추가 관찰이 필요') ||
+              parentBodyFinal.includes('추가 코멘트가 필요');
             const parentOk =
-              parentBodyFinal.length > 0 && scanSafety(parentBodyFinal, { hasLessonData }).pass;
+              parentBodyFinal.length > 0 &&
+              !(isPlaceholderParent && hasLessonData) &&
+              scanSafety(parentBodyFinal, { hasLessonData }).pass;
             if (!parentOk) {
               finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, hasLessonData)}`;
               qualityTag = qualityTag === 'GREEN' ? 'YELLOW' : qualityTag;
