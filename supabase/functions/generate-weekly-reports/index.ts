@@ -7,6 +7,7 @@ import {
   CONTENT_SAFETY_RULES,
   scanGroundedness,
   stripUngroundedSentences,
+  softenExternalText,
 } from './safety.ts';
 
 // WEEKLY-REPORT-TEACHER-EXCLUDE-V2 (과목 단위 제외)
@@ -650,6 +651,16 @@ Deno.serve(async (req) => {
               .split('\n')
               .filter((l) => !l.startsWith(NARRATIVE_RENDER_PREFIX) && !l.startsWith('[REPORT_GEN_DEBUG'))
               .join('\n');
+
+          // WEEKLY-REPORT-SOFTEN-V1: 중립 템플릿 fallback 전에 약속형/절대어 어미만 완곡화한다.
+          if (aiReportData) {
+            if (finalParentMessageToSave) finalParentMessageToSave = softenExternalText(finalParentMessageToSave);
+            if (finalStudentMessageToSave) finalStudentMessageToSave = softenExternalText(finalStudentMessageToSave);
+            if (typeof aiReportData.subject_breakdown === 'string') {
+              aiReportData.subject_breakdown = softenExternalText(aiReportData.subject_breakdown);
+            }
+          }
+
           const externalText = [
             stripMarkers(finalParentMessageToSave || aiReportData?.parent_message || ''),
             stripMarkers(finalStudentMessageToSave || aiReportData?.student_message || ''),
