@@ -562,6 +562,106 @@ Deno.serve(async (req) => {
           const lessonCount = includedLessons.length;
           const subjectCount = new Set(includedLessons.map((l: any) => l.subject)).size;
 
+          // WEEKLY-REPORT-NEUTRAL-FACTS-V1: 중립 문안에도 쓰이도록 통계를 먼저 계산한다.
+          let avgUnderstanding: number | null = null;
+          let homeworkCompletionRate: number | null = null;
+          let testAvgScore: number | null = null;
+          let hasTestRecords = false;
+
+          if (includedLessons.length > 0) {
+            const scores = includedLessons
+              .map((l: any) => l.understanding_score)
+              .filter((s: any) => s !== null && s !== undefined);
+            if (scores.length > 0) {
+              avgUnderstanding = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);
+            }
+
+            const hwLessons = includedLessons.filter(
+              (l: any) => l.homework_status && l.homework_status !== 'none_assigned' && l.homework_status !== 'none'
+            );
+            let hwCount = hwLessons.length;
+            let hwScore = hwLessons.reduce((acc: number, l: any) => {
+              if (l.homework_status === 'completed') return acc + 1;
+              if (l.homework_status === 'partial') return acc + 0.5;
+              return acc;
+            }, 0);
+
+            const weekLessonIds = includedLessons.map((l: any) => l.id);
+            const { data: hwAssignments } = weekLessonIds.length > 0
+              ? await supabase
+                  .from('homework_assignments')
+                  .select('result, check_status, assigned_date, checked_at, lesson_record_id')
+                  .eq('student_id', student.id)
+                  .in('lesson_record_id', weekLessonIds)
+                  .eq('check_status', 'checked')
+              : { data: [] as any[] };
+
+            for (const a of hwAssignments || []) {
+              const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
+              const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
+              if (!countedInWeek) continue;
+              const r = a.result;
+              if (!r || r === 'unable_to_verify') continue;
+              if (r === 'completed' || r === 'low_effort_completed') { hwCount++; hwScore += 1; }
+              else if (r === 'partial') { hwCount++; hwScore += 0.5; }
+              else if (r === 'not_done' || r === 'low_effort' || r === 'lost') { hwCount++; }
+            }
+
+            if (hwCount > 0) {
+              homeworkCompletionRate = Math.round((hwScore / hwCount) * 100);
+            }
+
+            // 테스트 결과: 점수 형태("18/20", "85점", "85")만 추출해 평균 백분율로 환산
+            const { data: testRows } = await supabase
+              .from('lesson_records')
+              .select('subject, test_name, test_result, test_result_text, test_name_2, test_result_2, test_result_text_2')
+              .eq('student_id', student.id)
+              .gte('lesson_date', weekStart)
+              .lte('lesson_date', weekEnd)
+              .eq('submitted', true);
+
+            const pcts: number[] = [];
+            for (const row of (testRows || []) as any[]) {
+              if (!keepSubject(row.subject)) continue;
+              const pairs: Array<[any, any]> = [
+                [row.test_name, `${row.test_result ?? ''} ${row.test_result_text ?? ''}`],
+                [row.test_name_2, `${row.test_result_2 ?? ''} ${row.test_result_text_2 ?? ''}`],
+              ];
+              for (const [name, raw] of pairs) {
+                const text = String(raw || '').trim();
+                if (!name && !text) continue;
+                if (text) hasTestRecords = true;
+                const frac = text.match(/(\d{1,3})\s*\/\s*(\d{1,3})/);
+                if (frac && Number(frac[2]) > 0) {
+                  pcts.push(Math.min(100, (Number(frac[1]) / Number(frac[2])) * 100));
+                  continue;
+                }
+                const num = text.match(/(\d{1,3})\s*점?/);
+                if (num) {
+                  const v = Number(num[1]);
+                  if (v >= 0 && v <= 100) pcts.push(v);
+                }
+              }
+            }
+            if (pcts.length > 0) {
+              testAvgScore = Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+            }
+          }
+
+          const reportFacts = {
+            hasLessonData: lessonCount > 0,
+            subjects: [...new Set(includedLessons.map((l: any) => l.subject).filter(Boolean))] as string[],
+            homeworkRate: homeworkCompletionRate,
+            understandingAvg: avgUnderstanding,
+            testAvgScore,
+            hasTestRecords,
+          };
+          const neutralParent = (header: string, hasData: boolean) =>
+            (hasData ? factualParentTemplate(header, reportFacts) : null) ||
+            neutralParentTemplate(header, hasData);
+          const neutralStudent = (hasData: boolean) =>
+            (hasData ? factualStudentTemplate(reportFacts) : null) || neutralStudentTemplate(hasData);
+
           if (!aiReportData || validatorStatus === 'fail') {
             // WEEKLY-REPORT-FALLBACK-V4: 사용자 노출 표식 없이 중립 문안만 저장한다.
             validatorStatus = 'fail';
@@ -570,8 +670,9 @@ Deno.serve(async (req) => {
             qualityTag = 'YELLOW';
 
             const header = formatParentHeader(student.name, weekStart, weekEnd);
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParentTemplate(header, lessonCount > 0)}`;
-            finalStudentMessageToSave = neutralStudentTemplate(lessonCount > 0);
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${neutralParent(header, lessonCount > 0)}`;
+            finalStudentMessageToSave = neutralStudent(lessonCount > 0);
+
           } else {
 
             riskLevelFromAi = aiReportData?.risk_level || 'low';
