@@ -228,15 +228,16 @@ export function RosterActionModal({
       let recordId = context.existingRecordId;
       
       if (!recordId) {
-        // Check if record exists
-        const { data: existing, error: existingError } = await supabase
+        // HW-VISIBILITY-FIX-V1: class_id 조건을 빼고 학생·날짜·과목 기준으로 조회(중복 방지 규칙과 동일)
+        const { data: existingList, error: existingError } = await supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', context.student_id)
-          .eq('class_id', context.class_id)
           .eq('lesson_date', context.date)
           .eq('subject', context.subject as SubjectType)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const existing = existingList?.[0] || null;
         
         if (existingError) {
           console.error('[fetchData] lesson_records SELECT failed:', existingError.code, existingError.message);
@@ -310,7 +311,8 @@ export function RosterActionModal({
           const { data: homework, error: hwError } = await supabase
             .from('homework_assignments')
             .select('*')
-            .eq('lesson_record_id', record.id);
+            .eq('lesson_record_id', record.id)
+            .order('created_at', { ascending: true });
           
           if (hwError) {
             console.error('[fetchData] homework_assignments SELECT failed:', hwError.code, hwError.message);
@@ -318,6 +320,8 @@ export function RosterActionModal({
           
           if (homework && homework.length > 0) {
             setNewHomeworkItems(homework.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
+          } else {
+            setNewHomeworkItems([{ content: '' }]);
           }
         }
       }
@@ -664,14 +668,16 @@ export function RosterActionModal({
       let recordId = lessonRecord?.id;
       
       if (!recordId) {
-        const { data: existing } = await supabase
+        // HW-VISIBILITY-FIX-V1: class_id 조건 제거(같은 학생·날짜·과목이면 같은 일지)
+        const { data: existingList } = await supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', context.student_id)
-          .eq('class_id', context.class_id)
           .eq('lesson_date', context.date)
           .eq('subject', context.subject as SubjectType)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
+        const existing = existingList?.[0] || null;
         
         if (existing) {
           recordId = existing.id;
@@ -708,9 +714,20 @@ export function RosterActionModal({
         items: validItems.map(item => ({ id: item.id, content: item.content })),
       });
       
+      // HW-VISIBILITY-FIX-V1: 저장 직후 DB에서 다시 읽어 화면에 실제 저장 결과를 표시
+      const { data: savedHw } = await supabase
+        .from('homework_assignments')
+        .select('id, content')
+        .eq('lesson_record_id', recordId)
+        .order('created_at', { ascending: true });
+      
+      if (savedHw && savedHw.length > 0) {
+        setNewHomeworkItems(savedHw.map((hw: any) => ({ id: hw.id, content: hw.content || '' })));
+      }
+      
       toast({
         title: '저장 완료',
-        description: `숙제 ${validItems.length}개가 저장되었습니다`,
+        description: `숙제 ${savedHw?.length ?? validItems.length}개가 저장되었습니다`,
       });
       
       onSaved?.();
