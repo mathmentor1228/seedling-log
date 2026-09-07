@@ -771,56 +771,9 @@ Deno.serve(async (req) => {
 
 
 
-          // Calculate stats
-          let avgUnderstanding: number | null = null;
-          let homeworkCompletionRate: number | null = null;
+          // (stats는 위에서 미리 계산됨 — WEEKLY-REPORT-NEUTRAL-FACTS-V1)
           const commonIssues: string[] = [];
 
-          if (lessons && lessons.length > 0) {
-            const scores = lessons.map((l) => l.understanding_score).filter((s) => s !== null);
-            if (scores.length > 0) {
-              avgUnderstanding = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-            }
-
-            // HW-RATE-FIX + HW-MERGE-V1: enum values are completed/partial/not_done/none_assigned.
-            // Combine lesson_records.homework_status AND homework_assignments (DailyHomeworkChecklist).
-            const hwLessons = lessons.filter(
-              (l) => l.homework_status && l.homework_status !== 'none_assigned' && l.homework_status !== 'none'
-            );
-            let hwCount = hwLessons.length;
-            let hwScore = hwLessons.reduce((acc, l) => {
-              if (l.homework_status === 'completed') return acc + 1;
-              if (l.homework_status === 'partial') return acc + 0.5;
-              return acc;
-            }, 0);
-
-            // WEEKLY-REPORT-REPAIR-V1: 해당 주 제출 일지에 lesson_record_id로 연결된 숙제만 집계.
-            // 미연결(regular 고아) 숙제는 주간리포트 통계에 섞지 않는다.
-            const weekLessonIds = (lessons || []).map((l) => l.id);
-            const { data: hwAssignments } = weekLessonIds.length > 0
-              ? await supabase
-                  .from('homework_assignments')
-                  .select('result, check_status, assigned_date, checked_at, lesson_record_id')
-                  .eq('student_id', student.id)
-                  .in('lesson_record_id', weekLessonIds)
-                  .eq('check_status', 'checked')
-              : { data: [] as any[] };
-
-            for (const a of hwAssignments || []) {
-              const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
-              const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
-              if (!countedInWeek) continue;
-              const r = a.result;
-              if (!r || r === 'unable_to_verify') continue;
-              if (r === 'completed' || r === 'low_effort_completed') { hwCount++; hwScore += 1; }
-              else if (r === 'partial') { hwCount++; hwScore += 0.5; }
-              else if (r === 'not_done' || r === 'low_effort' || r === 'lost') { hwCount++; }
-            }
-
-            if (hwCount > 0) {
-              homeworkCompletionRate = Math.round((hwScore / hwCount) * 100);
-            }
-          }
 
           let riskLevel: string | null = riskLevelFromAi || 'low';
           if (lessonCount === 0) {
