@@ -258,7 +258,7 @@ export default function Lessons() {
 
   useEffect(() => {
     fetchLessons();
-  }, [user, role, filterStartDate, filterEndDate, filterStatus, filterHomeworkStatus, filterSubject, filterTeacherId, searchQuery, currentPage]);
+  }, [user, role, filterStartDate, filterEndDate, filterStatus, filterHomeworkStatus, filterSubject, filterTeacherId, searchQuery, currentPage, pageSizeOption]);
 
   // Deep link handling
   useEffect(() => {
