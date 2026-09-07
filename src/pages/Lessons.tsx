@@ -874,7 +874,8 @@ export default function Lessons() {
     filterTeacherId !== 'all' ||
     searchQuery !== '';
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = pageSizeOption === 'all' ? 1 : Math.ceil(totalCount / PAGE_SIZE);
+  const periodLabel = `${filterStartDate || '전체'} ~ ${filterEndDate || '오늘'}`;
 
   if (loading) {
     return (
