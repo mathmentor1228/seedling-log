@@ -3,6 +3,7 @@
 // 순수 함수만 포함한다(운영 DB 접근 없음) → 단위 테스트 가능.
 
 export type SafetyViolation =
+  | 'NO_RECORD_CLAIM'
   | 'COUNT_EXPOSURE'
   | 'FUTURE_PROMISE'
   | 'ABSOLUTE_TERM'
@@ -68,7 +69,16 @@ const HARSH_TONE_PATTERNS: RegExp[] = [
   /(반성|각성|분발)(이\s*필요합니다|해야\s*합니다)/,
 ];
 
+// 8) WEEKLY-REPORT-NORECORD-V1: "관찰/기록이 없다"는 식으로 교사가 지켜보지 않았다는 인상을 주는 표현 전면 차단
+const NO_RECORD_CLAIM_PATTERNS: RegExp[] = [
+  /(관찰|수업|학습|특이사항|코멘트|기록|일지)\s*(기록)?\s*(이|가)?\s*(없|남아\s*있지\s*않|부족해서|많지\s*않아서)/,
+  /(작성하기가|말씀드리기(가)?|얘기해주기(가)?|설명드리기(가)?)\s*(조금\s*)?(어렵|힘들)/,
+  /(떠올려\s*봤어|떠올려\s*보았)/,
+  /(별다른|특별히\s*남겨둘\s*만한)\s*\S*\s*(없|않)/,
+];
+
 const GROUPS: Array<{ type: SafetyViolation; patterns: RegExp[] }> = [
+  { type: 'NO_RECORD_CLAIM', patterns: NO_RECORD_CLAIM_PATTERNS },
   { type: 'COUNT_EXPOSURE', patterns: COUNT_EXPOSURE_PATTERNS },
   { type: 'FUTURE_PROMISE', patterns: FUTURE_PROMISE_PATTERNS },
   { type: 'ABSOLUTE_TERM', patterns: ABSOLUTE_TERM_PATTERNS },
