@@ -3,6 +3,7 @@
 // 순수 함수만 포함한다(운영 DB 접근 없음) → 단위 테스트 가능.
 
 export type SafetyViolation =
+  | 'NO_RECORD_CLAIM'
   | 'COUNT_EXPOSURE'
   | 'FUTURE_PROMISE'
   | 'ABSOLUTE_TERM'
@@ -68,7 +69,18 @@ const HARSH_TONE_PATTERNS: RegExp[] = [
   /(반성|각성|분발)(이\s*필요합니다|해야\s*합니다)/,
 ];
 
+// 8) WEEKLY-REPORT-NORECORD-V1: "관찰/기록이 없다"는 식으로 교사가 지켜보지 않았다는 인상을 주는 표현 전면 차단
+const NO_RECORD_CLAIM_PATTERNS: RegExp[] = [
+  /(관찰|수업|학습|특이사항|코멘트|기록|일지)\s*(기록)?\s*(이|가)?\s*(없|남아\s*있지\s*않|부족해서|많지\s*않아서)/,
+  /(작성하기가|말씀드리기(가)?|얘기해주기(가)?|설명드리기(가)?)\s*(조금\s*)?(어렵|힘들)/,
+  /(떠올려\s*봤어|떠올려\s*보았)/,
+  /(별다른|특별히|딱히|눈에\s*띄는)[^.\n]{0,25}(없었|없지만|없어서|없네|없음)/,
+  /(기록|메모|관찰)[^.\n]{0,15}(하지\s*못|남기지\s*못|되지\s*않았)/,
+  /(구체적으로|자세히)\s*(기록|관찰|남기)[^.\n]{0,10}못/,
+];
+
 const GROUPS: Array<{ type: SafetyViolation; patterns: RegExp[] }> = [
+  { type: 'NO_RECORD_CLAIM', patterns: NO_RECORD_CLAIM_PATTERNS },
   { type: 'COUNT_EXPOSURE', patterns: COUNT_EXPOSURE_PATTERNS },
   { type: 'FUTURE_PROMISE', patterns: FUTURE_PROMISE_PATTERNS },
   { type: 'ABSOLUTE_TERM', patterns: ABSOLUTE_TERM_PATTERNS },
@@ -255,6 +267,7 @@ export function factualStudentTemplate(facts: ReportFacts): string | null {
 
 // generate-ai-report에 함께 전달하는 생성 규칙(프롬프트 강화용)
 export const CONTENT_SAFETY_RULES = [
+  '어떤 경우에도 "관찰 기록이 없다", "기록이 없어서 쓰기 어렵다", "떠올려 봤다"처럼 교사가 학생을 지켜보지 않았다는 인상을 주는 표현을 쓰지 말 것. 근거가 적으면 확인된 사실(과제 이행, 테스트, 수업 범위)만 담백하게 쓸 것.',
   '학부모/학생 문안과 subject_breakdown 등 외부 노출 텍스트에 실제 수업 횟수, 일지 수, 기록 수를 숫자로 쓰지 말 것.',
   '구체적인 미래 실행 계획, 약속, 보장 표현 금지. 대신 "유의 깊게 살필 부분", "조금 더 지켜볼 부분"처럼 관찰 방향만 서술.',
   '성격·태도·의도 단정, 학생 간 비교, 항상/절대/완벽 등 절대어, 불안을 유발하는 표현 금지.',
