@@ -55,6 +55,8 @@ import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGen
 import { useSearchParams } from 'react-router-dom';
 import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
 import { WeekProgressSummary, type StatusFilter } from '@/components/reports/WeekProgressSummary';
+import { ReportFullTextList } from '@/components/reports/ReportFullTextList';
+
 import {
   getWriteStatus, getDeliveryStatus, summarizeWeek, nextNeedsReview, WRITE_STATUS_LABEL,
 } from '@/lib/reportStatus';
