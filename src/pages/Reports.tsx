@@ -1367,6 +1367,28 @@ export default function Reports() {
                 </span>
               </div>
             </div>
+
+            {/* REPORT-FULLTEXT-V1: 보기 방식 전환 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground mr-1">보기:</span>
+              <Button
+                variant={listView === 'table' ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setListView('table')}
+              >
+                표 보기
+              </Button>
+              <Button
+                variant={listView === 'full' ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setListView('full')}
+              >
+                문안 한눈에 보기
+              </Button>
+            </div>
+
           </div>
         </CardHeader>
         <CardContent>
