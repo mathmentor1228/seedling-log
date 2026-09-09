@@ -1401,6 +1401,12 @@ export default function Reports() {
                   : '아직 생성된 리포트가 없습니다. 리포트는 매주 금요일에 자동 생성됩니다.'}
               </p>
             </div>
+          ) : listView === 'full' ? (
+            <ReportFullTextList
+              reports={filteredReports}
+              clean={stripDebugMarkers}
+              onCopy={copyToClipboard}
+            />
           ) : (
             <div className="overflow-x-auto">
               {/* Bulk delete action bar */}
