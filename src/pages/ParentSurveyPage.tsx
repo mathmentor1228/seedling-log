@@ -421,7 +421,7 @@ export default function ParentSurveyPage() {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-3">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">홍보 활용 예시</p>
+              <p className="text-[10px] tracking-wider text-muted-foreground mb-2">홍보 활용 예시 · 실제 학생이 아닌 가상의 예시입니다</p>
               <p className="text-sm text-foreground leading-relaxed">
                 중2 김○ 학생 / 수학 62점 → 88점 / 오답 점검과 주간 테스트를 꾸준히 진행했습니다.
               </p>
@@ -449,7 +449,7 @@ export default function ParentSurveyPage() {
             <div className="text-xs text-muted-foreground leading-relaxed space-y-1">
               <p>이 항목은 위의 수업기록 전달 선택과 완전히 분리된 자율 동의입니다. 선택하지 않으시거나 설문에 응답하지 않으시면 홍보 활용에는 동의하지 않은 것으로 처리됩니다.</p>
               <p>동의하지 않으셔도 수강·학습관리·수업기록 전달에 어떤 영향도 없습니다.</p>
-              <p>공개 기간은 게시 후 1년 또는 철회 시까지이며, 철회는 더멘토학원 카카오톡 채널로 언제든 요청하실 수 있습니다.</p>
+              <p>공개 기간은 게시 후 1년 또는 철회 시까지이며, 철회는 더멘토학원 카카오톡 채널 또는 전화 010-2752-4210으로 언제든 요청하실 수 있습니다.</p>
             </div>
 
           </CardContent>
@@ -459,6 +459,12 @@ export default function ParentSurveyPage() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           1분 설문 저장하기
         </Button>
+
+        <p className="text-[11px] text-muted-foreground leading-relaxed text-center px-2 pt-1">
+          수집·이용 주체: 더멘토학원 (교육청 등록 제4605호)
+          <br />
+          문의 및 동의 철회: 010-2752-4210 · 더멘토학원 카카오톡 채널
+        </p>
         <div className="h-6" />
       </main>
     </div>
