@@ -187,6 +187,10 @@ export default function Reports() {
   // Active main tab
   const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
 
+  // REPORT-FULLTEXT-V1: 표 보기 / 문안 한눈에 보기
+  const [listView, setListView] = useState<'table' | 'full'>('table');
+
+
   // Custom week range state
   const [weekStart, setWeekStart] = useState<string>(() => {
     const lastWeek = subWeeks(new Date(), 1);
