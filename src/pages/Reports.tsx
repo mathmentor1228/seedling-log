@@ -55,6 +55,8 @@ import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGen
 import { useSearchParams } from 'react-router-dom';
 import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
 import { WeekProgressSummary, type StatusFilter } from '@/components/reports/WeekProgressSummary';
+import { ReportFullTextList } from '@/components/reports/ReportFullTextList';
+
 import {
   getWriteStatus, getDeliveryStatus, summarizeWeek, nextNeedsReview, WRITE_STATUS_LABEL,
 } from '@/lib/reportStatus';
@@ -186,6 +188,10 @@ export default function Reports() {
 
   // Active main tab
   const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
+
+  // REPORT-FULLTEXT-V1: 표 보기 / 문안 한눈에 보기
+  const [listView, setListView] = useState<'table' | 'full'>('table');
+
 
   // Custom week range state
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -1361,6 +1367,28 @@ export default function Reports() {
                 </span>
               </div>
             </div>
+
+            {/* REPORT-FULLTEXT-V1: 보기 방식 전환 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground mr-1">보기:</span>
+              <Button
+                variant={listView === 'table' ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setListView('table')}
+              >
+                표 보기
+              </Button>
+              <Button
+                variant={listView === 'full' ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setListView('full')}
+              >
+                문안 한눈에 보기
+              </Button>
+            </div>
+
           </div>
         </CardHeader>
         <CardContent>
@@ -1373,6 +1401,12 @@ export default function Reports() {
                   : '아직 생성된 리포트가 없습니다. 리포트는 매주 금요일에 자동 생성됩니다.'}
               </p>
             </div>
+          ) : listView === 'full' ? (
+            <ReportFullTextList
+              reports={filteredReports}
+              clean={stripDebugMarkers}
+              onCopy={copyToClipboard}
+            />
           ) : (
             <div className="overflow-x-auto">
               {/* Bulk delete action bar */}
