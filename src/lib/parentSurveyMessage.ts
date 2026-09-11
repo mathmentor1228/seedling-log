@@ -3,7 +3,7 @@ export const PUBLISHED_ORIGIN = 'https://seedling-log.lovable.app';
 export const surveyUrl = (token: string) => `${PUBLISHED_ORIGIN}/parent/survey?token=${token}`;
 
 export const buildSurveyKakaoMessage = (link: string) =>
-  `[더멘토학원] 아이의 학습 상황, 어떻게 전해드릴까요 (1분 소요)\n\n선생님이 매 수업 뒤 아이의 수업 내용과 숙제, 이해도를 기록하고 있습니다.\n\n그 기록을 학부모님께 조금 더 편하게, 조금 더 도움이 되게 전해드리고 싶습니다. 1분이면 되니 잠시 관심을 부탁드립니다. 골라주신 방식에 맞춰 전해드리겠습니다.\n\n세 가지 중 하나만 고르시면 됩니다. 어떤 메시지를 받게 되는지 화면에서 미리 보실 수 있습니다.\n\n선택하지 않으셔도 괜찮습니다. 지금처럼 학부모 웹페이지에서 확인하시면 되고, 학원 공지는 기존과 같이 카카오톡으로 보내드립니다.\n\n${link}`;
+  `[더멘토학원] 아이의 학습 상황, 전달방법을 선택해주세요. (1분 소요)\n\n안녕하세요. 멘토입니다.\n선생님이 매 수업 뒤 아이의 수업 내용과 숙제, 이해도를 기록하고 있습니다.\n아이들의 학습 진행과정을 보다 편하게 받아보실 수 있도록,\n선택하는 설문조사입니다.\n\n선택하지 않으신 경우, 기존 방법과 동일하게\n학부모 웹페이지에서 확인하시면 됩니다.\n학원 공지는 기존과 같이 카카오톡으로 보내드릴 예정입니다.\n\n체계적인 학습 관리체계를 위하여 함께 고민해주시면\n감사하겠습니다 ^^\n\n${link}`;
 
 export async function fetchParentToken(studentId: string): Promise<string> {
   const res = await fetch(
