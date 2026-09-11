@@ -102,9 +102,11 @@ Deno.serve(async (req) => {
         continue;
       }
       const link = `${SURVEY_BASE}?token=${token}`;
+      // 알림톡은 템플릿에 등록된 변수만 허용한다. 승인 템플릿(학부모설문안내)은
+      // 본문의 #{학생명}과 버튼 링크의 #{token}만 쓰므로 #{설문링크}는 보내지 않는다.
+      // link 자체는 아래 dry_run 미리보기에서 계속 쓴다.
       const variables = {
         '#{학생명}': s.name,
-        '#{설문링크}': link,
         '#{token}': token,
       };
       previews.push({
