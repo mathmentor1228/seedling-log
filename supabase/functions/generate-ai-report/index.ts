@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAttendanceIssues } from '../_shared/attendance.ts';
+import { givenName, nameTopic, nameVocative } from '../_shared/name.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -154,6 +155,8 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
 **정보 출처 (Source of Truth):**
 반드시 아래 필드에서 직접 확인된 내용만 서술:
 - learning_issues_note (교사의 상세 관찰 기록)
+- notes (담당 선생님이 학부모 공유용으로 남긴 수업 메모 — 그대로 옮기지 말고 자연스럽게 반영)
+- lesson_range (이번 수업에서 다룬 진도·범위 — 단원·개념명의 출처)
 - next_lesson_goal (교사가 명시한 다음 수업 방향)
 - homework_check_note (숙제 관찰 메모)
 - test_result_text (테스트 결과 기록)
@@ -201,7 +204,7 @@ const RETRY_SYSTEM_PROMPT = `당신은 학원 담당 선생님입니다.
 
 **[REPORT_TEACHER_GROUNDED_NARRATIVE_V1] 핵심 원칙:**
 - 교사가 기록한 내용만 다시 표현 (추측/창작 금지)
-- learning_issues_note, next_lesson_goal 필드 내용만 사용
+- learning_issues_note, notes(수업 메모), lesson_range(진도), next_lesson_goal 필드 내용만 사용
 - 교사가 기록하지 않은 "심화", "확장", "다음 단계" 언급 금지
 
 **절대 금지:**
@@ -359,6 +362,9 @@ interface LessonRecord {
   learning_issues: string[] | null;
   learning_issues_note: string | null;
   next_lesson_goal: string | null;
+  // REPORT-INPUT-WIDEN-V1: 강사가 실제로 쓰는 두 칸을 AI 입력에 포함한다.
+  notes?: string | null;          // 수업 메모(학부모 공유)
+  lesson_range?: string | null;   // 진도·수업 범위
   lesson_types: string[] | null;
   attendance_status: string[] | null;
   test_result_text: string | null;
@@ -879,6 +885,8 @@ Deno.serve(async (req) => {
 
     // Check if we have sufficient narrative data
     const hasSufficientNarrativeData = currentWeekLessons.some(l => 
+      (l.notes && l.notes.trim().length > 10) ||
+      (l.lesson_range && l.lesson_range.trim().length > 10) ||
       (l.learning_issues_note && l.learning_issues_note.trim().length > 20) || 
       (l.next_lesson_goal && l.next_lesson_goal.trim().length > 10)
     );
@@ -1253,7 +1261,7 @@ function formatParentHeader(studentName: string, weekStart: string, weekEnd: str
   const endMonth = endDate.getMonth() + 1;
   const endDay = endDate.getDate();
   
-  return `[더멘토] ${studentName} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
+  return `[더멘토] ${givenName(studentName)} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
 }
 
 // v2.2 JSON-focused user prompt builder
@@ -1309,6 +1317,12 @@ function buildJsonUserPrompt(
       
       if (lesson.learning_issues_note) {
         prompt += `  [상세 관찰 기록]: ${lesson.learning_issues_note}\n`;
+      }
+      if (lesson.lesson_range && lesson.lesson_range.trim()) {
+        prompt += `  진도·수업 범위: ${lesson.lesson_range.trim()}\n`;
+      }
+      if (lesson.notes && lesson.notes.trim()) {
+        prompt += `  수업 메모(학부모 공유): ${lesson.notes.trim()}\n`;
       }
       
       if (lesson.next_lesson_goal) {
@@ -1620,7 +1634,7 @@ async function generateSingleSubjectReport(
 
 **핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
 
-- 정보 출처: learning_issues_note, next_lesson_goal, homework_check_note, test_result_text
+- 정보 출처: learning_issues_note, notes(수업 메모·학부모 공유), lesson_range(진도·범위), next_lesson_goal, homework_check_note, test_result_text
 - ${subject} 과목 전용 용어만 사용
 - 다른 과목 용어 혼용 절대 금지
 - 글머리 기호(·, -, •) 사용 금지
@@ -1835,6 +1849,12 @@ async function generateOpeningClosingNotes(
       if (lesson.learning_issues_note && lesson.learning_issues_note.trim().length > 10) {
         positiveObservations.push(`[${subj} ${lesson.lesson_date}] ${lesson.learning_issues_note.trim()}`);
       }
+      if (lesson.notes && lesson.notes.trim().length > 10) {
+        positiveObservations.push(`[${subj} ${lesson.lesson_date} 수업 메모] ${lesson.notes.trim()}`);
+      }
+      if (lesson.lesson_range && lesson.lesson_range.trim().length > 5) {
+        positiveObservations.push(`[${subj} ${lesson.lesson_date} 진도] ${lesson.lesson_range.trim()}`);
+      }
     }
   }
 
@@ -1905,7 +1925,7 @@ async function generateOpeningClosingNotes(
 
 반드시 유효한 JSON만 출력하세요.`;
 
-  const userPrompt = `학생: ${studentName}
+  const userPrompt = `학생: ${studentName} (부르는 이름: ${givenName(studentName)} → "${nameTopic(studentName)}"으로 시작. 성은 붙이지 않는다)
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subjects.join(', ')}
 총 수업: ${totalLessons}회
@@ -1940,7 +1960,7 @@ JSON만 출력하세요.`;
     if (!response.ok) {
       console.error('[generate-ai-report] Opening/closing notes AI error:', response.status);
       return {
-        openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
+        openingNote: `${nameTopic(studentName)} 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     }
@@ -1957,20 +1977,20 @@ JSON만 출력하세요.`;
     try {
       const parsed = JSON.parse(content);
       return {
-        openingNote: parsed.openingNote || `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
+        openingNote: parsed.openingNote || `${nameTopic(studentName)} 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: parsed.closingNote || '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     } catch {
       console.error('[generate-ai-report] Opening/closing notes JSON parse error');
       return {
-        openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
+        openingNote: `${nameTopic(studentName)} 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     }
   } catch (error) {
     console.error('[generate-ai-report] Opening/closing notes error:', error);
     return {
-      openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
+      openingNote: `${nameTopic(studentName)} 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
       closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
     };
   }
@@ -1991,28 +2011,32 @@ async function generateStudentMessage(
   let lastViolations: string[] = [];
 
   // Build detailed observation data from teacher notes
+  // REPORT-INPUT-WIDEN-V1: 그 주 수업 전부를 넘기고, 진도·수업 메모도 포함한다 (마지막 수업 하나만 보던 것을 교정).
   const observationData = Object.entries(subjectData).map(([subject, data]) => {
-    const recentLesson = data.lessons[data.lessons.length - 1];
-    const note = recentLesson?.learning_issues_note || '';
-    const goal = recentLesson?.next_lesson_goal || '';
-    const hwNote = recentLesson?.homework_check_note || '';
-    return `[${subject}] 수업 ${data.lessons.length}회
-  관찰 기록: ${note || '(없음)'}
-  다음 수업 방향: ${goal || '(없음)'}
-  숙제 관찰: ${hwNote || '(없음)'}`;
+    const lines = data.lessons.map((l) => {
+      const parts = [`  ${l.lesson_date}`];
+      if (l.lesson_range && l.lesson_range.trim()) parts.push(`진도: ${l.lesson_range.trim()}`);
+      if (l.learning_issues_note && l.learning_issues_note.trim()) parts.push(`관찰: ${l.learning_issues_note.trim()}`);
+      if (l.notes && l.notes.trim()) parts.push(`수업 메모: ${l.notes.trim()}`);
+      if (l.homework_check_note && l.homework_check_note.trim()) parts.push(`숙제 관찰: ${l.homework_check_note.trim()}`);
+      if (l.test_result_text && l.test_result_text.trim()) parts.push(`테스트: ${l.test_result_text.trim()}`);
+      if (l.next_lesson_goal && l.next_lesson_goal.trim()) parts.push(`다음 수업 방향: ${l.next_lesson_goal.trim()}`);
+      return parts.join(' / ');
+    });
+    return `[${subject}] 수업 ${data.lessons.length}회\n${lines.join('\n')}`;
   }).join('\n');
 
   while (attempts < maxRetries) {
     attempts++;
     const isRetry = attempts > 1;
 
-    const studentUserPrompt = `학생 이름: ${studentName}
+    const studentUserPrompt = `학생 이름: ${studentName} (부르는 이름: ${givenName(studentName)} → "${nameVocative(studentName)}"로 부른다. 성은 붙이지 않는다)
 기간: ${weekStart} ~ ${weekEnd}
 
 [STUDENT_REPORT_TONE_V2_TEACHER_VOICE 규칙]
 ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감지됨: ${lastViolations.join(', ')}\n` : ''}
 **학생 이름 호칭 (필수):**
-- 첫 문장에서 "${studentName}아" 또는 "${studentName}야"로 다정하게 불러주세요.
+- 첫 문장에서 "${nameVocative(studentName)}"처럼 성을 뗀 이름으로 다정하게 불러주세요.
 - 이름 끝이 받침이면 "아", 받침 없으면 "야"
 
 **절대 금지:**
@@ -2032,7 +2056,7 @@ ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감
 - 기록이 없으면 "다음 시간에 이어서 같이 볼 거야."
 
 **권장 표현:**
-- "${studentName}아, 이번 수업에서는 ~하는 모습이 보였어."
+- "${nameVocative(studentName)}, 이번 수업에서는 ~하는 모습이 보였어."
 - "~할 때 잠시 멈칫했지만 다시 시도했어."
 - "이 부분은 다음 시간에 다시 같이 볼 거야."
 - "아직 익숙하지 않은 단계야."
@@ -2118,7 +2142,7 @@ function generateFallbackStudentMessage(
   for (const [subject, data] of Object.entries(subjectData)) {
     const recentLesson = data.lessons[data.lessons.length - 1];
     if (recentLesson?.learning_issues_note && !observation) {
-      observation = `${studentName}아, 이번 ${subject} 수업에서 ${recentLesson.learning_issues_note.slice(0, 40)}하는 모습이 보였어.`;
+      observation = `${nameVocative(studentName)}, 이번 ${subject} 수업에서 ${recentLesson.learning_issues_note.slice(0, 40)}하는 모습이 보였어.`;
     }
     if (recentLesson?.next_lesson_goal && !nextFocus) {
       nextFocus = `다음 시간에는 ${recentLesson.next_lesson_goal} 부분 다시 같이 볼 거야.`;
@@ -2128,7 +2152,7 @@ function generateFallbackStudentMessage(
   
   // Default fallback with teacher-voice tone
   if (!observation) {
-    observation = `${studentName}아, 이번 주 수업 내용을 정리해봤어.`;
+    observation = `${nameVocative(studentName)}, 이번 주 수업 내용을 정리해봤어.`;
   }
   if (!nextFocus) {
     nextFocus = '다음 시간에 이어서 같이 볼 거야.';
