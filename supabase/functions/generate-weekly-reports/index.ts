@@ -11,6 +11,7 @@ import {
   factualParentTemplate,
   factualStudentTemplate,
 } from './safety.ts';
+import { givenName } from '../_shared/name.ts';
 
 // WEEKLY-REPORT-TEACHER-EXCLUDE-V2 (과목 단위 제외)
 // 담당 선생님이 주간 코멘트를 직접 작성하는 교사. 해당 교사가 담당하는 "과목"의 근거/문안만
@@ -54,7 +55,7 @@ interface ErrorDetail {
 // v2.4 FINAL SAVE VALIDATOR - stricter forbidden patterns
 const FORBIDDEN_PATTERNS_V24 = {
   bracketHeaders: /【/,
-  bulletDot: /·/,
+  bulletDot: /(^|\n)\s*·/,
   newlineDash: /\n-\s/,
   newlineBullet: /\n•/,
   labelLearningPoints: /학습\s*포인트\s*[:：]/i,
@@ -112,7 +113,7 @@ function formatParentHeader(studentName: string, weekStart: string, weekEnd: str
   const endMonth = endDate.getMonth() + 1;
   const endDay = endDate.getDate();
 
-  return `[더멘토] ${studentName} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
+  return `[더멘토] ${givenName(studentName)} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
 }
 
 // Determine quality tag based on validation and content
@@ -659,10 +660,10 @@ Deno.serve(async (req) => {
             hasTestRecords,
           };
           const neutralParent = (header: string, hasData: boolean) =>
-            (hasData ? factualParentTemplate(header, reportFacts) : null) ||
-            neutralParentTemplate(header, hasData);
+            (hasData ? factualParentTemplate(header, reportFacts, student.name) : null) ||
+            neutralParentTemplate(header, hasData, student.name);
           const neutralStudent = (hasData: boolean) =>
-            (hasData ? factualStudentTemplate(reportFacts) : null) || neutralStudentTemplate(hasData);
+            (hasData ? factualStudentTemplate(reportFacts, student.name) : null) || neutralStudentTemplate(hasData, student.name);
 
           if (!aiReportData || validatorStatus === 'fail') {
             // WEEKLY-REPORT-FALLBACK-V4: 사용자 노출 표식 없이 중립 문안만 저장한다.

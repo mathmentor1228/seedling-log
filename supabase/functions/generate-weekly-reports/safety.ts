@@ -1,3 +1,4 @@
+import { nameTopic, nameVocative } from '../_shared/name.ts';
 // WEEKLY-REPORT-SAFETY-V1
 // 학부모/학생에게 노출 가능한 모든 텍스트에 대한 서버측 문안 검증기.
 // 순수 함수만 포함한다(운영 DB 접근 없음) → 단위 테스트 가능.
@@ -160,26 +161,30 @@ export function softenExternalText(text: string): string {
 
 
 // 위반 시 저장되는 안전 중립 템플릿
-export function neutralParentTemplate(header: string, hasLessonData: boolean): string {
+export function neutralParentTemplate(header: string, hasLessonData: boolean, studentName?: string): string {
+  const who = nameTopic(studentName);
   if (!hasLessonData) {
     return `${header}
 
-이번 주에는 학습 상황을 정리해 말씀드릴 만한 수업 기록이 확인되지 않았습니다. 학습 흐름을 판단하기에는 자료가 충분하지 않아, 현재 상태에 대한 평가는 남기지 않았습니다.
+이번 주에는 ${who} 학습 상황을 정리해 말씀드릴 만한 수업 기록이 확인되지 않았습니다. 학습 흐름을 판단하기에는 자료가 충분하지 않아, 현재 상태에 대한 평가는 남기지 않았습니다.
 
 수업 참여 상황과 과제 진행은 조금 더 유의 깊게 살필 부분으로 두고 있습니다. 궁금하신 부분은 담당 선생님께 편하게 문의해 주세요.`;
   }
 
   return `${header}
 
-이번 주 학습 내용은 담당 선생님이 남긴 기록을 바탕으로 정리하고 있습니다. 학부모님께 전해 드릴 문안은 표현을 다듬는 중입니다.
+${who} 이번 주 수업 내용을 담당 선생님이 남긴 기록을 바탕으로 정리하고 있습니다. 학부모님께 전해 드릴 문안은 표현을 다듬는 중입니다.
 
 수업 중 이해 정도와 과제 흐름은 조금 더 지켜볼 부분으로 두고 있습니다.`;
 }
 
-export function neutralStudentTemplate(hasLessonData: boolean): string {
+export function neutralStudentTemplate(hasLessonData: boolean, studentName?: string): string {
+  // 기록이 얇아도 아이에게 "기록이 없다"고 말하지 않는다. 이름을 부르고, 다음 시간을 약속한다.
+  const voc = nameVocative(studentName);
+  const call = voc ? `${voc}, ` : '';
   return hasLessonData
-    ? '이번 주 학습 내용은 선생님과 함께 다시 정리해 볼 부분이 있어요. 다음 수업에서 이어서 확인해 봐요.'
-    : '이번 주에는 확인된 학습 기록이 많지 않았어요. 다음 수업에서 함께 상황을 정리해 봐요.';
+    ? `${call}이번 주 수업에서 다룬 내용은 다음 시간에 선생님이랑 한 번 더 같이 짚을 거야. 막히는 자리 있으면 그대로 가져와, 천천히 가도 돼. 🌱`
+    : `${call}다음 시간엔 네가 어디까지 왔는지 먼저 같이 확인하고 시작할 거야. 막히는 자리 있으면 그대로 가져와, 천천히 가도 돼. 🌱`;
 }
 
 // ============================================================
@@ -221,7 +226,7 @@ function understandingSentence(avg: number | null | undefined): string | null {
 }
 
 /** 사실 기반 중립 학부모 문안. 근거가 하나도 없으면 null → 기존 중립 템플릿 사용. */
-export function factualParentTemplate(header: string, facts: ReportFacts): string | null {
+export function factualParentTemplate(header: string, facts: ReportFacts, studentName?: string): string | null {
   if (!facts.hasLessonData) return null;
   const body = [
     understandingSentence(facts.understandingAvg),
@@ -234,16 +239,17 @@ export function factualParentTemplate(header: string, facts: ReportFacts): strin
   }
 
   const subjects = (facts.subjects || []).filter(Boolean);
+  const who = nameTopic(studentName);
   const lead = subjects.length > 0
-    ? `이번 기간에는 ${subjects.join('·')} 수업 기록을 바탕으로 학습 흐름을 정리했습니다.`
-    : '이번 기간에 남은 수업 기록을 바탕으로 학습 흐름을 정리했습니다.';
+    ? `${who} 이번 기간 ${subjects.join('·')} 수업 기록을 바탕으로 학습 흐름을 정리했습니다.`
+    : `${who} 이번 기간에 남은 수업 기록을 바탕으로 학습 흐름을 정리했습니다.`;
   const tail = '전반적인 흐름이 안정적으로 이어지는지 조금 더 지켜보며, 필요한 부분은 수업 중에 함께 짚어 보려 합니다.';
 
   return `${header}\n\n${lead} ${body.join(' ')}\n\n${tail}`;
 }
 
 /** 사실 기반 중립 학생 문안(짧게). */
-export function factualStudentTemplate(facts: ReportFacts): string | null {
+export function factualStudentTemplate(facts: ReportFacts, studentName?: string): string | null {
   if (!facts.hasLessonData) return null;
   const parts: string[] = [];
   if (typeof facts.homeworkRate === 'number') {
@@ -261,7 +267,9 @@ export function factualStudentTemplate(facts: ReportFacts): string | null {
     );
   }
   if (parts.length === 0) return null;
-  return parts.join(' ');
+  const voc = nameVocative(studentName);
+  const call = voc ? `${voc}, ` : '';
+  return `${call}${parts.join(' ')} 다음 시간에 막히는 자리 있으면 그대로 가져와. 🌱`;
 }
 
 
