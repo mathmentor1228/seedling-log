@@ -1,3 +1,5 @@
+import { sendConsultationNotice } from './telegram.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -93,6 +95,20 @@ Deno.serve(async (req) => {
       } catch (notificationError) {
         console.error('consultation task notification failed', notificationError);
       }
+      // Send only after the lead has been committed. An unavailable Telegram service must
+      // never turn a successful reservation into an error or trigger a duplicate form submission.
+      const notification = sendConsultationNotice(data, {
+        botToken: Deno.env.get('CONSULTATION_TELEGRAM_BOT_TOKEN'),
+        chatId: Deno.env.get('CONSULTATION_TELEGRAM_CHAT_ID'),
+      }).then((result) => {
+        if (result.status !== 'sent') {
+          console.error('consultation telegram notification', {
+            lead_id: data.id, status: result.status, attempts: result.attempts, code: result.code,
+          });
+        }
+      }).catch(() => console.error('consultation telegram notification failed', { lead_id: data.id }));
+      // Supabase keeps this promise alive after returning the successful receipt.
+      EdgeRuntime.waitUntil(notification);
       return Response.json({ token: data.public_token }, { headers: corsHeaders });
     }
 
