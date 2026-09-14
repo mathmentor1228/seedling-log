@@ -101,11 +101,11 @@ Deno.serve(async (req) => {
         botToken: Deno.env.get('CONSULTATION_TELEGRAM_BOT_TOKEN'),
         chatId: Deno.env.get('CONSULTATION_TELEGRAM_CHAT_ID'),
       }).then((result) => {
-        if (result.status !== 'sent') {
-          console.error('consultation telegram notification', {
-            lead_id: data.id, status: result.status, attempts: result.attempts, code: result.code,
-          });
-        }
+        // Keep a PII-free delivery receipt so production notifications can be verified.
+        const log = result.status === 'sent' ? console.info : console.error;
+        log('consultation telegram notification', {
+          lead_id: data.id, status: result.status, attempts: result.attempts, code: result.code,
+        });
       }).catch(() => console.error('consultation telegram notification failed', { lead_id: data.id }));
       // Supabase keeps this promise alive after returning the successful receipt.
       EdgeRuntime.waitUntil(notification);
