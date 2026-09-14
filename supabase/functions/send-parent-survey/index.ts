@@ -162,6 +162,13 @@ Deno.serve(async (req) => {
     } else {
       const failedList: any[] = resBody?.failedMessageList ?? [];
       const failedPhones = new Set(failedList.map((f: any) => (f.to || '').replace(/[^0-9]/g, '')));
+      // 솔라피가 준 실패 사유를 그대로 보여준다. '수신 불가'로 뭉개면 템플릿 미승인·변수 불일치·번호 문제를 구분할 수 없다.
+      const failedReasonByPhone = new Map<string, string>(
+        failedList.map((f: any) => [
+          (f.to || '').replace(/[^0-9]/g, ''),
+          [f.statusCode, f.statusMessage || f.errorMessage || f.reason].filter(Boolean).join(' '),
+        ]),
+      );
       const groupId = resBody?.groupInfo?.groupId ?? null;
       messageMeta.forEach((m, i) => {
         const failed = failedPhones.has(messages[i].to);
@@ -169,7 +176,7 @@ Deno.serve(async (req) => {
           student_id: m.student_id,
           student_name: m.student_name,
           ok: !failed,
-          reason: failed ? '알림톡 발송 실패 (수신 불가)' : undefined,
+          reason: failed ? `알림톡 발송 실패: ${failedReasonByPhone.get(messages[i].to) || '사유 미제공 (수신 불가 추정)'}` : undefined,
           provider_message_id: groupId,
         });
       });
