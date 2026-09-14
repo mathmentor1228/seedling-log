@@ -54,6 +54,68 @@ Deno.serve(async (req) => {
     const studentIds: string[] = Array.isArray(body?.student_ids) ? body.student_ids : [];
     const dryRun = body?.dry_run === true;
     const testPhone = typeof body?.test_phone === 'string' ? body.test_phone.replace(/[^0-9]/g, '') : '';
+    // RECONCILE: 최근 발송 기록을 솔라피 최종 상태로 다시 맞춘다.
+    // 발송 직후엔 카카오 쪽 실패(3104·3107)가 아직 확정되지 않아 'sent'로 남을 수 있고,
+    // 옛 버전은 전화번호로 실패를 매핑해 형제 중 실제로 받은 아이까지 'failed'로 적었다.
+    if (body?.action === 'reconcile') {
+      const sinceIso = typeof body?.since === 'string' ? body.since : new Date(Date.now() - 7 * 86400000).toISOString();
+      const apiKey = Deno.env.get('SOLAPI_API_KEY');
+      const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
+      if (!apiKey || !apiSecret) return json({ error: 'not_configured', missing: ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET'] }, 400);
+
+      const { data: logRows, error: lErr } = await admin
+        .from('parent_survey_sends')
+        .select('id, student_id, status, provider_message_id, sent_at')
+        .gte('sent_at', sinceIso)
+        .not('provider_message_id', 'is', null);
+      if (lErr) return json({ error: 'log_load_failed', detail: lErr.message }, 500);
+      const rows = (logRows ?? []) as any[];
+      const sids = [...new Set(rows.map((r) => r.student_id))];
+      const { data: studs } = sids.length > 0
+        ? await admin.from('students').select('id, name').in('id', sids)
+        : { data: [] as any[] };
+      const nameById = new Map<string, string>((studs ?? []).map((x: any) => [x.id, x.name]));
+      // 옛 발송분은 customFields가 없어 본문의 "학부모님, OOO 학생"으로 되짚는다. 이름이 겹치면 건너뛴다.
+      const idsByName = new Map<string, string[]>();
+      for (const r of rows) { const n = nameById.get(r.student_id); if (!n) continue; const arr = idsByName.get(n) ?? []; if (!arr.includes(r.student_id)) arr.push(r.student_id); idsByName.set(n, arr); }
+
+      const finalBy = new Map<string, { code: string; message: string }>();
+      const groups = [...new Set(rows.map((r) => String(r.provider_message_id)))];
+      for (const gid of groups) {
+        try {
+          const auth = await solapiAuthHeader(apiKey, apiSecret);
+          const lr = await fetch(`https://api.solapi.com/messages/v4/list?groupId=${encodeURIComponent(gid)}&limit=500`, { headers: { Authorization: auth } });
+          if (!lr.ok) continue;
+          const lj = await lr.json().catch(() => ({}));
+          for (const msg of Object.values((lj?.messageList ?? {}) as Record<string, any>)) {
+            const code = String(msg.statusCode ?? '');
+            const message = String(msg.statusMessage ?? '');
+            let sid: string | null = msg?.customFields?.studentId ? String(msg.customFields.studentId) : null;
+            if (!sid) {
+              const nm = String(msg.text ?? '').match(/학부모님, (.+?) 학생/)?.[1];
+              const cands = nm ? (idsByName.get(nm) ?? []) : [];
+              if (cands.length === 1) sid = cands[0];
+            }
+            if (sid && code) finalBy.set(`${sid}|${gid}`, { code, message });
+          }
+        } catch (e) { console.warn('[send-parent-survey] reconcile group read failed:', gid, String(e)); }
+      }
+
+      const isFail = (c: string) => /^1\d{3}$/.test(c) || (/^3\d{3}$/.test(c) && c !== '3000');
+      let checked = 0; const changes: any[] = [];
+      for (const r of rows) {
+        const fin = finalBy.get(`${r.student_id}|${r.provider_message_id}`);
+        if (!fin) continue;
+        const newStatus = fin.code === '4000' ? 'sent' : isFail(fin.code) ? 'failed' : null;
+        if (!newStatus) continue; // 아직 발송중(2000/3000)
+        const newErr = newStatus === 'failed' ? `알림톡 발송 실패: ${[fin.code, fin.message].filter(Boolean).join(' ')}` : null;
+        checked++;
+        const { error: uErr } = await admin.from('parent_survey_sends').update({ status: newStatus, error_message: newErr }).eq('id', r.id);
+        if (!uErr && newStatus !== r.status) changes.push({ student_name: nameById.get(r.student_id) ?? '?', from: r.status, to: newStatus, code: fin.code });
+      }
+      return json({ action: 'reconcile', since: sinceIso, groups: groups.length, rows: rows.length, updated: checked, changed: changes.length, changes });
+    }
+
     if (studentIds.length === 0) return json({ error: 'no_targets' }, 400);
     if (testPhone && (studentIds.length < 1 || studentIds.length > 3)) return json({ error: 'test_requires_1_to_3_students' }, 400);
     const allowResend = body?.allow_resend === true;
@@ -189,7 +251,7 @@ Deno.serve(async (req) => {
       const finalByStudent = new Map<string, { code: string; message: string }>();
       if (groupId) {
         try {
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) => setTimeout(r, 8000)); // 카카오 쪽 실패(3104·3107)가 확정될 시간을 조금 더 준다
           const listAuth = await solapiAuthHeader(cfg.SOLAPI_API_KEY!, cfg.SOLAPI_API_SECRET!);
           const lr = await fetch(`https://api.solapi.com/messages/v4/list?groupId=${encodeURIComponent(groupId)}&limit=500`, {
             headers: { Authorization: listAuth },

@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Copy, Send, Eye, FlaskConical } from 'lucide-react';
+import { Loader2, Copy, Send, Eye, FlaskConical, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/hooks/use-toast';
 import { buildSurveyKakaoMessage, fetchParentToken, surveyUrl } from '@/lib/parentSurveyMessage';
@@ -159,6 +159,25 @@ function ParentLearningFeedbackContent() {
   const respondedCount = activeStudents.filter((s) => respondedIds.has(s.id)).length;
   const pendingStudents = activeStudents.filter((s) => !respondedIds.has(s.id));
   const selectedIds = activeStudents.filter((s) => selected.has(s.id)).map((s) => s.id);
+  // 솔라피 최종 상태(4000 수신 완료 / 3104·3107 카카오 미수신 / 1026 중복 등)로 최근 7일 발송 기록을 다시 맞춘다.
+  const runReconcile = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-parent-survey', { body: { action: 'reconcile' } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const changed = (data?.changes ?? []) as { student_name: string; from: string; to: string; code: string }[];
+      toast({
+        title: `발송 상태 새로고침 — ${data?.updated ?? 0}건 확인, ${changed.length}건 변경`,
+        description: changed.length
+          ? changed.map((c) => `${c.student_name} ${c.from}→${c.to} (${c.code})`).join(' · ').slice(0, 400)
+          : '변경된 기록이 없습니다.',
+      });
+    } catch (e: any) {
+      toast({ title: '발송 상태 새로고침 실패', description: e.message, variant: 'destructive' });
+    } finally { setBusy(false); }
+  };
+
   const selectedNoPhone = activeStudents.filter((s) => selected.has(s.id) && !s.parent_phone).length;
   const selectedResponded = activeStudents.filter((s) => selected.has(s.id) && respondedIds.has(s.id)).length;
 
@@ -217,6 +236,9 @@ function ParentLearningFeedbackContent() {
                   </Button>
                   <Button size="sm" disabled={busy || selectedIds.length === 0} onClick={() => setConfirmOpen(true)}>
                     <Send className="w-3.5 h-3.5 mr-1.5" />알림톡 일괄발송
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={runReconcile} title="솔라피 최종 상태로 최근 7일 발송 기록을 다시 맞춥니다">
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />발송 상태 새로고침
                   </Button>
                 </div>
 
