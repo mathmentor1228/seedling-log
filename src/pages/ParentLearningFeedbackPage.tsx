@@ -59,6 +59,8 @@ function ParentLearningFeedbackContent() {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
+  // 번호를 고친 뒤 다시 보내거나 미응답 리마인드를 보낼 때만 켠다. 켜지 않으면 이미 받은 학부모에겐 두 번 가지 않는다.
+  const [allowResend, setAllowResend] = useState(false);
   const [preview, setPreview] = useState<any | null>(null);
   const [sendResults, setSendResults] = useState<{ sent: number; failed: number; skipped: number; results: SendResult[]; test_mode?: boolean } | null>(null);
 
@@ -99,7 +101,7 @@ function ParentLearningFeedbackContent() {
   };
 
   const invokeSend = async (payload: { student_ids: string[]; dry_run?: boolean; test_phone?: string }) => {
-    const { data, error } = await supabase.functions.invoke('send-parent-survey', { body: payload });
+    const { data, error } = await supabase.functions.invoke('send-parent-survey', { body: { ...payload, allow_resend: allowResend } });
     if (error) throw new Error(error.message);
     if (data?.error === 'not_configured') {
       throw new Error(`솔라피 템플릿 등록 및 환경변수 설정 필요 — 누락: ${(data.missing || []).join(', ')}`);
@@ -240,6 +242,10 @@ function ParentLearningFeedbackContent() {
                   <Button size="sm" variant="ghost" disabled={busy} onClick={runReconcile} title="솔라피 최종 상태로 최근 7일 발송 기록을 다시 맞춥니다">
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" />발송 상태 새로고침
                   </Button>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none" title="켜지 않으면 이미 수신한 학부모는 자동으로 건너뜁니다. 번호를 고쳐 다시 보내거나 미응답 리마인드를 보낼 때만 켜세요.">
+                    <input type="checkbox" className="accent-primary" checked={allowResend} onChange={(e) => setAllowResend(e.target.checked)} />
+                    이미 보낸 아이도 다시 보내기
+                  </label>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -343,6 +349,7 @@ function ParentLearningFeedbackContent() {
                       <div>대상 학생: {selectedIds.length}명</div>
                       <div>연락처 없음(제외 예정): {selectedNoPhone}명</div>
                       <div>이미 응답한 학생 포함: {selectedResponded}명</div>
+                      {allowResend && <div className="text-amber-600">'다시 보내기'가 켜져 있어 이미 받은 학부모에게도 한 번 더 갑니다.</div>}
                       <div className="text-destructive">실제 알림톡이 발송되며 발송 비용이 발생합니다.</div>
                     </div>
                   </AlertDialogDescription>
