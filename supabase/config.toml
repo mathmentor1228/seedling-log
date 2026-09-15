@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.class-signup]
 verify_jwt = false
+
+[functions.watch-school-exams]
+verify_jwt = false

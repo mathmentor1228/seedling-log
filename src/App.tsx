@@ -21,6 +21,7 @@ const PublicReport = lazy(() => import("./pages/PublicReport"));
 const IntensiveApplyPage = lazy(() => import("./pages/IntensiveApplyPage"));
 const ClassSignupPage = lazy(() => import("./pages/ClassSignupPage"));
 const ClassSignupAdminPage = lazy(() => import("./pages/ClassSignupAdminPage"));
+const ExamSchoolSettingsPage = lazy(() => import("./pages/ExamSchoolSettingsPage"));
 const IntensiveApplicationsPage = lazy(() => import("./pages/IntensiveApplicationsPage"));
 const ParentPortal = lazy(() => import("./pages/ParentPortal"));
 const PayInfo = lazy(() => import("./pages/PayInfo"));
@@ -236,6 +237,7 @@ const App = () => (
                 <Route path="/exam-board/principal" element={<ExamDirectionPage />} />
                 <Route path="/admin/intensive-applications" element={<IntensiveApplicationsPage />} />
                 <Route path="/admin/class-signups" element={<ClassSignupAdminPage />} />
+                <Route path="/admin/exam-schools" element={<ExamSchoolSettingsPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
                 <Route path="/exam-trends" element={<ExamScoreTrendsPage />} />
