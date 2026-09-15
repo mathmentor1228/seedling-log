@@ -16,8 +16,9 @@ const UA = 'Mozilla/5.0 (compatible; TheMentorExamWatcher/1.0)';
 const EXAM_KEYWORDS = /지필|시험\s*(시간표|범위|일정)|(중간|기말)\s*고사|평가\s*계획|고사\s*(시간표|범위)|시험시간표|시험범위/;
 // 수행평가·모의고사만 다루는 글은 뺀다 (지필·중간·기말이 같이 있으면 남김)
 const EXCLUDE_ONLY = /^(?!.*(지필|중간|기말)).*(수행\s*평가|모의고사|학력평가|모의평가)/;
-const NEIS_EXAM = /지필|중간고사|기말고사/;
-const NEIS_EXCLUDE = /수행|모의|학력평가|성적/;
+// 나이스 학사일정 실제 표기 (2026-09-15 실측): 신길중 "1차 정기고사(2학년)", 선부고 "1차정기시험", 그 외 지필평가·중간고사·기말고사
+const NEIS_EXAM = /지필|정기\s*(고사|시험)|(중간|기말)\s*고사|\d\s*차\s*(고사|시험|평가)/;
+const NEIS_EXCLUDE = /수행|모의|학력평가|성적|설명회|안내/;
 
 type School = {
   id: string; name: string; official_name: string; school_level: string; neis_office_code: string | null; neis_school_code: string | null;
@@ -122,12 +123,16 @@ async function watchNeis(admin: any, school: School, key: string, horizonDays: n
     if (!NEIS_EXAM.test(name) || NEIS_EXCLUDE.test(name)) continue;
     const d = String(r.AA_YMD ?? ''); if (d.length !== 8) continue;
     const date = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-    gradeKeys.forEach((k, i) => {
-      const g = i + 1;
-      if (r[k] === 'Y' && (school.grades.length === 0 || school.grades.includes(g))) {
-        const arr = byGrade.get(g) ?? []; arr.push({ date, name }); byGrade.set(g, arr);
-      }
-    });
+    // 학년: ① 학년별 Y 플래그 → ② 행사명/내용의 "(2학년)" → ③ 없으면 학원 담당 학년 전부
+    let grades = gradeKeys.map((k, i) => (r[k] === 'Y' ? i + 1 : 0)).filter(Boolean);
+    if (grades.length === 0) {
+      const inText = [...`${name} ${r.EVENT_CNTNT ?? ''}`.matchAll(/([1-6])\s*학년/g)].map((m) => Number(m[1]));
+      grades = inText.length > 0 ? [...new Set(inText)] : [...school.grades];
+    }
+    for (const g of grades) {
+      if (school.grades.length > 0 && !school.grades.includes(g)) continue;
+      const arr = byGrade.get(g) ?? []; arr.push({ date, name }); byGrade.set(g, arr);
+    }
   }
   let cycles = 0;
   for (const [grade, list] of byGrade) {
