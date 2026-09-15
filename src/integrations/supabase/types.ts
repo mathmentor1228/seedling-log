@@ -65,6 +65,63 @@ export type Database = {
         }
         Relationships: []
       }
+      academy_schools: {
+        Row: {
+          aliases: string[]
+          boards: Json
+          created_at: string
+          grades: number[]
+          homepage_url: string | null
+          id: string
+          is_active: boolean
+          last_checked_at: string | null
+          lead_weeks: number
+          name: string
+          neis_office_code: string | null
+          neis_school_code: string | null
+          official_name: string
+          school_level: string
+          subjects: string[]
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          boards?: Json
+          created_at?: string
+          grades?: number[]
+          homepage_url?: string | null
+          id?: string
+          is_active?: boolean
+          last_checked_at?: string | null
+          lead_weeks?: number
+          name: string
+          neis_office_code?: string | null
+          neis_school_code?: string | null
+          official_name: string
+          school_level: string
+          subjects?: string[]
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          boards?: Json
+          created_at?: string
+          grades?: number[]
+          homepage_url?: string | null
+          id?: string
+          is_active?: boolean
+          last_checked_at?: string | null
+          lead_weeks?: number
+          name?: string
+          neis_office_code?: string | null
+          neis_school_code?: string | null
+          official_name?: string
+          school_level?: string
+          subjects?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_office_read_status: {
         Row: {
           id: string
@@ -1326,6 +1383,127 @@ export type Database = {
             columns: ["locked_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_cycle_subjects: {
+        Row: {
+          cycle_id: string
+          exam_date: string | null
+          exam_time: string | null
+          id: string
+          notes: string | null
+          period: number | null
+          scope: string | null
+          source: string
+          source_url: string | null
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          cycle_id: string
+          exam_date?: string | null
+          exam_time?: string | null
+          id?: string
+          notes?: string | null
+          period?: number | null
+          scope?: string | null
+          source?: string
+          source_url?: string | null
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          cycle_id?: string
+          exam_date?: string | null
+          exam_time?: string | null
+          id?: string
+          notes?: string | null
+          period?: number | null
+          scope?: string | null
+          source?: string
+          source_url?: string | null
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_cycle_subjects_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "exam_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_cycles: {
+        Row: {
+          academic_year: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          end_date: string | null
+          exam_type: string
+          grade_year: number
+          id: string
+          notes: string | null
+          school_id: string | null
+          school_level: string
+          school_name: string
+          semester: string
+          source: string
+          source_url: string | null
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          end_date?: string | null
+          exam_type: string
+          grade_year: number
+          id?: string
+          notes?: string | null
+          school_id?: string | null
+          school_level: string
+          school_name: string
+          semester: string
+          source?: string
+          source_url?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          end_date?: string | null
+          exam_type?: string
+          grade_year?: number
+          id?: string
+          notes?: string | null
+          school_id?: string | null
+          school_level?: string
+          school_name?: string
+          semester?: string
+          source?: string
+          source_url?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_cycles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "academy_schools"
             referencedColumns: ["id"]
           },
         ]
@@ -5520,6 +5698,72 @@ export type Database = {
           year?: number | null
         }
         Relationships: []
+      }
+      school_watch_log: {
+        Row: {
+          attachments: Json
+          board_name: string | null
+          created_at: string
+          cycle_id: string | null
+          extracted: Json | null
+          id: string
+          matched_keywords: string[]
+          post_key: string
+          post_url: string | null
+          posted_on: string | null
+          school_id: string | null
+          school_name: string
+          status: string
+          title: string
+        }
+        Insert: {
+          attachments?: Json
+          board_name?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          extracted?: Json | null
+          id?: string
+          matched_keywords?: string[]
+          post_key: string
+          post_url?: string | null
+          posted_on?: string | null
+          school_id?: string | null
+          school_name: string
+          status?: string
+          title: string
+        }
+        Update: {
+          attachments?: Json
+          board_name?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          extracted?: Json | null
+          id?: string
+          matched_keywords?: string[]
+          post_key?: string
+          post_url?: string | null
+          posted_on?: string | null
+          school_id?: string | null
+          school_name?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_watch_log_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "exam_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_watch_log_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "academy_schools"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       self_study_records: {
         Row: {
