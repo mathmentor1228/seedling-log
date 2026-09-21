@@ -8,6 +8,13 @@
       "when": 1789449986544,
       "tag": "0000_exam_cycles",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789950358308,
+      "tag": "0001_create_autonomous_study_survey_v2",
+      "breakpoints": true
     }
   ]
 }

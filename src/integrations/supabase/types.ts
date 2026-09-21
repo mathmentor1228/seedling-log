@@ -424,6 +424,42 @@ export type Database = {
           },
         ]
       }
+      autonomous_study_surveys: {
+        Row: {
+          created_at: string | null
+          end_time: string
+          grade: string
+          id: string
+          is_test: boolean | null
+          phone: string | null
+          start_time: string
+          student_name: string
+          survey_date: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_time: string
+          grade: string
+          id?: string
+          is_test?: boolean | null
+          phone?: string | null
+          start_time: string
+          student_name: string
+          survey_date: string
+        }
+        Update: {
+          created_at?: string | null
+          end_time?: string
+          grade?: string
+          id?: string
+          is_test?: boolean | null
+          phone?: string | null
+          start_time?: string
+          student_name?: string
+          survey_date?: string
+        }
+        Relationships: []
+      }
       billing_schedules: {
         Row: {
           base_amount: number
@@ -8978,6 +9014,15 @@ export type Database = {
       }
     }
     Functions: {
+      autonomous_study_survey_counts: {
+        Args: { _from_date: string; _to_date: string }
+        Returns: {
+          count: number
+          end_time: string
+          start_time: string
+          survey_date: string
+        }[]
+      }
       check_math_question_daily_limit: {
         Args: { _date?: string; _student_id: string }
         Returns: boolean

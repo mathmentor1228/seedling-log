@@ -39,7 +39,9 @@ import {
   Search,
   X as XIcon,
   CalendarPlus,
+  CalendarClock,
 } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -197,18 +199,20 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '조교 요청·업무', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, description: '요청 생성·배정과 조교 업무 처리 상태', allowedRoles: ['admin', 'teacher', 'assistant'] },
       ],
     },
-    {
-      label: '학생·반',
-      items: [
-        { label: '상담·등록', href: '/admin/admissions', icon: <UserCheck className="w-4 h-4" />, description: '상담 예약·사전정보·등록 전환·인계 흐름', allowedRoles: ['admin'] },
-        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, description: '학생 등록·수정·반 배정 · 학생 카르테 진입', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
-        { label: '선착순 수강신청', href: '/admin/class-signups', icon: <CalendarPlus className="w-4 h-4" />, description: '날짜·시간 개설 후 링크로 선착순 신청 접수', allowedRoles: ['admin', 'teacher'] },
-        { label: '학교·시험 일정', href: '/admin/exam-schools', icon: <School className="w-4 h-4" />, description: '담당 학교 설정 · 나이스/홈페이지 자동 감시 · 시험 사이클 초안 확인·확정', allowedRoles: ['admin', 'teacher'] },
-        { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, description: '반 생성·명단·시간표 연결', allowedRoles: ['admin'] },
-        { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도', allowedRoles: ['admin', 'teacher'] },
-        { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·입고·배부·교재비', allowedRoles: ['admin', 'teacher'] },
-      ],
-    },
+      {
+        label: '학생·반',
+        items: [
+          { label: '상담·등록', href: '/admin/admissions', icon: <UserCheck className="w-4 h-4" />, description: '상담 예약·사전정보·등록 전환·인계 흐름', allowedRoles: ['admin'] },
+          { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, description: '학생 등록·수정·반 배정 · 학생 카르테 진입', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+          { label: '선착순 수강신청', href: '/admin/class-signups', icon: <CalendarPlus className="w-4 h-4" />, description: '날짜·시간 개설 후 링크로 선착순 신청 접수', allowedRoles: ['admin', 'teacher'] },
+          { label: '추석 자습 신청 현황', href: '/admin/autonomous-study-survey', icon: <CalendarClock className="w-4 h-4" />, description: '추석 연휴 자습 희망 시간 조사 집계', allowedRoles: ['admin', 'teacher'] },
+          { label: '학교·시험 일정', href: '/admin/exam-schools', icon: <School className="w-4 h-4" />, description: '담당 학교 설정 · 나이스/홈페이지 자동 감시 · 시험 사이클 초안 확인·확정', allowedRoles: ['admin', 'teacher'] },
+          { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, description: '반 생성·명단·시간표 연결', allowedRoles: ['admin'] },
+          { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도', allowedRoles: ['admin', 'teacher'] },
+          { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·입고·배부·교재비', allowedRoles: ['admin', 'teacher'] },
+        ],
+      },
+
     {
       label: '수업·출결',
       items: [
