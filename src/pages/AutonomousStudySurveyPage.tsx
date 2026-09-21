@@ -75,6 +75,7 @@ export default function AutonomousStudySurveyPage() {
   }
 
   useEffect(() => {
+    document.title = '추석 연휴 자습 희망 시간 조사 | 더멘토학원';
     loadCounts().finally(() => setLoading(false));
   }, []);
 
