@@ -30,9 +30,12 @@ const ParentSurveyPage = lazy(() => import("./pages/ParentSurveyPage"));
 const MentorMapPublicPage = lazy(() => import("./pages/MentorMapPublicPage"));
 const AdminMentorMapPage = lazy(() => import("./pages/AdminMentorMapPage"));
 const ConsultationReservationPage = lazy(() => import("./pages/ConsultationReservationPage"));
+const AutonomousStudySurveyPage = lazy(() => import("./pages/AutonomousStudySurveyPage"));
+const AdminAutonomousStudySurveyPage = lazy(() => import("./pages/AdminAutonomousStudySurveyPage"));
 const StudentLayout = lazy(() =>
   import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
 );
+
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const PrincipalDashboard = lazy(() => import("./pages/PrincipalDashboard"));
@@ -139,6 +142,8 @@ const App = () => (
           <Route path="/quiz-print" element={<QuizPrintPage />} />
           <Route path="/quiz-submit" element={<QuizSubmitPage />} />
           <Route path="/consultation" element={<ConsultationReservationPage />} />
+          <Route path="/autonomous-study-survey" element={<AutonomousStudySurveyPage />} />
+
 
           {/* All authenticated routes */}
           <Route path="/*" element={
@@ -236,7 +241,9 @@ const App = () => (
                 <Route path="/exam-board" element={<ExamBoardPage />} />
                 <Route path="/exam-board/principal" element={<ExamDirectionPage />} />
                 <Route path="/admin/intensive-applications" element={<IntensiveApplicationsPage />} />
-                <Route path="/admin/class-signups" element={<ClassSignupAdminPage />} />
+          <Route path="/admin/class-signups" element={<ClassSignupAdminPage />} />
+          <Route path="/admin/autonomous-study-survey" element={<AdminAutonomousStudySurveyPage />} />
+
                 <Route path="/admin/exam-schools" element={<ExamSchoolSettingsPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/exam-review" element={<ExamReviewPage />} />
