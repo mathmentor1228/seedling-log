@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { CheckCircle2, Loader2, Users, CalendarClock, Info } from 'lucide-react';
+
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const SURVEY_DATES = ['2026-09-24', '2026-09-25', '2026-09-26'];
