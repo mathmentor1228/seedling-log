@@ -90,8 +90,12 @@ export function BatchTestInputModal({
     try {
       let successCount = 0;
       const savedRecordIds: string[] = [];
-      
-      for (const entry of entries) {
+
+      // 결과(통과/불통과 또는 점수)를 입력하지 않은 학생은 테스트 기록을 남기지 않음
+      const filledEntries = entries.filter(e => e.test_result !== 'none' || e.test_result_text.trim() !== '');
+      const skippedCount = entries.length - filledEntries.length;
+
+      for (const entry of filledEntries) {
         if (!entry.lesson_record_id) continue;
 
         const { error } = await supabase.rpc('update_lesson_test_fields', {
@@ -112,7 +116,7 @@ export function BatchTestInputModal({
       }
 
       // For students without lesson records, update directly if possible
-      const noRecordStudents = entries.filter(e => !e.lesson_record_id);
+      const noRecordStudents = filledEntries.filter(e => !e.lesson_record_id);
       if (noRecordStudents.length > 0) {
         const { data: foundRecords } = await supabase
           .from('lesson_records')
@@ -160,7 +164,7 @@ export function BatchTestInputModal({
             if (!currentTypes.includes('테스트')) {
               const updatedTypes = [...currentTypes, '테스트'];
               // Also set english_pass_fail for English subject
-              const entry = entries.find(e => e.student_id === rec.student_id);
+              const entry = filledEntries.find(e => e.student_id === rec.student_id);
               const updatePayload: Record<string, any> = {
                 lesson_types: updatedTypes,
               };
@@ -173,7 +177,7 @@ export function BatchTestInputModal({
                 .eq('id', rec.id);
             } else if (subject === '영어') {
               // lesson_types already has '테스트' but still sync english_pass_fail
-              const entry = entries.find(e => e.student_id === rec.student_id);
+              const entry = filledEntries.find(e => e.student_id === rec.student_id);
               if (entry?.english_pass_fail) {
                 await supabase
                   .from('lesson_records')
@@ -187,7 +191,7 @@ export function BatchTestInputModal({
 
       toast({
         title: '테스트 결과 일괄 저장 완료',
-        description: `${successCount}명의 테스트 결과를 저장했습니다.`,
+        description: `${successCount}명의 테스트 결과를 저장했습니다.${skippedCount > 0 ? ` (결과 미입력 ${skippedCount}명 제외)` : ''}`,
       });
 
       onOpenChange(false);
