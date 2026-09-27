@@ -164,7 +164,7 @@ export function BatchTestInputModal({
             if (!currentTypes.includes('테스트')) {
               const updatedTypes = [...currentTypes, '테스트'];
               // Also set english_pass_fail for English subject
-              const entry = entries.find(e => e.student_id === rec.student_id);
+              const entry = filledEntries.find(e => e.student_id === rec.student_id);
               const updatePayload: Record<string, any> = {
                 lesson_types: updatedTypes,
               };
@@ -177,7 +177,7 @@ export function BatchTestInputModal({
                 .eq('id', rec.id);
             } else if (subject === '영어') {
               // lesson_types already has '테스트' but still sync english_pass_fail
-              const entry = entries.find(e => e.student_id === rec.student_id);
+              const entry = filledEntries.find(e => e.student_id === rec.student_id);
               if (entry?.english_pass_fail) {
                 await supabase
                   .from('lesson_records')
@@ -191,7 +191,7 @@ export function BatchTestInputModal({
 
       toast({
         title: '테스트 결과 일괄 저장 완료',
-        description: `${successCount}명의 테스트 결과를 저장했습니다.`,
+        description: `${successCount}명의 테스트 결과를 저장했습니다.${skippedCount > 0 ? ` (결과 미입력 ${skippedCount}명 제외)` : ''}`,
       });
 
       onOpenChange(false);
