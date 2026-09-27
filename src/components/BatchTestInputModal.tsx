@@ -90,8 +90,12 @@ export function BatchTestInputModal({
     try {
       let successCount = 0;
       const savedRecordIds: string[] = [];
-      
-      for (const entry of entries) {
+
+      // 결과(통과/불통과 또는 점수)를 입력하지 않은 학생은 테스트 기록을 남기지 않음
+      const filledEntries = entries.filter(e => e.test_result !== 'none' || e.test_result_text.trim() !== '');
+      const skippedCount = entries.length - filledEntries.length;
+
+      for (const entry of filledEntries) {
         if (!entry.lesson_record_id) continue;
 
         const { error } = await supabase.rpc('update_lesson_test_fields', {
@@ -112,7 +116,7 @@ export function BatchTestInputModal({
       }
 
       // For students without lesson records, update directly if possible
-      const noRecordStudents = entries.filter(e => !e.lesson_record_id);
+      const noRecordStudents = filledEntries.filter(e => !e.lesson_record_id);
       if (noRecordStudents.length > 0) {
         const { data: foundRecords } = await supabase
           .from('lesson_records')
