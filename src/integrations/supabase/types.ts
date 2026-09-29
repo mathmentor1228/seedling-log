@@ -196,6 +196,8 @@ export type Database = {
           student_synced_at: string | null
           title: string
           updated_at: string
+          withdrawal_last_class_date: string | null
+          withdrawal_reason: string | null
         }
         Insert: {
           assignee_name?: string | null
@@ -217,6 +219,8 @@ export type Database = {
           student_synced_at?: string | null
           title: string
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
         }
         Update: {
           assignee_name?: string | null
@@ -238,6 +242,8 @@ export type Database = {
           student_synced_at?: string | null
           title?: string
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
         }
         Relationships: [
           {
@@ -6921,6 +6927,8 @@ export type Database = {
           total_points: number | null
           tuition_memo: string | null
           updated_at: string
+          withdrawal_last_class_date: string | null
+          withdrawal_reason: string | null
           withdrawn_at: string | null
         }
         Insert: {
@@ -6951,6 +6959,8 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
           withdrawn_at?: string | null
         }
         Update: {
@@ -6981,6 +6991,8 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
           withdrawn_at?: string | null
         }
         Relationships: []
@@ -9072,7 +9084,6 @@ export type Database = {
         Returns: string
       }
       generate_parent_token: { Args: never; Returns: string }
-      office_task_target_status: { Args: { _category: string }; Returns: string }
       generate_share_token: { Args: never; Returns: string }
       generate_vocab_test_token: { Args: never; Returns: string }
       generate_weekly_reports: {
@@ -9222,6 +9233,10 @@ export type Database = {
       is_private_channel_member: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      office_task_target_status: {
+        Args: { _category: string }
+        Returns: string
       }
       reconcile_lesson_homework: {
         Args: {
