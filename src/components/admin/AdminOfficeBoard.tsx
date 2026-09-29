@@ -81,6 +81,9 @@ export function AdminOfficeBoard() {
   const [selectedStudent, setSelectedStudent] = useState<PickableStudent | null>(null);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [effectiveDate, setEffectiveDate] = useState(todayKst());
+  const [lastClassDate, setLastClassDate] = useState('');
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -138,6 +141,9 @@ export function AdminOfficeBoard() {
   const handleCreate = async () => {
     if (!newTitle.trim()) { toast.error('제목을 입력해주세요'); return; }
     if (needsStudent(newCategory) && !selectedStudent) { toast.error('학생을 선택해주세요'); return; }
+    const isWithdraw = newCategory === '퇴원생 안내';
+    if (isWithdraw && !lastClassDate) { toast.error('마지막 수업일을 입력해주세요'); return; }
+    if (isWithdraw && !withdrawReason.trim()) { toast.error('퇴원 사유를 입력해주세요'); return; }
     setCreating(true);
     const linkStudent = needsStudent(newCategory) ? selectedStudent : null;
     const willChangeStatus = !!linkStudent && changesStatus(newCategory);
@@ -150,7 +156,15 @@ export function AdminOfficeBoard() {
       assignee_name: newAssignee.trim() || null,
       student_id: linkStudent?.id ?? null,
       effective_date: willChangeStatus ? (effectiveDate || todayKst()) : null,
-    });
+      withdrawal_last_class_date: isWithdraw ? lastClassDate : null,
+      withdrawal_reason: isWithdraw ? withdrawReason.trim() : null,
+    } as any);
+    if (!error && isWithdraw && linkStudent) {
+      const { error: sErr } = await supabase.from('students')
+        .update({ withdrawal_last_class_date: lastClassDate, withdrawal_reason: withdrawReason.trim() } as any)
+        .eq('id', linkStudent.id);
+      if (sErr) console.warn('[withdrawal] student note skipped', sErr);
+    }
     if (error) { toast.error('생성 실패'); console.error(error); }
     else {
       const syncMsg = linkStudent ? syncResultToast(newCategory, linkStudent.name, effectiveDate) : null;
@@ -230,10 +244,13 @@ export function AdminOfficeBoard() {
     else { setCommentText(''); fetchComments(selectedTask.id); }
   };
 
+  const q = search.trim().toLowerCase();
   const filtered = tasks.filter(t => {
-    const statusMatch = activeTab === 'active' ? t.status !== '완료' : t.status === '완료';
+    const statusMatch = activeTab === 'all' ? true : activeTab === 'active' ? t.status !== '완료' : t.status === '완료';
     const catMatch = categoryFilter === 'all' || t.category === categoryFilter;
-    return statusMatch && catMatch;
+    const text = [t.title, t.description, t.category, t.assignee_name, t.created_by_name, t.completed_by_name,
+      (t as any).withdrawal_reason, t.student_sync_note].filter(Boolean).join(' ').toLowerCase();
+    return statusMatch && catMatch && (!q || text.includes(q));
   });
 
   const statusBadge = (status: Status) => {
@@ -356,6 +373,18 @@ export function AdminOfficeBoard() {
                   <p className="mt-1 text-[11px] text-muted-foreground">{syncPreviewText(newCategory, effectiveDate)}</p>
                 </div>
               )}
+              {newCategory === '퇴원생 안내' && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">마지막 수업일 (이 날 수업까지 기준) *</label>
+                    <Input type="date" value={lastClassDate} onChange={e => setLastClassDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">퇴원 사유 *</label>
+                    <Textarea value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} placeholder="예: 이사, 타학원 이동, 일정 문제 등" rows={2} />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="text-sm font-medium text-foreground">제목 *</label>
                 <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="업무 제목" />
@@ -395,8 +424,15 @@ export function AdminOfficeBoard() {
           <TabsList>
             <TabsTrigger value="active">진행 중</TabsTrigger>
             <TabsTrigger value="completed">완료</TabsTrigger>
+            <TabsTrigger value="all">전체</TabsTrigger>
           </TabsList>
         </Tabs>
+        <Input
+          value={search}
+          onChange={e => { setSearch(e.target.value); if (e.target.value && activeTab === 'active') setActiveTab('all'); }}
+          placeholder="업무 검색 (학생명·제목·내용·사유)"
+          className="w-full sm:w-64"
+        />
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="전체 분류" /></SelectTrigger>
           <SelectContent>
@@ -471,6 +507,12 @@ export function AdminOfficeBoard() {
                 )}
                 {selectedTask.student_sync_note && (
                   <p className="text-xs rounded-md bg-muted px-3 py-2 text-foreground">🔄 {selectedTask.student_sync_note}</p>
+                )}
+                {((selectedTask as any).withdrawal_last_class_date || (selectedTask as any).withdrawal_reason) && (
+                  <div className="text-xs rounded-md border border-border px-3 py-2 space-y-0.5">
+                    {(selectedTask as any).withdrawal_last_class_date && <p>마지막 수업일: {(selectedTask as any).withdrawal_last_class_date}</p>}
+                    {(selectedTask as any).withdrawal_reason && <p className="whitespace-pre-wrap">퇴원 사유: {(selectedTask as any).withdrawal_reason}</p>}
+                  </div>
                 )}
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p>작성자: {selectedTask.created_by_name} · {format(new Date(selectedTask.created_at), 'yyyy-MM-dd HH:mm')}</p>
