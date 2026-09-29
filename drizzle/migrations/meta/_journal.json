@@ -15,6 +15,13 @@
       "when": 1789950358308,
       "tag": "0001_create_autonomous_study_survey_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790671647192,
+      "tag": "0002_office_task_withdrawal_details",
+      "breakpoints": true
     }
   ]
 }

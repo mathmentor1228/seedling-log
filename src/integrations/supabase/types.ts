@@ -191,6 +191,8 @@ export type Database = {
           status: string
           title: string
           updated_at: string
+          withdrawal_last_class_date: string | null
+          withdrawal_reason: string | null
         }
         Insert: {
           assignee_name?: string | null
@@ -207,6 +209,8 @@ export type Database = {
           status?: string
           title: string
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
         }
         Update: {
           assignee_name?: string | null
@@ -223,6 +227,8 @@ export type Database = {
           status?: string
           title?: string
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
         }
         Relationships: []
       }
@@ -6898,6 +6904,8 @@ export type Database = {
           total_points: number | null
           tuition_memo: string | null
           updated_at: string
+          withdrawal_last_class_date: string | null
+          withdrawal_reason: string | null
           withdrawn_at: string | null
         }
         Insert: {
@@ -6928,6 +6936,8 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
           withdrawn_at?: string | null
         }
         Update: {
@@ -6958,6 +6968,8 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawal_last_class_date?: string | null
+          withdrawal_reason?: string | null
           withdrawn_at?: string | null
         }
         Relationships: []
