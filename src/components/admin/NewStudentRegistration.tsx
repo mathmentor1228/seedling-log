@@ -196,6 +196,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
 
     await supabase.from('admin_office_tasks').insert({
       category: '신규생 정보',
+      student_id: (studentData as any)?.id ?? null, // OFFICE-TASK-STUDENT-SYNC-V1: 업무 ↔ 학생 기록 연결
       title: `[신규] ${studentName.trim()} (${schoolLevel}${gradeYear})`,
       description,
       created_by: user!.id,

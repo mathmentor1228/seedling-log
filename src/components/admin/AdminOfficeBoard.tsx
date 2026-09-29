@@ -11,14 +11,20 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText, Check, ChevronsUpDown, CalendarDays, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
 import { ParentAnnouncementTemplates } from './ParentAnnouncementTemplates';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+// OFFICE-TASK-STUDENT-SYNC-V1: 행정 업무 ↔ 학생 기록 자동 반영 규칙
+import {
+  OFFICE_CATEGORIES, buildTaskTitle, changesStatus, needsStudent, pickableStudents, studentLabel,
+  syncBadge, syncPreviewText, syncResultToast, todayKst, type PickableStudent, type SyncStatus,
+} from '@/lib/officeTaskSync';
 
-const CATEGORIES = ['신규생 정보', '퇴원생 안내', '수강과목 변경', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
-const STUDENT_NAME_CATEGORIES = ['퇴원생 안내', '수강과목 변경'];
+const CATEGORIES = [...OFFICE_CATEGORIES];
 const STATUSES = ['대기 중', '진행 중', '완료'] as const;
 
 type Status = typeof STATUSES[number];
@@ -36,6 +42,10 @@ interface Task {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  student_id?: string | null;
+  effective_date?: string | null;
+  student_sync_status?: SyncStatus;
+  student_sync_note?: string | null;
 }
 
 interface Comment {
@@ -61,13 +71,16 @@ export function AdminOfficeBoard() {
   const [userName, setUserName] = useState('');
 
   // New task form
-  const [newCategory, setNewCategory] = useState(CATEGORIES[0]);
+  const [newCategory, setNewCategory] = useState<string>(CATEGORIES[0]);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
-  const [newStudentName, setNewStudentName] = useState('');
   const [creating, setCreating] = useState(false);
   const [showNewStudentDialog, setShowNewStudentDialog] = useState(false);
+  const [students, setStudents] = useState<PickableStudent[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<PickableStudent | null>(null);
+  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  const [effectiveDate, setEffectiveDate] = useState(todayKst());
 
   useEffect(() => {
     if (user) {
@@ -77,6 +90,9 @@ export function AdminOfficeBoard() {
   }, [user]);
 
   const fetchTasks = useCallback(async () => {
+    // 적용일이 된 예약 건(퇴원·휴원·재등원)을 먼저 학생 기록에 반영한 뒤 목록을 읽는다
+    const { error: syncError } = await supabase.rpc('apply_due_office_task_student_sync');
+    if (syncError) console.warn('[office-task-sync] due sync skipped', syncError);
     const { data, error } = await supabase
       .from('admin_office_tasks')
       .select('*')
@@ -92,9 +108,39 @@ export function AdminOfficeBoard() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
+  // 업무 등록 창을 열 때 학생 목록을 읽는다 (학생 선택용)
+  useEffect(() => {
+    if (!showCreateDialog) return;
+    supabase
+      .from('students')
+      .select('id, name, school, school_level, grade_year, enrollment_status')
+      .order('name')
+      .then(({ data }) => setStudents((data as PickableStudent[]) || []));
+  }, [showCreateDialog]);
+
+  const resetCreateForm = () => {
+    setNewTitle(''); setNewDescription(''); setNewAssignee('');
+    setSelectedStudent(null); setEffectiveDate(todayKst());
+  };
+
+  const handleCategoryChange = (cat: string) => {
+    setNewCategory(cat);
+    if (!needsStudent(cat)) {
+      setSelectedStudent(null);
+      if (/^\[(퇴원|휴원|재등원|과목변경)\]/.test(newTitle)) setNewTitle('');
+      return;
+    }
+    const keep = selectedStudent && pickableStudents(cat, [selectedStudent]).length > 0 ? selectedStudent : null;
+    setSelectedStudent(keep);
+    setNewTitle(buildTaskTitle(cat, keep));
+  };
+
   const handleCreate = async () => {
     if (!newTitle.trim()) { toast.error('제목을 입력해주세요'); return; }
+    if (needsStudent(newCategory) && !selectedStudent) { toast.error('학생을 선택해주세요'); return; }
     setCreating(true);
+    const linkStudent = needsStudent(newCategory) ? selectedStudent : null;
+    const willChangeStatus = !!linkStudent && changesStatus(newCategory);
     const { error } = await supabase.from('admin_office_tasks').insert({
       category: newCategory,
       title: newTitle.trim(),
@@ -102,15 +148,35 @@ export function AdminOfficeBoard() {
       created_by: user!.id,
       created_by_name: userName,
       assignee_name: newAssignee.trim() || null,
-    } as any);
+      student_id: linkStudent?.id ?? null,
+      effective_date: willChangeStatus ? (effectiveDate || todayKst()) : null,
+    });
     if (error) { toast.error('생성 실패'); console.error(error); }
     else {
-      toast.success('업무가 등록되었습니다');
+      const syncMsg = linkStudent ? syncResultToast(newCategory, linkStudent.name, effectiveDate) : null;
+      toast.success(syncMsg ? `업무 등록 완료 · ${syncMsg}` : '업무가 등록되었습니다');
       setShowCreateDialog(false);
-      setNewTitle(''); setNewDescription(''); setNewAssignee(''); setNewStudentName('');
+      resetCreateForm();
       fetchTasks();
     }
     setCreating(false);
+  };
+
+  // 예약된 재원상태 변경을 오늘로 앞당겨 즉시 반영 (DB 트리거가 처리)
+  const applyNow = async (task: Task) => {
+    if (!confirm('이 학생의 재원상태를 지금 바로 바꿀까요?')) return;
+    const { error } = await supabase.from('admin_office_tasks').update({ effective_date: todayKst() }).eq('id', task.id);
+    if (error) toast.error('반영 실패');
+    else { toast.success('학생 기록에 반영했습니다'); setSelectedTask(null); fetchTasks(); }
+  };
+
+  const syncBadgeEl = (task: Task) => {
+    const b = syncBadge(task);
+    if (!b) return null;
+    const cls = b.tone === 'success' ? 'border-success/40 text-success'
+      : b.tone === 'warning' ? 'border-warning/50 text-warning'
+      : 'text-muted-foreground';
+    return <Badge variant="outline" className={cn('text-[10px] gap-1', cls)}><RefreshCw className="w-3 h-3" />{b.label}</Badge>;
   };
 
   const updateStatus = async (task: Task, newStatus: Status) => {
@@ -217,7 +283,7 @@ export function AdminOfficeBoard() {
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowNewStudentDialog(true)}>
           <UserPlus className="w-4 h-4" />신규생 등록
         </Button>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) resetCreateForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />업무 등록</Button>
           </DialogTrigger>
@@ -226,21 +292,68 @@ export function AdminOfficeBoard() {
             <div className="space-y-4 mt-2">
               <div>
                 <label className="text-sm font-medium text-foreground">분류</label>
-                <Select value={newCategory} onValueChange={setNewCategory}>
+                <Select value={newCategory} onValueChange={handleCategoryChange}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              {STUDENT_NAME_CATEGORIES.includes(newCategory) && (
+              {newCategory === '신규생 정보' && (
+                <div className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
+                  신규생은 <b>신규생 등록</b>으로 넣으면 학생 기록과 이 업무가 함께 만들어집니다.
+                  <Button type="button" variant="link" size="sm" className="h-auto px-1 py-0 text-xs"
+                    onClick={() => { setShowCreateDialog(false); resetCreateForm(); setShowNewStudentDialog(true); }}>
+                    신규생 등록 열기
+                  </Button>
+                </div>
+              )}
+              {needsStudent(newCategory) && (
                 <div>
-                  <label className="text-sm font-medium text-foreground">학생 이름</label>
-                  <Input value={newStudentName} onChange={e => {
-                    setNewStudentName(e.target.value);
-                    const prefix = newCategory === '퇴원생 안내' ? '[퇴원]' : '[과목변경]';
-                    setNewTitle(`${prefix} ${e.target.value}`);
-                  }} placeholder="학생 이름 입력" />
+                  <label className="text-sm font-medium text-foreground">학생 *</label>
+                  <Popover open={studentPickerOpen} onOpenChange={setStudentPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
+                        <span className="truncate">{selectedStudent ? studentLabel(selectedStudent) : '학생 이름 검색…'}</span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="학생 이름 검색..." />
+                        <CommandList>
+                          <CommandEmpty>해당하는 학생이 없습니다.</CommandEmpty>
+                          <CommandGroup>
+                            {pickableStudents(newCategory, students).map(s => (
+                              <CommandItem
+                                key={s.id}
+                                value={`${s.name} ${s.school ?? ''}`}
+                                onSelect={() => {
+                                  setSelectedStudent(s);
+                                  setNewTitle(buildTaskTitle(newCategory, s));
+                                  setStudentPickerOpen(false);
+                                }}
+                              >
+                                <Check className={cn('mr-2 h-4 w-4', selectedStudent?.id === s.id ? 'opacity-100' : 'opacity-0')} />
+                                <span className="flex-1 truncate">{studentLabel(s)}</span>
+                                <span className="text-[10px] text-muted-foreground">{s.enrollment_status || '재학'}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {newCategory === '재등원 안내' && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">퇴원·휴학 상태인 학생만 보입니다.</p>
+                  )}
+                </div>
+              )}
+              {changesStatus(newCategory) && (
+                <div>
+                  <label className="text-sm font-medium text-foreground flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />적용일</label>
+                  <Input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
+                  <p className="mt-1 text-[11px] text-muted-foreground">{syncPreviewText(newCategory, effectiveDate)}</p>
                 </div>
               )}
               <div>
@@ -312,6 +425,7 @@ export function AdminOfficeBoard() {
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant="outline" className="text-[10px]">{task.category}</Badge>
                   {statusBadge(task.status)}
+                  {syncBadgeEl(task)}
                 </div>
                 <p className="font-medium text-foreground truncate">{task.title}</p>
                 <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
@@ -347,12 +461,16 @@ export function AdminOfficeBoard() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-[10px]">{selectedTask.category}</Badge>
                   {statusBadge(selectedTask.status)}
+                  {syncBadgeEl(selectedTask)}
                 </div>
                 <DialogTitle className="text-left mt-2">{selectedTask.title}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 flex-1 overflow-y-auto">
                 {selectedTask.description && (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedTask.description}</p>
+                )}
+                {selectedTask.student_sync_note && (
+                  <p className="text-xs rounded-md bg-muted px-3 py-2 text-foreground">🔄 {selectedTask.student_sync_note}</p>
                 )}
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p>작성자: {selectedTask.created_by_name} · {format(new Date(selectedTask.created_at), 'yyyy-MM-dd HH:mm')}</p>
@@ -369,6 +487,11 @@ export function AdminOfficeBoard() {
                       {s}(으)로 변경
                     </Button>
                   ))}
+                  {selectedTask.student_sync_status === 'scheduled' && (
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => applyNow(selectedTask)}>
+                      <RefreshCw className="w-3.5 h-3.5" />지금 반영
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-destructive" onClick={() => deleteTask(selectedTask.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>

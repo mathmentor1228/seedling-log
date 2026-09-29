@@ -185,10 +185,15 @@ export type Database = {
           created_by: string
           created_by_name: string
           description: string | null
+          effective_date: string | null
           id: string
           source_id: string | null
           source_type: string | null
           status: string
+          student_id: string | null
+          student_sync_note: string | null
+          student_sync_status: string | null
+          student_synced_at: string | null
           title: string
           updated_at: string
         }
@@ -201,10 +206,15 @@ export type Database = {
           created_by: string
           created_by_name: string
           description?: string | null
+          effective_date?: string | null
           id?: string
           source_id?: string | null
           source_type?: string | null
           status?: string
+          student_id?: string | null
+          student_sync_note?: string | null
+          student_sync_status?: string | null
+          student_synced_at?: string | null
           title: string
           updated_at?: string
         }
@@ -217,14 +227,27 @@ export type Database = {
           created_by?: string
           created_by_name?: string
           description?: string | null
+          effective_date?: string | null
           id?: string
           source_id?: string | null
           source_type?: string | null
           status?: string
+          student_id?: string | null
+          student_sync_note?: string | null
+          student_sync_status?: string | null
+          student_synced_at?: string | null
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_office_tasks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       assistant_tasks: {
         Row: {
@@ -9014,6 +9037,11 @@ export type Database = {
       }
     }
     Functions: {
+      apply_due_office_task_student_sync: { Args: never; Returns: number }
+      apply_office_task_student_sync: {
+        Args: { _task_id: string }
+        Returns: string
+      }
       autonomous_study_survey_counts: {
         Args: { _from_date: string; _to_date: string }
         Returns: {
@@ -9044,6 +9072,7 @@ export type Database = {
         Returns: string
       }
       generate_parent_token: { Args: never; Returns: string }
+      office_task_target_status: { Args: { _category: string }; Returns: string }
       generate_share_token: { Args: never; Returns: string }
       generate_vocab_test_token: { Args: never; Returns: string }
       generate_weekly_reports: {
