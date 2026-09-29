@@ -61,6 +61,9 @@ export function UnifiedExamHub({ schools, schedules, archives, onSelectSchool, o
         </Card>
       </div>
 
+      {/* Past-year exam paper search */}
+      <PastExamPaperSearch />
+
       {/* Upload hub */}
       <UnifiedUploadHub knownSchools={knownSchools} onComplete={onRefetch} />
 
