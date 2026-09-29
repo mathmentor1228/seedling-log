@@ -123,7 +123,7 @@ export function AdminOfficeBoard() {
 
   const resetCreateForm = () => {
     setNewTitle(''); setNewDescription(''); setNewAssignee('');
-    setSelectedStudent(null); setEffectiveDate(todayKst());
+    setSelectedStudent(null); setEffectiveDate(todayKst()); setLastClassDate(''); setWithdrawReason('');
   };
 
   const handleCategoryChange = (cat: string) => {
