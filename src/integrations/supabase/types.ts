@@ -185,10 +185,15 @@ export type Database = {
           created_by: string
           created_by_name: string
           description: string | null
+          effective_date: string | null
           id: string
           source_id: string | null
           source_type: string | null
           status: string
+          student_id: string | null
+          student_sync_note: string | null
+          student_sync_status: string | null
+          student_synced_at: string | null
           title: string
           updated_at: string
           withdrawal_last_class_date: string | null
@@ -203,10 +208,15 @@ export type Database = {
           created_by: string
           created_by_name: string
           description?: string | null
+          effective_date?: string | null
           id?: string
           source_id?: string | null
           source_type?: string | null
           status?: string
+          student_id?: string | null
+          student_sync_note?: string | null
+          student_sync_status?: string | null
+          student_synced_at?: string | null
           title: string
           updated_at?: string
           withdrawal_last_class_date?: string | null
@@ -221,16 +231,29 @@ export type Database = {
           created_by?: string
           created_by_name?: string
           description?: string | null
+          effective_date?: string | null
           id?: string
           source_id?: string | null
           source_type?: string | null
           status?: string
+          student_id?: string | null
+          student_sync_note?: string | null
+          student_sync_status?: string | null
+          student_synced_at?: string | null
           title?: string
           updated_at?: string
           withdrawal_last_class_date?: string | null
           withdrawal_reason?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_office_tasks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       assistant_tasks: {
         Row: {
@@ -9026,6 +9049,11 @@ export type Database = {
       }
     }
     Functions: {
+      apply_due_office_task_student_sync: { Args: never; Returns: number }
+      apply_office_task_student_sync: {
+        Args: { _task_id: string }
+        Returns: string
+      }
       autonomous_study_survey_counts: {
         Args: { _from_date: string; _to_date: string }
         Returns: {
@@ -9205,6 +9233,10 @@ export type Database = {
       is_private_channel_member: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      office_task_target_status: {
+        Args: { _category: string }
+        Returns: string
       }
       reconcile_lesson_homework: {
         Args: {
