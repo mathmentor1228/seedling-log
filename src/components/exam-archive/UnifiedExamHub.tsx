@@ -10,6 +10,7 @@ import type { Schedule, SchoolInfo } from './types';
 import { UnifiedCalendarView } from './UnifiedCalendarView';
 import { UnifiedUploadHub } from './UnifiedUploadHub';
 import { ExamMaterialsBrowser } from './ExamMaterialsBrowser';
+import { PastExamPaperSearch } from './PastExamPaperSearch';
 
 interface Props {
   schools: SchoolInfo[];
@@ -59,6 +60,9 @@ export function UnifiedExamHub({ schools, schedules, archives, onSelectSchool, o
           <div className="text-xl font-bold">{archives.length}</div>
         </Card>
       </div>
+
+      {/* Past-year exam paper search */}
+      <PastExamPaperSearch />
 
       {/* Upload hub */}
       <UnifiedUploadHub knownSchools={knownSchools} onComplete={onRefetch} />
