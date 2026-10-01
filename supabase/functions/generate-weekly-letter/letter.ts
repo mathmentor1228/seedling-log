@@ -58,6 +58,12 @@ const HOMEWORK_LABEL: Record<string, string> = {
   completed: '완료', done: '완료', partial: '부분', not_done: '미완', none_assigned: '',
 };
 const ABSENT_MARKERS = ['인정결석', '무단결석', '결석', '미등원', 'legacy_absent'];
+// 선생님들이 진도 칸에 적는 결석 사유·안내문. 진도가 아니므로 기록 카드와 AI 재료에서 뺀다.
+const NOT_A_RANGE = /결석|사유|수업이\s*없|휴강|보충\s*수업\s*예정|시험\s*기간|예정입니다|없습니다/;
+
+export function isRealRange(text: string): boolean {
+  return text.length > 0 && !NOT_A_RANGE.test(text);
+}
 
 /** `[보충 시간: 15:00]` 같은 시스템 태그를 떼고 공백 정리 */
 export function cleanLine(text: string | null | undefined): string {
@@ -82,9 +88,10 @@ export function collectMaterial(lessons: LessonRow[], verbatimTeacherIds: string
     bySubject.set(l.subject, f);
     f.lessons += 1;
     const att = l.attendance_status || [];
-    if (att.some(a => ABSENT_MARKERS.includes(a))) f.absences += 1;
+    const absent = att.some(a => ABSENT_MARKERS.includes(a));
+    if (absent) f.absences += 1;
     const range = cleanLine(l.lesson_range);
-    if (range && !f.ranges.includes(range)) f.ranges.push(range);
+    if (!absent && isRealRange(range) && !f.ranges.includes(range)) f.ranges.push(range);
     const hw = HOMEWORK_LABEL[l.homework_status || ''] ?? '';
     if (hw) f.homework.push(hw);
     if (l.test_result === 'pass' || l.test_result === 'fail') {
@@ -176,6 +183,15 @@ export const LETTER_SYSTEM_PROMPT = `당신은 더멘토학원의 담당 선생�
 [길이와 모양]
 4~6문장, 한 단락 또는 두 단락. 과목 소제목·글머리 기호·숫자 나열은 쓰지 않습니다. 이해도 점수와 수업 횟수는 쓰지 않습니다.
 
+[기간 표현]
+이 편지는 해당 주가 끝날 때 보냅니다. "이번 주"라고 부르고 "지난주"는 쓰지 않습니다.
+
+[순서]
+첫 문장은 선생님 말 가운데 아이가 해낸 것·진전된 것으로 시작합니다. 아쉬운 점(숙제 누락·태도)은 그 뒤에 사실로 적되, 반드시 "다음 수업에서 학원이 하는 것" 한 문장이 따라오고, 필요하면 "가정에서 부탁드리는 것" 한 문장을 덧붙입니다. 아쉬운 점으로 편지를 끝내지 않습니다.
+
+[공지성 메모]
+"보강 진행", "공휴일 정상 수업", "시험 대비 일정" 같은 안내는 편지 맨 끝에 한 문장으로 따로 전달합니다. "다음 수업에서는"과 섞지 않습니다.
+
 [이름]
 성을 떼고 주어형 호칭(예: 민준이는, 지우는)으로 첫 문장을 시작합니다. 편지 어디에서도 성을 붙여 부르지 않습니다.
 
@@ -197,7 +213,7 @@ export const LETTER_SYSTEM_PROMPT = `당신은 더멘토학원의 담당 선생�
 "연산에서 틀릴 것 같다는 말을 종종 하곤 합니다. 지금은 혼합계산까지 스스로 식을 세우는 데까지 왔습니다."
 
 [학생용 메모]
-같은 재료로 학생에게 직접 말하듯 2~3문장. 호격(예: 민준아, 지우야)으로 시작합니다. 선생님이 본 것 하나와 다음 시간에 같이 볼 것 하나. 다정하게, 명령이나 훈계 없이. 이모지는 맨 끝에 🌱 하나만.
+같은 재료로 학생에게 직접 말하듯 2~3문장. 호격(예: 민준아, 지우야)으로 시작합니다. 반말로만 씁니다("~했어", "~해보자"). "~합니다", "~습니다"는 쓰지 않습니다. 잘한 것 하나를 먼저, 그다음 다음 시간에 같이 할 것 하나. 아쉬운 점을 나열하거나 꾸짖지 않습니다("아쉬워", "부족해" 금지). 이모지는 맨 끝에 🌱 하나만.
 
 출력은 JSON만 허용합니다: {"parent_letter": "...", "student_note": "..."}`;
 
@@ -274,6 +290,7 @@ export function validateParentLetter(text: string, studentName: string): Validat
   for (const w of VAGUE_WORDS) if (text.includes(w)) v.push(`VAGUE:${w}`);
   for (const p of PROMISE_PATTERNS) if (p.test(text)) v.push(`PROMISE:${p.source}`);
   for (const p of JUDGEMENT_PATTERNS) if (p.test(text)) v.push(`JUDGEMENT:${p.source}`);
+  if (text.includes('지난주') || text.includes('지난 주')) v.push('LAST_WEEK_WORDING');
   const sentences = text.split(/(?<=[.!?다])\s+/).filter(s => s.trim().length > 0);
   if (sentences.length > 9) v.push('TOO_MANY_SENTENCES');
   return { ok: v.length === 0, violations: v };
@@ -287,6 +304,8 @@ export function validateStudentNote(text: string, studentName: string): Validati
   if (g && !text.includes(g)) v.push('NAME_MISSING');
   for (const w of SCENE_WORDS) if (text.includes(w)) v.push(`SCENE:${w}`);
   for (const w of ['또래', '친구들보다', '다른 학생']) if (text.includes(w)) v.push(`VAGUE:${w}`);
+  if (/(습니다|합니다)(?=[.!?\s]|$)/.test(text)) v.push('HONORIFIC_MIX');
+  for (const w of ['아쉬워', '아쉽', '부족해']) if (text.includes(w)) v.push(`SCOLDING:${w}`);
   return { ok: v.length === 0, violations: v };
 }
 

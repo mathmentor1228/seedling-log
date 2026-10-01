@@ -169,6 +169,7 @@ Deno.serve(async (req) => {
     let retryNote: string | undefined;
     let saved = false;
     let lastReason = 'unknown';
+    let firstFail = '';
     while (attempts < 2 && !saved) {
       attempts += 1;
       try {
@@ -181,6 +182,7 @@ Deno.serve(async (req) => {
           const all = [...pv.violations, ...sv.violations.map(v => `student:${v}`)];
           lastReason = all.join(',');
           retryNote = all.join(', ');
+          if (!firstFail) firstFail = all.join('|');
           continue;
         }
         const parentMessage = composeParentMessage(t.name, weekStart, weekEnd, parsed.parent_letter, m);
@@ -203,7 +205,7 @@ Deno.serve(async (req) => {
             teacher_lines: m.lines,
             verbatim_subjects: m.verbatim.map(v => v.subject),
           },
-          debug_info: `${ENGINE} model=${MODEL} lines=${m.lines.length} verbatim=${m.verbatim.length} attempts=${attempts} source=${source}`,
+          debug_info: `${ENGINE} model=${MODEL} lines=${m.lines.length} verbatim=${m.verbatim.length} attempts=${attempts} source=${source}${firstFail ? ` first_fail=${firstFail}` : ''}`,
           generated_at: new Date().toISOString(),
         };
         const ex = existing.get(t.id);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFactsCard, buildUserPrompt, cleanLine, collectMaterial, composeParentMessage, formatHeader,
-  homeworkCompletionRate, parseLetterJson, skipReason, validateParentLetter, validateStudentNote,
+  homeworkCompletionRate, isRealRange, parseLetterJson, skipReason, validateParentLetter, validateStudentNote,
   type LessonRow,
 } from '../../supabase/functions/generate-weekly-letter/letter.ts';
 
@@ -56,11 +56,31 @@ describe('재료 수집', () => {
       lesson({ id: 'l2', lesson_date: '2026-09-24', homework_status: 'partial', attendance_status: ['무단결석'], lesson_range: '수학1 p.56~60' }),
     ], VERBATIM, '2026-09-21');
     const s = m.subjects[0];
-    expect(s.ranges).toEqual(['수학1 p.42~55', '수학1 p.56~60']);
+    expect(s.ranges).toEqual(['수학1 p.42~55']); // 결석한 날의 진도는 카드에 올리지 않는다
     expect(s.homework).toEqual(['완료', '부분']);
     expect(s.tests).toEqual(['단원평가 통과']);
     expect(s.absences).toBe(1);
     expect(homeworkCompletionRate(m)).toBe(75);
+  });
+});
+
+describe('진도 칸 오염 (2026-10-02 첫 생성에서 발견)', () => {
+  it('결석 사유·안내문은 진도로 치지 않는다', () => {
+    expect(isRealRange('수학1 p.42~55')).toBe(true);
+    expect(isRealRange('결석 사유: 가족 사정으로 인한 결석')).toBe(false);
+    expect(isRealRange('보충수업 예정')).toBe(false);
+    expect(isRealRange('시험기간으로 수업이 없습니다')).toBe(false);
+  });
+  it('결석한 날의 진도와 사유 문구는 카드에 나오지 않는다', () => {
+    const m = collectMaterial([
+      lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' }),
+      lesson({ id: 'e1', subject: '영어', lesson_date: '2026-09-24', lesson_range: '결석 사유: 가족 사정으로 인한 결석', attendance_status: ['인정결석'], homework_status: 'none_assigned' }),
+      lesson({ id: 'e2', subject: '영어', lesson_date: '2026-09-26', lesson_range: '문제 풀이 (6모, 9모), 보충수업 예정' }),
+    ], VERBATIM, '2026-09-21');
+    const card = buildFactsCard(m);
+    expect(card).not.toContain('결석 사유');
+    expect(card).not.toContain('보충수업 예정');
+    expect(card).toContain('영어 · 숙제 모두 해옴 · 결석 있음');
   });
 });
 
@@ -132,6 +152,16 @@ describe('검증', () => {
   it('학생 메모 검증', () => {
     expect(validateStudentNote('민준아, 이번 주 기울기 읽기를 세 번 만에 네 힘으로 맞혔지. 다음 시간엔 절편까지 같이 보자. 🌱', '김민준').ok).toBe(true);
     expect(validateStudentNote('짧아', '김민준').ok).toBe(false);
+  });
+
+  it('학생 메모에 존댓말이 섞이거나 꾸짖으면 걸린다 (2026-10-02 첫 생성에서 발견)', () => {
+    const v = validateStudentNote('민준아, 숙제 정확도를 높이는 것이 필요해. 주말 특강에 나오지 않은 점은 아쉬워. 다음 수업에서는 국어 내신 보강을 같이 진행합니다. 🌱', '김민준').violations;
+    expect(v).toContain('HONORIFIC_MIX');
+    expect(v).toContain('SCOLDING:아쉬워');
+  });
+
+  it("학부모 편지에 '지난주'를 쓰면 걸린다", () => {
+    expect(validateParentLetter(good.replace('이번 주', '지난주'), '김민준').violations).toContain('LAST_WEEK_WORDING');
   });
 });
 
