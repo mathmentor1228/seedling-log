@@ -52,6 +52,7 @@ import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReportPromptSettings } from '@/components/ReportPromptSettings';
 import { WeeklyReportGenerationStatus } from '@/components/admin/WeeklyReportGenerationStatus';
+import { WeeklyLetterPanel } from '@/components/admin/WeeklyLetterPanel';
 import { useSearchParams } from 'react-router-dom';
 import { ReportPurposeBanner } from '@/components/reports/ReportPurposeBanner';
 import { WeekProgressSummary, type StatusFilter } from '@/components/reports/WeekProgressSummary';
@@ -945,6 +946,13 @@ export default function Reports() {
         weekEnd={weekRange.end}
         generating={generating}
         onGenerateAll={() => handleGenerateReports('all')}
+      />
+
+      {/* WEEKLY-LETTER-V1: 편지형 생성 (시범) — 선생님 메모가 있는 학생만 */}
+      <WeeklyLetterPanel
+        weekStart={weekRange.start}
+        weekEnd={weekRange.end}
+        onDone={async () => { await fetchExistingReportsForWeek(); await fetchReports(); }}
       />
 
       {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}

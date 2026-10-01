@@ -620,6 +620,21 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                   </div>
                 </div>
 
+                {/* WEEKLY-LETTER-V1: 학부모께 한 줄 — 주간 편지의 재료. 접지 않고 진도·숙제보다 앞에 둔다 */}
+                <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                  <Label className="text-[11px] font-medium text-primary">
+                    ✉ 학부모께 한 줄
+                    <span className="ml-1 font-normal text-muted-foreground">오늘 이 학생에게서 본 것. 이게 없으면 그 주 편지가 나가지 않습니다</span>
+                  </Label>
+                  <Textarea
+                    value={s.notes}
+                    onChange={(e) => patch(s.id, { notes: e.target.value })}
+                    rows={2}
+                    placeholder="예: 일차함수 그래프에서 기울기 읽기를 세 번 만에 스스로 맞췄어요 / 분수 통분에서 멈춰서 다음 시간에 다시 봅니다"
+                    className="text-xs bg-background"
+                  />
+                </div>
+
                 {/* 진도 예외 + 다음 숙제 */}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input
@@ -645,12 +660,6 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                       </button>
                     )}
                   </div>
-                </div>
-
-                {/* 학부모 전달 메모는 접지 않는다 */}
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">수업 메모 (학부모 공유)</Label>
-                  <Textarea value={s.notes} onChange={(e) => patch(s.id, { notes: e.target.value })} rows={2} placeholder="학부모에게 전달할 내용" className="text-xs" />
                 </div>
 
                 <button
