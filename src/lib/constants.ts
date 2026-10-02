@@ -32,22 +32,21 @@ export function getGradeYearsForLevel(level: string) {
 }
 
 // ── Teachers ──
-// 강의실 배정 룰 (단일 진실 공급원):
+// 강의실 배정 룰 (단일 진실 공급원, 2026-10-02 조정):
 // - 황은지: 4층 2강의실
-// - 최윤기: 4층 4강의실 (수학) / 3층 10강의실 (과학)
+// - 최윤기: 3층 7강의실 (수학) / 3층 10강의실 (과학)
 // - 이재진: 4층 5강의실
 // - 이나연: 3층 6강의실
-// - 함유빈: 3층 7강의실
-// - 조준희: 3층 8강의실
-// - 김민희: 3층 9강의실
+// - 함유빈: 4층 4강의실
+// - 조준희: 3층 9강의실
+// - 김민희: (임시 계정, 배정 없음)
 export const TEACHERS = [
   { name: '황은지(원장)', room: '4층 2강의실' },
-  { name: '최윤기', room: '4층 4강의실' },
+  { name: '최윤기', room: '3층 7강의실' },
   { name: '이재진', room: '4층 5강의실' },
   { name: '이나연', room: '3층 6강의실' },
-  { name: '함유빈', room: '3층 7강의실' },
-  { name: '조준희', room: '3층 8강의실' },
-  { name: '김민희', room: '3층 9강의실' },
+  { name: '함유빈', room: '4층 4강의실' },
+  { name: '조준희', room: '3층 9강의실' },
   { name: '김은수', room: '4층 3강의실' }, // 영어(임시 근무)
 ] as const;
 
@@ -63,7 +62,7 @@ export function getTeacherRoom(teacherName: string, subject?: string): string {
   if (!teacherName) return '';
   const base = teacherName.replace(/\(.*\)/, '').trim();
   if (base === '최윤기') {
-    return subject === '과학' ? '3층 10강의실' : '4층 4강의실';
+    return subject === '과학' ? '3층 10강의실' : '3층 7강의실';
   }
   const match = TEACHERS.find(t => t.name.replace(/\(.*\)/, '').trim() === base);
   return match?.room ?? '';
