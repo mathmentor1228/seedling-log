@@ -195,23 +195,30 @@ export function EnglishPayrollTab() {
 
   const printSheet = () => {
     const [y, m] = month.split('-');
-    const rowsHtml = computed.map(({ r, c, fee }) => `<tr><td>${r.name}</td><td>${r.days.map(d => DOW[d]).join('')}</td><td></td><td class="n">${c.total}</td><td class="n">${c.attended}</td><td class="n">${won(Math.round(fee * 0.4))}</td><td>${r.endDate ? '종료 ' + r.endDate : ''}</td></tr>`).join('');
-    const blank = Array.from({ length: Math.max(0, 5 - 0) }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+    const rowsHtml = computed.map(({ r, c, fee }, i) => `<tr><td class="c">${i + 1}</td><td class="l">${r.name}</td><td class="c">${r.days.map(d => DOW[d]).join('')}</td><td class="n">${c.total}</td><td class="n">${c.attended}</td><td class="n">${won(Math.round(fee * 0.4))}</td><td class="l s">${r.endDate ? '종료 ' + r.endDate : ''}</td></tr>`).join('');
     const w = window.open('', '_blank');
     if (!w) return toast.error('팝업이 차단되었습니다');
     w.document.write(`<html><head><title>월별 강사 정산서 ${month}</title><style>
-      @page{size:A4;margin:14mm}body{font-family:'Noto Sans KR',sans-serif;font-size:11px;color:#111}
-      h1{color:#1f2a6b;font-size:22px;margin:0 0 14px}
-      .top{display:flex;justify-content:space-between;margin-bottom:14px}.info td{padding:3px 14px 3px 0}
-      table{border-collapse:collapse}.sum td{border:1px solid #333;padding:3px 8px}.sum td:first-child{background:#e5e7eb;font-weight:bold;text-align:center}
-      .main{width:100%}.main th{background:#1f2a6b;color:#fff;padding:4px;border:1px solid #333}.main td{border:1px solid #555;padding:2px 6px;text-align:center}
-      .main tr:nth-child(even) td{background:#f1f3f9}.n{text-align:right!important}
-      .foot{display:flex;justify-content:space-between;margin-top:24px}.sign div{margin-bottom:22px}
+      @page{size:A4 portrait;margin:12mm 10mm}
+      *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      html,body{margin:0;padding:0}
+      body{width:190mm;margin:0 auto;font-family:'Noto Sans KR',sans-serif;font-size:10px;color:#111}
+      h1{color:#1f2a6b;font-size:18px;margin:0 0 8px}
+      .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8mm}.info td{padding:2px 10px 2px 0;font-size:11px}
+      table{border-collapse:collapse}.sum td{border:1px solid #333;padding:3px 8px;font-size:11px}.sum td:first-child{background:#e5e7eb;font-weight:bold;text-align:center;white-space:nowrap}
+      .main{width:100%;table-layout:fixed}.main th{background:#1f2a6b;color:#fff;padding:3px 2px;border:1px solid #333;font-size:10px;white-space:nowrap}
+      .main td{border:1px solid #777;padding:2px 4px;height:5.6mm;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+      .main thead{display:table-header-group}.main tr{page-break-inside:avoid;break-inside:avoid}
+      .main tr:nth-child(even) td{background:#f1f3f9}.n{text-align:right}.c{text-align:center}.l{text-align:left}.s{font-size:9px}
+      .main tfoot td{font-weight:bold;background:#e5e7eb}
+      .foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10mm;page-break-inside:avoid;font-size:11px}.sign div{margin-bottom:8mm;min-width:50mm;border-bottom:1px solid #999;padding-bottom:2px}
     </style></head><body>
       <h1>월별 강사 정산서</h1>
-      <div class="top"><table class="info"><tr><td><b>강사명</b></td><td>이재진</td></tr><tr><td><b>정산월</b></td><td>${y}-${m}</td></tr></table>
+      <div class="top"><table class="info"><tr><td><b>강사명</b></td><td>이재진</td></tr><tr><td><b>정산월</b></td><td>${y}-${m}</td></tr><tr><td><b>인원</b></td><td>${computed.length}명</td></tr></table>
       <table class="sum"><tr><td>총 정산 급여</td><td class="n">${won(pay.gross)}</td></tr><tr><td>공제액 (3.3%)</td><td class="n">${won(pay.tax)}</td></tr><tr><td>실 지급액</td><td class="n">${won(pay.net)}</td></tr></table></div>
-      <table class="main"><thead><tr><th>학생명</th><th>기본 요일</th><th>당월 요일</th><th>당월 총회차</th><th>실제 출석</th><th>강사 급여</th><th>비고</th></tr></thead><tbody>${rowsHtml}${blank}</tbody></table>
+      <table class="main"><colgroup><col style="width:7%"><col style="width:17%"><col style="width:13%"><col style="width:11%"><col style="width:11%"><col style="width:17%"><col style="width:24%"></colgroup>
+      <thead><tr><th>No</th><th>학생명</th><th>수업 요일</th><th>당월 총회차</th><th>반영 횟수</th><th>강사 급여</th><th>비고</th></tr></thead><tbody>${rowsHtml}</tbody>
+      <tfoot><tr><td colspan="5" class="c">합계</td><td class="n">${won(pay.gross)}</td><td></td></tr></tfoot></table>
       <div class="foot"><div>위와 같이 정산 내역을 확인합니다.</div><div class="sign"><div>일자:</div><div>서명:</div></div></div>
       <script>window.onload=()=>{window.print()}<\/script></body></html>`);
     w.document.close();
