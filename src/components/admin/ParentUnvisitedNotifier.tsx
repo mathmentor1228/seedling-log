@@ -176,7 +176,7 @@ export function ParentUnvisitedNotifier() {
   function downloadExcel() {
     const rows = unvisited.map((student) => ({
       학생명: student.name,
-      학년: student.grade ? `${student.grade}학년` : '',
+      학년: student.grade ? `${student.grade}` : '',
       담당선생님: student.teacher_name || '',
       학부모명: student.parent_name || '',
       연락처: student.parent_phone || '',
@@ -268,7 +268,7 @@ export function ParentUnvisitedNotifier() {
                       <Checkbox checked={selected.includes(student.id)} onCheckedChange={(checked) => toggleOne(student.id, checked === true)} />
                     </TableCell>
                     <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{student.grade ? `${student.grade}학년` : '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{student.grade ? `${student.grade}` : '-'}</TableCell>
                     <TableCell className="text-muted-foreground">{student.teacher_name || '-'}</TableCell>
                     <TableCell>{student.parent_name || '-'}</TableCell>
                     <TableCell className="text-muted-foreground">{student.parent_phone || '-'}</TableCell>
