@@ -174,10 +174,12 @@ export function EnglishPayrollTab() {
   const groups = useMemo(() => {
     const mp = new Map<string, typeof computed>();
     visible.forEach(x => {
-      const k = groupBy === 'grade' ? x.r.grade : groupBy === 'start' ? x.r.startDate : '전체';
+      const levelLabel = x.r.schoolLevel === '고' ? '고등' : x.r.schoolLevel === '중' ? '중등' : '';
+      const k = groupBy === 'grade' ? (levelLabel ? `${levelLabel} ${x.r.grade}` : x.r.grade) : groupBy === 'start' ? x.r.startDate : '전체';
       mp.set(k, [...(mp.get(k) || []), x]);
     });
-    return [...mp.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ko'));
+    const order = (k: string) => (k.startsWith('중등') ? 0 : k.startsWith('고등') ? 1 : 2);
+    return [...mp.entries()].sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0], 'ko', { numeric: true }));
   }, [visible, groupBy]);
 
   const printSheet = () => {
