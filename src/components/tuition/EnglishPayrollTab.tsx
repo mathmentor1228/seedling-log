@@ -249,7 +249,7 @@ export function EnglishPayrollTab() {
         <CardHeader className="pb-2"><CardTitle className="text-sm">학생별 정산 ({rows.length}명)</CardTitle></CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {loading ? <div className="p-8 text-center text-muted-foreground">불러오는 중...</div> : (
-            <Table className="min-w-[1150px]">
+            <Table className="min-w-[920px] [&_th]:px-2 [&_th]:py-1.5 [&_td]:px-2 [&_td]:py-1.5 [&_th]:whitespace-nowrap [&_th]:text-xs">
               <TableHeader><TableRow>
                 <TableHead className="sticky left-0 z-30 bg-card">학생</TableHead><TableHead>시작일</TableHead><TableHead>요일</TableHead>
                 <TableHead className="text-right">기본</TableHead><TableHead className="text-right">할인</TableHead>
@@ -269,12 +269,12 @@ export function EnglishPayrollTab() {
                       {!r.withdrawn && r.endDate && <div className="text-[10px] text-destructive">수업 종료 {r.endDate} · {r.endDate}까지 반영</div>}
                     </TableCell>
                     <TableCell>
-                      <Input type="date" defaultValue={r.startDate} className="h-8 w-36" onBlur={e => e.target.value !== r.startDate && saveStart(r.courseId, e.target.value)} />
+                      <Input type="date" defaultValue={r.startDate} className="h-7 w-[112px] px-2 text-xs" onBlur={e => e.target.value !== r.startDate && saveStart(r.courseId, e.target.value)} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <div className="flex gap-0.5">{[1, 2, 3, 4, 5, 6, 0].map(d => (
+                      <div className="flex gap-[2px]">{[1, 2, 3, 4, 5, 6, 0].map(d => (
                         <button key={d} type="button" onClick={() => toggleDay(r, d)}
-                          className={`h-6 w-6 rounded text-[11px] border ${r.days.includes(d) ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-border hover:bg-muted'}`}>{DOW[d]}</button>
+                          className={`h-5 w-5 rounded text-[10px] border ${r.days.includes(d) ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-border hover:bg-muted'}`}>{DOW[d]}</button>
                       ))}</div>
                       <div className="text-[10px] mt-0.5 text-muted-foreground">
                         {r.daySource === 'manual' && <>직접 조정 · <button type="button" className="underline" onClick={() => saveDays(r.courseId, null)}>기본으로</button></>}
@@ -292,7 +292,7 @@ export function EnglishPayrollTab() {
                     <TableCell className="text-right">{c.fee.toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       <Input key={`${r.courseId}-${fee}`} defaultValue={overridden ? String(fee) : ''} placeholder={fee.toLocaleString()}
-                        className={`h-8 w-28 ml-auto text-right ${overridden ? 'border-primary' : ''}`}
+                        className={`h-7 w-24 ml-auto text-right text-xs ${overridden ? 'border-primary' : ''}`}
                         onBlur={e => { const v = e.target.value; if (v !== (overridden ? String(fee) : '')) saveOverride(r.courseId, v); }} />
                     </TableCell>
                   </TableRow>
