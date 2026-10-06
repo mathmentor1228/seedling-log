@@ -12,8 +12,8 @@ import { useAuth } from '@/lib/auth';
 
 export function TuitionDashboard() {
   const [tab, setTab] = useState('calendar');
-  const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  const { role, user } = useAuth();
+  const isAdmin = role === 'admin' || user?.email === 'bfkor8810@naver.com';
 
   return (
     <AppLayout>

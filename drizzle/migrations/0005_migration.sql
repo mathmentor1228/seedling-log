@@ -1,0 +1,1 @@
+create policy "bfkor8810 manages payroll overrides" on public.teacher_payroll_overrides for all to authenticated using ((auth.jwt() ->> 'email') = 'bfkor8810@naver.com') with check ((auth.jwt() ->> 'email') = 'bfkor8810@naver.com');

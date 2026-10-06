@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Printer } from 'lucide-react';
 import { computeEnglishFee, computePay } from '@/lib/englishPayroll';
 
 const TEACHER_ID = '916c5055-2a8c-46d8-b84c-fd280d7f541f'; // 이재진(영어)
@@ -119,6 +121,30 @@ export function EnglishPayrollTab() {
     toast.success('금액 저장'); load();
   };
 
+  const printSheet = () => {
+    const [y, m] = month.split('-');
+    const rowsHtml = computed.map(({ r, c, fee }) => `<tr><td>${r.name}</td><td>${r.days.map(d => DOW[d]).join('')}</td><td></td><td class="n">${c.total}</td><td class="n">${c.attended}</td><td class="n">${won(Math.round(fee * 0.4))}</td><td>${r.endDate ? '종료 ' + r.endDate : ''}</td></tr>`).join('');
+    const blank = Array.from({ length: Math.max(0, 5 - 0) }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+    const w = window.open('', '_blank');
+    if (!w) return toast.error('팝업이 차단되었습니다');
+    w.document.write(`<html><head><title>월별 강사 정산서 ${month}</title><style>
+      @page{size:A4;margin:14mm}body{font-family:'Noto Sans KR',sans-serif;font-size:11px;color:#111}
+      h1{color:#1f2a6b;font-size:22px;margin:0 0 14px}
+      .top{display:flex;justify-content:space-between;margin-bottom:14px}.info td{padding:3px 14px 3px 0}
+      table{border-collapse:collapse}.sum td{border:1px solid #333;padding:3px 8px}.sum td:first-child{background:#e5e7eb;font-weight:bold;text-align:center}
+      .main{width:100%}.main th{background:#1f2a6b;color:#fff;padding:4px;border:1px solid #333}.main td{border:1px solid #555;padding:2px 6px;text-align:center}
+      .main tr:nth-child(even) td{background:#f1f3f9}.n{text-align:right!important}
+      .foot{display:flex;justify-content:space-between;margin-top:24px}.sign div{margin-bottom:22px}
+    </style></head><body>
+      <h1>월별 강사 정산서</h1>
+      <div class="top"><table class="info"><tr><td><b>강사명</b></td><td>이재진</td></tr><tr><td><b>정산월</b></td><td>${y}-${m}</td></tr></table>
+      <table class="sum"><tr><td>총 정산 급여</td><td class="n">${won(pay.gross)}</td></tr><tr><td>공제액 (3.3%)</td><td class="n">${won(pay.tax)}</td></tr><tr><td>실 지급액</td><td class="n">${won(pay.net)}</td></tr></table></div>
+      <table class="main"><thead><tr><th>학생명</th><th>기본 요일</th><th>당월 요일</th><th>당월 총회차</th><th>실제 출석</th><th>강사 급여</th><th>비고</th></tr></thead><tbody>${rowsHtml}${blank}</tbody></table>
+      <div class="foot"><div>위와 같이 정산 내역을 확인합니다.</div><div class="sign"><div>일자:</div><div>서명:</div></div></div>
+      <script>window.onload=()=>{window.print()}<\/script></body></html>`);
+    w.document.close();
+  };
+
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -126,6 +152,7 @@ export function EnglishPayrollTab() {
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m.replace('-', '년 ')}월</SelectItem>)}</SelectContent>
         </Select>
+        <Button size="sm" variant="outline" onClick={printSheet} disabled={loading} className="gap-1.5"><Printer className="h-4 w-4" />정산서 인쇄</Button>
         <p className="text-xs text-muted-foreground">영어 이재진 · 중등 25만 / 고등 32만 · 시작일~말일 수업 횟수로 일할 · 급여 40% · 세금 3.3%</p>
       </div>
 
