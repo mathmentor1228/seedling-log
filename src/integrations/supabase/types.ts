@@ -7323,6 +7323,7 @@ export type Database = {
       teacher_payroll_overrides: {
         Row: {
           billing_month: string
+          class_days: number[] | null
           created_at: string
           id: string
           memo: string | null
@@ -7333,6 +7334,7 @@ export type Database = {
         }
         Insert: {
           billing_month: string
+          class_days?: number[] | null
           created_at?: string
           id?: string
           memo?: string | null
@@ -7343,6 +7345,7 @@ export type Database = {
         }
         Update: {
           billing_month?: string
+          class_days?: number[] | null
           created_at?: string
           id?: string
           memo?: string | null
