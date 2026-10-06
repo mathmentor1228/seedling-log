@@ -29,6 +29,13 @@
       "when": 1790671740552,
       "tag": "0003_office_task_student_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791292538438,
+      "tag": "0004_teacher_payroll_overrides",
+      "breakpoints": true
     }
   ]
 }

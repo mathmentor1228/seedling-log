@@ -7320,6 +7320,47 @@ export type Database = {
           },
         ]
       }
+      teacher_payroll_overrides: {
+        Row: {
+          billing_month: string
+          created_at: string
+          id: string
+          memo: string | null
+          override_amount: number | null
+          student_course_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          billing_month: string
+          created_at?: string
+          id?: string
+          memo?: string | null
+          override_amount?: number | null
+          student_course_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          billing_month?: string
+          created_at?: string
+          id?: string
+          memo?: string | null
+          override_amount?: number | null
+          student_course_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_payroll_overrides_student_course_id_fkey"
+            columns: ["student_course_id"]
+            isOneToOne: false
+            referencedRelation: "student_courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teacher_student_links: {
         Row: {
           first_seen_at: string
