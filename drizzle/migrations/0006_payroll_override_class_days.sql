@@ -1,0 +1,1 @@
+ALTER TABLE public.teacher_payroll_overrides ADD COLUMN IF NOT EXISTS class_days smallint[];
