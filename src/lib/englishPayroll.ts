@@ -1,6 +1,6 @@
 // 영어과(이재진) 급여 정산 규칙
 export const ENGLISH_FEE = { middle: 250000, high: 320000 } as const;
-export const SIBLING_DISCOUNT_TOTAL = 10000; // 형제 할인: 수강 과목 수로 나눠 영어 몫만 반영
+export const SIBLING_DISCOUNT_TOTAL = 10000; // 형제 할인: 주요과목(영·수)이 부담
 export const PAY_RATE = 0.4;
 export const TAX_RATE = 0.033;
 
@@ -11,9 +11,10 @@ export function multiSubjectEnglishDiscount(subjectCount: number): number {
   return 0;
 }
 
-export function siblingEnglishDiscount(isSibling: boolean, subjectCount: number): number {
+/** 형제 할인 1만원은 주요과목(영어·수학)이 부담: 영어+수학이면 5천원씩, 아니면 영어가 1만원 */
+export function siblingEnglishDiscount(isSibling: boolean, takesMath: boolean): number {
   if (!isSibling) return 0;
-  return Math.round(SIBLING_DISCOUNT_TOTAL / Math.max(1, subjectCount));
+  return takesMath ? SIBLING_DISCOUNT_TOTAL / 2 : SIBLING_DISCOUNT_TOTAL;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -35,6 +36,7 @@ export interface PayrollInput {
   schoolLevel: string | null;
   subjectCount: number;
   isSibling: boolean;
+  takesMath?: boolean;
   days: number[];
   startDate: string;
   endDate: string | null;
@@ -44,7 +46,7 @@ export interface PayrollInput {
 export function computeEnglishFee(i: PayrollInput) {
   const [y, m] = i.month.split('-').map(Number);
   const base = i.schoolLevel === '고' ? ENGLISH_FEE.high : ENGLISH_FEE.middle;
-  const sib = siblingEnglishDiscount(i.isSibling, i.subjectCount);
+  const sib = siblingEnglishDiscount(i.isSibling, !!i.takesMath);
   const multi = multiSubjectEnglishDiscount(i.subjectCount);
   const monthly = base - sib - multi;
   const total = countClassDays(y, m, i.days);
