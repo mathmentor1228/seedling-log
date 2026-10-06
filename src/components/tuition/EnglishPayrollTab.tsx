@@ -238,9 +238,9 @@ export function EnglishPayrollTab() {
         <CardHeader className="pb-2"><CardTitle className="text-sm">학생별 정산 ({rows.length}명)</CardTitle></CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           {loading ? <div className="p-8 text-center text-muted-foreground">불러오는 중...</div> : (
-            <Table>
+            <Table className="min-w-[1150px]">
               <TableHeader><TableRow>
-                <TableHead>학생</TableHead><TableHead>시작일</TableHead><TableHead>요일</TableHead>
+                <TableHead className="sticky left-0 z-30 bg-card">학생</TableHead><TableHead>시작일</TableHead><TableHead>요일</TableHead>
                 <TableHead className="text-right">기본</TableHead><TableHead className="text-right">할인</TableHead>
                 <TableHead className="text-right">시수</TableHead><TableHead className="text-right">계산 원비</TableHead>
                 <TableHead className="text-right">최종 원비(수정)</TableHead>
@@ -252,7 +252,7 @@ export function EnglishPayrollTab() {
                   </TableCell></TableRow>,
                   ...items.map(({ r, c, fee, overridden }) => (
                   <TableRow key={r.courseId}>
-                    <TableCell className="font-medium whitespace-nowrap">
+                    <TableCell className="font-medium whitespace-nowrap sticky left-0 z-20 bg-card group-hover/tr:bg-card">
                       {r.name} <span className="text-xs text-muted-foreground">{r.grade}</span>
                       {r.endDate && <div className="text-[10px] text-destructive">{r.withdrawn ? '퇴원' : '종료'} · {r.endDate}까지 반영</div>}
                     </TableCell>
