@@ -173,12 +173,22 @@ export function EnglishPayrollTab() {
   const visible = computed.filter(x => gradeFilter === 'all' || x.r.grade === gradeFilter);
   const groups = useMemo(() => {
     const mp = new Map<string, typeof computed>();
+    const gradeGroupLabel = (r: Row) => {
+      const ym = r.grade.match(/(\d+)/)?.[1];
+      const lv = r.schoolLevel === '고' ? '고' : r.schoolLevel === '중' ? '중' : '';
+      if (lv && ym) return `${lv}${ym}그룹`;
+      if (ym) return `${ym}학년 그룹`;
+      return '학년 미상';
+    };
     visible.forEach(x => {
-      const levelLabel = x.r.schoolLevel === '고' ? '고등' : x.r.schoolLevel === '중' ? '중등' : '';
-      const k = groupBy === 'grade' ? (levelLabel ? `${levelLabel} ${x.r.grade}` : x.r.grade) : groupBy === 'start' ? x.r.startDate : '전체';
+      const k = groupBy === 'grade' ? gradeGroupLabel(x.r) : groupBy === 'start' ? x.r.startDate : '전체';
       mp.set(k, [...(mp.get(k) || []), x]);
     });
-    const order = (k: string) => (k.startsWith('중등') ? 0 : k.startsWith('고등') ? 1 : 2);
+    const order = (k: string) => {
+      const m = k.match(/^([중고])(\d)/);
+      if (m) return (m[1] === '중' ? 0 : 10) + Number(m[2]);
+      return 99;
+    };
     return [...mp.entries()].sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0], 'ko', { numeric: true }));
   }, [visible, groupBy]);
 
