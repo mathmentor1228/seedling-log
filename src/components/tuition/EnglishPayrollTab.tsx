@@ -24,7 +24,7 @@ const endOf = (c: any): string | null => {
 interface Row {
   courseId: string; studentId: string; name: string; schoolLevel: string | null;
   startDate: string; endDate: string | null; subjectCount: number; isSibling: boolean; days: number[];
-  grade: string; daySource: 'schedule' | 'lessons' | 'manual' | 'none'; withdrawn: boolean;
+  grade: string; daySource: 'schedule' | 'lessons' | 'manual' | 'none'; withdrawn: boolean; withdrawnAt: string | null;
 }
 
 export function EnglishPayrollTab() {
@@ -105,7 +105,7 @@ export function EnglishPayrollTab() {
       const st = c.students || {};
       const grade = st.grade || (st.school_level && st.grade_year ? `${st.school_level}${st.grade_year}` : (st.school_level === '고' ? '고등' : '중등'));
       return {
-        grade, daySource, withdrawn: !!st.withdrawn_at,
+        grade, daySource, withdrawn: !!st.withdrawn_at, withdrawnAt: st.withdrawn_at?.slice(0, 10) || null,
         courseId: c.id, studentId: c.student_id, name: c.students?.name || '-',
         schoolLevel: c.students?.school_level, startDate: c.enrollment_date, endDate: end,
         subjectCount: Math.max(1, subjBy.get(c.student_id)?.size || 1),
@@ -254,7 +254,8 @@ export function EnglishPayrollTab() {
                   <TableRow key={r.courseId}>
                     <TableCell className="font-medium whitespace-nowrap sticky left-0 z-20 bg-card group-hover/tr:bg-card">
                       {r.name} <span className="text-xs text-muted-foreground">{r.grade}</span>
-                      {r.endDate && <div className="text-[10px] text-destructive">{r.withdrawn ? '퇴원' : '종료'} · {r.endDate}까지 반영</div>}
+                      {r.withdrawn && <div className="text-[10px] text-destructive">퇴원 {r.withdrawnAt || '날짜 미상'} · {r.endDate || '?'}까지 반영</div>}
+                      {!r.withdrawn && r.endDate && <div className="text-[10px] text-destructive">수업 종료 {r.endDate} · {r.endDate}까지 반영</div>}
                     </TableCell>
                     <TableCell>
                       <Input type="date" defaultValue={r.startDate} className="h-8 w-36" onBlur={e => e.target.value !== r.startDate && saveStart(r.courseId, e.target.value)} />
