@@ -282,14 +282,14 @@ export function EnglishPayrollTab() {
                         {r.daySource === 'none' && <span className="text-destructive">요일을 눌러 지정</span>}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">{c.base.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-xs">{c.base.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-xs whitespace-nowrap">
                       {c.sib > 0 && <div>형제 -{c.sib.toLocaleString()}</div>}
                       {c.multi > 0 && <div>{r.subjectCount}과목 -{c.multi.toLocaleString()}</div>}
                       {!c.sib && !c.multi && '-'}
                     </TableCell>
-                    <TableCell className="text-right">{c.attended}/{c.total}</TableCell>
-                    <TableCell className="text-right">{c.fee.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-xs">{c.attended}/{c.total}</TableCell>
+                    <TableCell className="text-right text-xs">{c.fee.toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       <Input key={`${r.courseId}-${fee}`} defaultValue={overridden ? String(fee) : ''} placeholder={fee.toLocaleString()}
                         className={`h-7 w-24 ml-auto text-right text-xs ${overridden ? 'border-primary' : ''}`}
