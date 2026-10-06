@@ -23,7 +23,7 @@ const endOf = (c: any): string | null => {
 
 interface Row {
   courseId: string; studentId: string; name: string; schoolLevel: string | null;
-  startDate: string; endDate: string | null; subjectCount: number; isSibling: boolean; days: number[];
+  startDate: string; endDate: string | null; subjectCount: number; isSibling: boolean; takesMath: boolean; days: number[];
   grade: string; daySource: 'schedule' | 'lessons' | 'manual' | 'none'; withdrawn: boolean; withdrawnAt: string | null;
 }
 
@@ -109,6 +109,7 @@ export function EnglishPayrollTab() {
         courseId: c.id, studentId: c.student_id, name: c.students?.name || '-',
         schoolLevel: c.students?.school_level, startDate: c.enrollment_date, endDate: end,
         subjectCount: Math.max(1, subjBy.get(c.student_id)?.size || 1),
+        takesMath: subjBy.get(c.student_id)?.has('수학') || false,
         isSibling: g != null && (groupCount.get(g) || 0) >= 2,
         days,
       };
