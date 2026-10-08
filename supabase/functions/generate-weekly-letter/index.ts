@@ -1,25 +1,27 @@
-// WEEKLY-LETTER-V1 — 주간 학습 편지 생성 (편지형, 시범 운영)
-// 선생님이 직접 쓴 말이 있는 학생만, AI 호출 1번으로 학부모 편지 + 학생 메모를 만들어 weekly_reports에 저장한다.
+// WEEKLY-LETTER-V2 — 주간 학습 편지 생성
+// 선생님 말(주간 코멘트 1순위)이 있는 학생은 AI 호출 1번으로 학부모 편지 + 학생 메모를, 없는 학생은 AI 없이 약식(기록만)을 만들어 weekly_reports에 저장한다.
 // 검증 실패 시 저장하지 않는다(중립 대체 문안 없음). 공개·발송된 행은 건드리지 않는다.
 //
 // 요청 (POST, 관리자 JWT 또는 x-cron-key)
 //   { week_start: 'YYYY-MM-DD'(월), week_end?: 'YYYY-MM-DD'(기본 +5=토), student_ids?: string[],
-//     dry_run?: boolean (재료 점검만, AI·DB 쓰기 없음), force?: boolean (기존 초안 덮어쓰기) }
+//     dry_run?: boolean (재료 점검만, AI·DB 쓰기 없음), force?: boolean (기존 초안 덮어쓰기),
+//     skip_facts_only?: boolean (선생님 말 없는 학생의 약식은 만들지 않음) }
 // 응답
-//   { week_start, week_end, dry_run, ready: [...], skipped: [{id,name,reason}], generated: [...], failed: [...], protected: [...], exists: [...] }
+//   { week_start, week_end, dry_run, ready: [{id,name,mode:'letter'|'facts_only',...}], skipped: [{id,name,reason}], generated: [...], failed: [...], protected: [...], exists: [...] }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   type LessonRow, type Material,
-  collectMaterial, skipReason, buildUserPrompt, LETTER_SYSTEM_PROMPT, parseLetterJson,
-  validateParentLetter, validateStudentNote, composeParentMessage, averageUnderstanding,
-  homeworkCompletionRate, firstSentence,
+  collectMaterial, skipReason, letterMode, buildUserPrompt, LETTER_SYSTEM_PROMPT, parseLetterJson,
+  validateParentLetter, validateStudentNote, composeParentMessage, composeFactsOnlyMessage, averageUnderstanding,
+  homeworkCompletionRate, firstSentence, type LetterMode,
 } from './letter.ts';
 
-const ENGINE = 'LETTER_V1';
+const ENGINE = 'LETTER_V2';
 const MODEL = 'google/gemini-2.5-flash';
 const MAX_PER_CALL = 12;
-// 영어 이재진 선생님: 주간 코멘트를 직접 쓰고 원문 그대로 싣는다 (원장 방침 2026-07-29)
-const VERBATIM_TEACHER_IDS = ['916c5055-2a8c-46d8-b84c-fd280d7f541f'];
+// 주간 코멘트 대상에서 제외하는 선생님 — 영어 이재진. 수업 코멘트가 학부모 포털에 그대로 노출되므로 편지로 갈음한다 (원장 결정 2026-10-09).
+// 프런트 src/lib/constants.ts 의 WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS 와 함께 갱신할 것.
+const EXCLUDED_TEACHER_IDS = ['916c5055-2a8c-46d8-b84c-fd280d7f541f'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,6 +94,7 @@ Deno.serve(async (req) => {
   const weekEnd = /^\d{4}-\d{2}-\d{2}$/.test(String(body.week_end || '')) ? String(body.week_end) : addDays(weekStart, 5);
   const dryRun = body.dry_run === true;
   const force = body.force === true;
+  const skipFactsOnly = body.skip_facts_only === true;
   const requestedIds = Array.isArray(body.student_ids) ? (body.student_ids as string[]).filter(Boolean) : null;
 
   // --- 대상 학생 ---
@@ -123,7 +126,7 @@ Deno.serve(async (req) => {
     existing.set(r.student_id, {
       id: r.id,
       locked: !!r.parent_visible || r.parent_sent_status === 'sent' || r.student_sent_status === 'sent',
-      engine: r.debug_info?.startsWith(ENGINE) ? ENGINE : 'legacy',
+      engine: r.debug_info?.startsWith('LETTER_V') ? ENGINE : 'legacy',
     });
   }
 
@@ -134,21 +137,23 @@ Deno.serve(async (req) => {
     byStudent.set(l.student_id, arr);
   }
 
-  const ready: Array<Named & { lines: number; verbatim: number; subjects: string[] }> = [];
+  const ready: Array<Named & { mode: LetterMode; lines: number; subjects: string[] }> = [];
   const skipped: Array<Named & { reason: string }> = [];
   const protectedRows: Named[] = [];
   const existsRows: Named[] = [];
   const materials = new Map<string, Material>();
 
   for (const s of studentList) {
-    const m = collectMaterial(byStudent.get(s.id) ?? [], VERBATIM_TEACHER_IDS, weekStart);
+    const m = collectMaterial(byStudent.get(s.id) ?? [], EXCLUDED_TEACHER_IDS, weekStart);
     const reason = skipReason(m);
     if (reason) { skipped.push({ id: s.id, name: s.name, reason }); continue; }
+    const mode = letterMode(m);
+    if (mode === 'facts_only' && skipFactsOnly) { skipped.push({ id: s.id, name: s.name, reason: 'no_teacher_note' }); continue; }
     const ex = existing.get(s.id);
     if (ex?.locked) { protectedRows.push({ id: s.id, name: s.name }); continue; }
     if (ex && !force) { existsRows.push({ id: s.id, name: s.name }); continue; }
     materials.set(s.id, m);
-    ready.push({ id: s.id, name: s.name, lines: m.lines.length, verbatim: m.verbatim.length, subjects: m.subjects.map(x => x.subject) });
+    ready.push({ id: s.id, name: s.name, mode, lines: m.lines.length, subjects: m.subjects.map(x => x.subject) });
   }
 
   if (dryRun) {
@@ -158,12 +163,48 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get('LOVABLE_API_KEY');
   if (!apiKey) return json({ error: 'LOVABLE_API_KEY_missing' }, 500);
 
-  const generated: Array<Named & { attempts: number }> = [];
+  const generated: Array<Named & { attempts: number; mode: LetterMode }> = [];
   const failed: Array<Named & { reason: string }> = [];
   const targets = ready.slice(0, MAX_PER_CALL);
 
   for (const t of targets) {
     const m = materials.get(t.id)!;
+    const breakdown = {
+      engine: ENGINE,
+      mode: t.mode,
+      subjects: m.subjects.map(s => ({ subject: s.subject, ranges: s.ranges, homework: s.homework, tests: s.tests })),
+      teacher_lines: m.lines,
+      excluded_lessons: m.excludedLessons,
+    };
+
+    // 약식: 선생님 말이 없으면 AI 없이 헤더 + 기록 카드만 저장
+    if (t.mode === 'facts_only') {
+      const payload = {
+        student_id: t.id,
+        week_start: weekStart,
+        week_end: weekEnd,
+        parent_message: composeFactsOnlyMessage(t.name, weekStart, weekEnd, m),
+        student_message: null,
+        summary: '📋 기록만 (선생님 코멘트 없음)',
+        total_lessons: m.totalLessons,
+        avg_understanding: averageUnderstanding(m),
+        homework_completion_rate: homeworkCompletionRate(m),
+        report_quality_tag: 'FACTS_ONLY',
+        risk_level: null,
+        parent_visible: false,
+        subject_breakdown: breakdown,
+        debug_info: `${ENGINE} mode=facts_only lines=${m.lines.length} source=${source}`,
+        generated_at: new Date().toISOString(),
+      };
+      const ex = existing.get(t.id);
+      const { error: saveErr } = ex
+        ? await admin.from('weekly_reports').update(payload).eq('id', ex.id)
+        : await admin.from('weekly_reports').insert(payload);
+      if (saveErr) failed.push({ id: t.id, name: t.name, reason: `SAVE_FAILED:${saveErr.message}` });
+      else generated.push({ id: t.id, name: t.name, attempts: 0, mode: 'facts_only' });
+      continue;
+    }
+
     const userPrompt = buildUserPrompt(t.name, weekStart, weekEnd, m);
     let attempts = 0;
     let retryNote: string | undefined;
@@ -199,13 +240,8 @@ Deno.serve(async (req) => {
           report_quality_tag: 'GREEN',
           risk_level: null,
           parent_visible: false,
-          subject_breakdown: {
-            engine: ENGINE,
-            subjects: m.subjects.map(s => ({ subject: s.subject, ranges: s.ranges, homework: s.homework, tests: s.tests })),
-            teacher_lines: m.lines,
-            verbatim_subjects: m.verbatim.map(v => v.subject),
-          },
-          debug_info: `${ENGINE} model=${MODEL} lines=${m.lines.length} verbatim=${m.verbatim.length} attempts=${attempts} source=${source}${firstFail ? ` first_fail=${firstFail}` : ''}`,
+          subject_breakdown: breakdown,
+          debug_info: `${ENGINE} mode=letter model=${MODEL} lines=${m.lines.length} attempts=${attempts} source=${source}${firstFail ? ` first_fail=${firstFail}` : ''}`,
           generated_at: new Date().toISOString(),
         };
         const ex = existing.get(t.id);
@@ -214,7 +250,7 @@ Deno.serve(async (req) => {
           : await admin.from('weekly_reports').insert(payload);
         if (saveErr) { lastReason = `SAVE_FAILED:${saveErr.message}`; break; }
         saved = true;
-        generated.push({ id: t.id, name: t.name, attempts });
+        generated.push({ id: t.id, name: t.name, attempts, mode: 'letter' });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         lastReason = msg;
@@ -231,7 +267,7 @@ Deno.serve(async (req) => {
     week_end: weekEnd,
     status: failed.length === 0 ? 'completed' : 'completed_with_errors',
     scheduler_source: source,
-    message: `${ENGINE}: generated ${generated.length}, failed ${failed.length}, skipped ${skipped.length}, protected ${protectedRows.length}, exists ${existsRows.length}`,
+    message: `${ENGINE}: generated ${generated.length} (letter ${generated.filter(g => g.mode === 'letter').length}, facts_only ${generated.filter(g => g.mode === 'facts_only').length}), failed ${failed.length}, skipped ${skipped.length}, protected ${protectedRows.length}, exists ${existsRows.length}`,
   });
 
   return json({

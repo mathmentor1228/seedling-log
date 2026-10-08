@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildFactsCard, buildUserPrompt, cleanLine, collectMaterial, composeParentMessage, formatHeader,
-  homeworkCompletionRate, isRealRange, parseLetterJson, skipReason, validateParentLetter, validateStudentNote,
-  type LessonRow,
+  buildFactsCard, buildUserPrompt, cleanLine, collectMaterial, composeFactsOnlyMessage, composeParentMessage, formatHeader,
+  homeworkCompletionRate, isRealRange, letterMode, parseLetterJson, skipReason, validateParentLetter, validateStudentNote,
+  FACTS_ONLY_INTRO, type LessonRow,
 } from '../../supabase/functions/generate-weekly-letter/letter.ts';
 
-const VERBATIM = ['t-english'];
+const EXCLUDED = ['t-english'];
 
 const lesson = (o: Partial<LessonRow> = {}): LessonRow => ({
   id: 'l1', student_id: 's1', subject: '수학', lesson_date: '2026-09-22', teacher_id: 't-math', teacher_display_name: '황은지',
@@ -15,46 +15,81 @@ const lesson = (o: Partial<LessonRow> = {}): LessonRow => ({
   ...o,
 });
 
-describe('재료 수집', () => {
-  it('진도만 있고 선생님 말이 없으면 편지를 만들지 않는다', () => {
-    const m = collectMaterial([lesson(), lesson({ id: 'l2', lesson_date: '2026-09-24' })], VERBATIM, '2026-09-21');
+describe('재료 수집 · 모드 (V2)', () => {
+  it('진도만 있고 선생님 말이 없으면 약식(기록만)', () => {
+    const m = collectMaterial([lesson(), lesson({ id: 'l2', lesson_date: '2026-09-24' })], EXCLUDED, '2026-09-21');
     expect(m.totalLessons).toBe(2);
     expect(m.lines).toHaveLength(0);
-    expect(skipReason(m)).toBe('no_teacher_note');
+    expect(skipReason(m)).toBeNull();
+    expect(letterMode(m)).toBe('facts_only');
   });
 
   it('수업이 없으면 no_lessons', () => {
-    expect(skipReason(collectMaterial([], VERBATIM, '2026-09-21'))).toBe('no_lessons');
+    expect(skipReason(collectMaterial([], EXCLUDED, '2026-09-21'))).toBe('no_lessons');
   });
 
-  it('학부모께 한 줄이 있으면 편지 가능, 시스템 태그는 뗀다', () => {
-    const m = collectMaterial([lesson({ notes: '[보충 시간: 15:00] 기울기 읽기를 세 번 만에 스스로 맞췄어요' })], VERBATIM, '2026-09-21');
-    expect(skipReason(m)).toBeNull();
+  it('주간 코멘트가 있으면 편지, 재료 맨 위에 온다', () => {
+    const m = collectMaterial([
+      lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' }),
+      lesson({ id: 'l2', lesson_date: '2026-09-24', weekly_summary: '이번 주 일차함수 그래프 해석에서 기울기와 절편을 스스로 읽기 시작했습니다.', weekly_summary_week: '2026-09-21' }),
+    ], EXCLUDED, '2026-09-21');
+    expect(letterMode(m)).toBe('letter');
+    expect(m.lines[0]).toMatchObject({ kind: '주간 코멘트', subject: '수학', date: '9/24' });
+    expect(m.lines[1]).toMatchObject({ kind: '학부모께 한 줄' });
+  });
+
+  it('다른 주의 주간 코멘트는 쓰지 않는다 · 같은 문장은 한 번만', () => {
+    const m = collectMaterial([
+      lesson({ weekly_summary: '지난주 코멘트', weekly_summary_week: '2026-09-14' }),
+      lesson({ id: 'l2', lesson_date: '2026-09-24', weekly_summary: '이번 주 코멘트입니다.', weekly_summary_week: '2026-09-21' }),
+      lesson({ id: 'l3', lesson_date: '2026-09-26', weekly_summary: '이번 주 코멘트입니다.', weekly_summary_week: '2026-09-21' }),
+    ], EXCLUDED, '2026-09-21');
+    expect(m.lines.filter(l => l.kind === '주간 코멘트')).toHaveLength(1);
+    expect(m.lines[0].text).toBe('이번 주 코멘트입니다.');
+  });
+
+  it('학부모께 한 줄이 있으면 편지, 시스템 태그는 뗀다', () => {
+    const m = collectMaterial([lesson({ notes: '[보충 시간: 15:00] 기울기 읽기를 세 번 만에 스스로 맞췄어요' })], EXCLUDED, '2026-09-21');
+    expect(letterMode(m)).toBe('letter');
     expect(m.lines[0]).toMatchObject({ subject: '수학', date: '9/22', kind: '학부모께 한 줄', text: '기울기 읽기를 세 번 만에 스스로 맞췄어요' });
   });
 
-  it('다음 수업 방향만 있는 것은 선생님 말로 치지 않는다', () => {
-    const m = collectMaterial([lesson({ next_lesson_goal: '기울기·절편 다시' })], VERBATIM, '2026-09-21');
-    expect(m.lines).toHaveLength(1);
-    expect(skipReason(m)).toBe('no_teacher_note');
+  it('보충 스탬프만 있는 메모는 선생님 말이 아니다 → 약식', () => {
+    const m = collectMaterial([lesson({ notes: '[보충 시간: 19:00]\n[보충 선생님: 황은지]' })], EXCLUDED, '2026-09-21');
+    expect(m.lines).toHaveLength(0);
+    expect(letterMode(m)).toBe('facts_only');
   });
 
-  it('원문 그대로 싣는 선생님의 메모는 AI 재료에서 빼고 코멘트는 verbatim으로 모은다', () => {
+  it('다음 수업 방향만 있는 것은 편지 재료로 치지 않는다 → 약식', () => {
+    const m = collectMaterial([lesson({ next_lesson_goal: '기울기·절편 다시' })], EXCLUDED, '2026-09-21');
+    expect(m.lines).toHaveLength(1);
+    expect(letterMode(m)).toBe('facts_only');
+  });
+
+  it('제외 선생님(영어 재진쌤) 수업은 재료·기록 카드에서 전부 빠진다', () => {
     const m = collectMaterial([
-      lesson({ id: 'e1', subject: '영어', teacher_id: 't-english', teacher_display_name: '이재진', notes: '학부모께 비공개 메모', weekly_summary: '이번 주 독해 지문에서 주제문 찾기를 연습했습니다.', weekly_summary_week: '2026-09-21' }),
-      lesson({ id: 'e2', subject: '영어', teacher_id: 't-english', teacher_display_name: '이재진', lesson_date: '2026-09-24', weekly_summary: '이번 주 독해 지문에서 주제문 찾기를 연습했습니다.', weekly_summary_week: '2026-09-21' }),
-    ], VERBATIM, '2026-09-21');
-    expect(m.lines).toHaveLength(0);
-    expect(m.verbatim).toHaveLength(1);
-    expect(m.verbatim[0]).toMatchObject({ subject: '영어', teacher: '이재진' });
-    expect(skipReason(m)).toBeNull();
+      lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' }),
+      lesson({ id: 'e1', subject: '영어', teacher_id: 't-english', teacher_display_name: '이재진', notes: '이번 주 수업에서는 모의고사 풀이를 진행하였습니다.', weekly_summary: '주간 코멘트', weekly_summary_week: '2026-09-21' }),
+    ], EXCLUDED, '2026-09-21');
+    expect(m.totalLessons).toBe(1);
+    expect(m.excludedLessons).toBe(1);
+    expect(m.subjects.map(s => s.subject)).toEqual(['수학']);
+    expect(m.lines.every(l => l.subject === '수학')).toBe(true);
+    expect(buildFactsCard(m)).not.toContain('영어');
+  });
+
+  it('제외 선생님 수업만 있는 학생은 excluded_teacher_only', () => {
+    const m = collectMaterial([
+      lesson({ id: 'e1', subject: '영어', teacher_id: 't-english', notes: '이번 주 수업에서는 …' }),
+    ], EXCLUDED, '2026-09-21');
+    expect(skipReason(m)).toBe('excluded_teacher_only');
   });
 
   it('숙제·테스트·결석을 과목별 사실로 모은다', () => {
     const m = collectMaterial([
       lesson({ homework_status: 'completed', test_result: 'pass', test_title: '단원평가' }),
       lesson({ id: 'l2', lesson_date: '2026-09-24', homework_status: 'partial', attendance_status: ['무단결석'], lesson_range: '수학1 p.56~60' }),
-    ], VERBATIM, '2026-09-21');
+    ], EXCLUDED, '2026-09-21');
     const s = m.subjects[0];
     expect(s.ranges).toEqual(['수학1 p.42~55']); // 결석한 날의 진도는 카드에 올리지 않는다
     expect(s.homework).toEqual(['완료', '부분']);
@@ -74,13 +109,13 @@ describe('진도 칸 오염 (2026-10-02 첫 생성에서 발견)', () => {
   it('결석한 날의 진도와 사유 문구는 카드에 나오지 않는다', () => {
     const m = collectMaterial([
       lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' }),
-      lesson({ id: 'e1', subject: '영어', lesson_date: '2026-09-24', lesson_range: '결석 사유: 가족 사정으로 인한 결석', attendance_status: ['인정결석'], homework_status: 'none_assigned' }),
-      lesson({ id: 'e2', subject: '영어', lesson_date: '2026-09-26', lesson_range: '문제 풀이 (6모, 9모), 보충수업 예정' }),
-    ], VERBATIM, '2026-09-21');
+      lesson({ id: 'e1', subject: '국어', lesson_date: '2026-09-24', lesson_range: '결석 사유: 가족 사정으로 인한 결석', attendance_status: ['인정결석'], homework_status: 'none_assigned' }),
+      lesson({ id: 'e2', subject: '국어', lesson_date: '2026-09-26', lesson_range: '문제 풀이 (6모, 9모), 보충수업 예정' }),
+    ], EXCLUDED, '2026-09-21');
     const card = buildFactsCard(m);
     expect(card).not.toContain('결석 사유');
     expect(card).not.toContain('보충수업 예정');
-    expect(card).toContain('영어 · 숙제 모두 해옴 · 결석 있음');
+    expect(card).toContain('국어 · 숙제 모두 해옴 · 결석 있음');
   });
 });
 
@@ -89,36 +124,47 @@ describe('사실 카드·헤더·합성', () => {
     const m = collectMaterial([
       lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요', homework_status: 'completed', test_result: 'pass', test_title: '단원평가' }),
       lesson({ id: 'l2', lesson_date: '2026-09-24', homework_status: 'partial' }),
-    ], VERBATIM, '2026-09-21');
+    ], EXCLUDED, '2026-09-21');
     const card = buildFactsCard(m);
     expect(card).toContain('수학 · 진도 수학1 p.42~55 · 숙제 일부만 해온 날 있음 · 단원평가 통과');
     expect(card).not.toMatch(/\d+회/);
     expect(card).not.toMatch(/\/5/);
   });
 
-  it('헤더는 성을 떼고 기간을 붙인다', () => {
+  it('헤더는 성을 떼고 기간을 붙인다 (편지/기록)', () => {
     expect(formatHeader('김민준', '2026-09-21', '2026-09-26')).toBe('[더멘토] 민준 주간 학습 편지 (9/21~9/26)');
+    expect(formatHeader('김민준', '2026-09-21', '2026-09-26', '기록')).toBe('[더멘토] 민준 주간 학습 기록 (9/21~9/26)');
   });
 
-  it('최종 문안 = 헤더 + 편지 + 기록 카드 + 원문 코멘트', () => {
-    const m = collectMaterial([
-      lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' }),
-      lesson({ id: 'e1', subject: '영어', teacher_id: 't-english', teacher_display_name: '이재진', weekly_summary: '주제문 찾기 연습.', weekly_summary_week: '2026-09-21' }),
-    ], VERBATIM, '2026-09-21');
+  it('최종 문안 = 헤더 + 편지 + 기록 카드', () => {
+    const m = collectMaterial([lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' })], EXCLUDED, '2026-09-21');
     const out = composeParentMessage('김민준', '2026-09-21', '2026-09-26', '민준이는 이번 주 기울기 읽기를 세 번째 시도에서 스스로 맞혔습니다.', m);
     const parts = out.split('\n\n');
     expect(parts[0]).toBe('[더멘토] 민준 주간 학습 편지 (9/21~9/26)');
     expect(parts[1]).toContain('민준이는');
-    expect(out).toContain('이번 주 기록');
-    expect(out).toContain('💬 영어 이재진\n주제문 찾기 연습.');
+    expect(parts[2]).toContain('이번 주 기록');
+    expect(parts).toHaveLength(3);
   });
 
-  it('프롬프트에 호칭 두 형태와 선생님 말이 들어간다', () => {
-    const m = collectMaterial([lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요' })], VERBATIM, '2026-09-21');
+  it('약식 = 헤더(기록) + 안내 한 줄 + 기록 카드, 숫자 없음', () => {
+    const m = collectMaterial([lesson(), lesson({ id: 'l2', lesson_date: '2026-09-24', homework_status: 'partial' })], EXCLUDED, '2026-09-21');
+    const out = composeFactsOnlyMessage('김민준', '2026-09-21', '2026-09-26', m);
+    const parts = out.split('\n\n');
+    expect(parts[0]).toBe('[더멘토] 민준 주간 학습 기록 (9/21~9/26)');
+    expect(parts[1]).toBe(FACTS_ONLY_INTRO);
+    expect(parts[2]).toContain('수학 · 진도 수학1 p.42~55 · 숙제 일부만 해온 날 있음');
+    expect(out).not.toMatch(/\d+회/);
+    expect(out).not.toMatch(/이해도/);
+  });
+
+  it('프롬프트에 호칭 두 형태와 선생님 말이 들어가고 주간 코멘트가 먼저 온다', () => {
+    const m = collectMaterial([
+      lesson({ notes: '기울기 읽기를 세 번 만에 맞췄어요', weekly_summary: '이번 주 그래프 해석이 자리 잡았습니다.', weekly_summary_week: '2026-09-21' }),
+    ], EXCLUDED, '2026-09-21');
     const p = buildUserPrompt('김민준', '2026-09-21', '2026-09-26', m);
     expect(p).toContain('주어형 "민준이는"');
     expect(p).toContain('호격 "민준아"');
-    expect(p).toContain('[수학 9/22 · 학부모께 한 줄] 기울기 읽기를 세 번 만에 맞췄어요');
+    expect(p.indexOf('[수학 9/22 · 주간 코멘트] 이번 주 그래프 해석이 자리 잡았습니다.')).toBeLessThan(p.indexOf('[수학 9/22 · 학부모께 한 줄] 기울기 읽기를 세 번 만에 맞췄어요'));
   });
 });
 
@@ -175,5 +221,6 @@ describe('JSON 파싱·정리', () => {
   });
   it('cleanLine은 대괄호 태그와 공백을 정리한다', () => {
     expect(cleanLine('  [보충 선생님: 김은수]  오늘  잘함 ')).toBe('오늘 잘함');
+    expect(cleanLine('[보충 시간: 19:00]\n[보충 선생님: 이재진]')).toBe('');
   });
 });

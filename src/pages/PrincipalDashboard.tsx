@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
+import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { ConsultFollowUpsCard } from '@/components/consult/ConsultFollowUpsCard';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
@@ -565,6 +566,9 @@ function PrincipalContent() {
             onClose={() => setDetailOpen(null)}
             logs={logs}
           />
+
+          {/* WEEKLY-COMMENT-V2: 원장 본인 수업 학생의 주간 코멘트 (수요일부터) */}
+          <WeeklySummaryWidget />
 
           {/* 강의실 수업 현황 */}
           <ClassroomView slots={classroomSlots} />

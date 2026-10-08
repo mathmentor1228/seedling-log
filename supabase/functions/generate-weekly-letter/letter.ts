@@ -1,11 +1,14 @@
-// WEEKLY-LETTER-V1 — 주간 학습 편지의 순수 로직.
+// WEEKLY-LETTER-V2 — 주간 학습 편지의 순수 로직.
 // Deno(엣지 함수)와 vitest(src/lib/weeklyLetter.test.ts) 양쪽에서 import 한다. 네트워크·DB 접근 없음.
 //
-// 원칙 (2026-10-01 개편안)
-//   1. 편지의 심장은 "선생님이 직접 쓴 말"이다. AI는 그것을 학부모 말로 다듬기만 한다.
-//   2. 선생님 말이 한 줄도 없는 학생은 편지를 만들지 않는다. (밍밍한 문안이 나가는 것을 구조적으로 막는다)
+// 원칙 (2026-10-01 개편안 → 2026-10-09 V2)
+//   1. 편지의 심장은 "선생님이 직접 쓴 말"이다. 그중에서도 **주간 코멘트**(선생님이 그 주를 돌아보며 학생별로 남긴 한 줄)가 1순위,
+//      수업별 "학부모께 한 줄"·학습 이슈·숙제 관찰은 그것을 뒷받침한다. AI는 학부모 말로 다듬기만 한다.
+//   2. 선생님 말이 한 줄도 없는 학생은 편지 대신 **약식(기록만)** — 헤더 + 이번 주 기록 카드만 만든다. AI 호출 없음.
 //   3. 검증에 걸리면 저장하지 않는다. 중립 대체 문안은 없다.
 //   4. 수업 횟수·이해도 점수는 학부모 문안에 쓰지 않는다 (2026-08-20 원칙).
+//   5. 주간 코멘트 대상에서 제외된 선생님(영어 이재진 — 포털 수업 코멘트로 갈음, 원장 결정 2026-10-09)의 수업은
+//      재료·기록 카드 모두에서 뺀다. 그 선생님 수업만 있는 학생은 편지를 만들지 않는다.
 import { givenName, nameTopic, nameVocative } from '../_shared/name.ts';
 
 export interface LessonRow {
@@ -32,7 +35,10 @@ export interface LessonRow {
   weekly_summary_week: string | null;
 }
 
-export type LineKind = '학부모께 한 줄' | '학습 이슈' | '숙제 관찰' | '다음 수업 방향';
+export type LineKind = '주간 코멘트' | '학부모께 한 줄' | '학습 이슈' | '숙제 관찰' | '다음 수업 방향';
+/** 이 종류의 말이 하나라도 있어야 "편지"가 된다. 나머지(다음 수업 방향)는 보조 재료. */
+const CORE_KINDS: ReadonlySet<LineKind> = new Set<LineKind>(['주간 코멘트', '학부모께 한 줄', '학습 이슈', '숙제 관찰']);
+const KIND_ORDER: Record<LineKind, number> = { '주간 코멘트': 0, '학부모께 한 줄': 1, '학습 이슈': 2, '숙제 관찰': 3, '다음 수업 방향': 4 };
 
 export interface TeacherLine { subject: string; date: string; kind: LineKind; text: string }
 export interface SubjectFacts {
@@ -44,15 +50,17 @@ export interface SubjectFacts {
   tests: string[];
   understanding: number[];
 }
-export interface VerbatimComment { subject: string; teacher: string; text: string }
 export interface Material {
   subjects: SubjectFacts[];
   lines: TeacherLine[];
-  verbatim: VerbatimComment[];
+  /** 제외 선생님 수업을 뺀 수업 수 */
   totalLessons: number;
+  /** 제외 선생님 수업 수 (명단 표시용) */
+  excludedLessons: number;
 }
 
-export type SkipReason = 'no_lessons' | 'no_teacher_note';
+export type SkipReason = 'no_lessons' | 'excluded_teacher_only';
+export type LetterMode = 'letter' | 'facts_only';
 
 const HOMEWORK_LABEL: Record<string, string> = {
   completed: '완료', done: '완료', partial: '부분', not_done: '미완', none_assigned: '',
@@ -65,7 +73,7 @@ export function isRealRange(text: string): boolean {
   return text.length > 0 && !NOT_A_RANGE.test(text);
 }
 
-/** `[보충 시간: 15:00]` 같은 시스템 태그를 떼고 공백 정리 */
+/** `[보충 시간: 15:00]` `[보충 선생님: …]` 같은 시스템 태그를 떼고 공백 정리. 태그만 있던 메모는 빈 문자열이 된다. */
 export function cleanLine(text: string | null | undefined): string {
   return (text || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -75,15 +83,18 @@ function md(date: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
-export function collectMaterial(lessons: LessonRow[], verbatimTeacherIds: string[], weekStart: string): Material {
+export function collectMaterial(lessons: LessonRow[], excludedTeacherIds: string[], weekStart: string): Material {
   const bySubject = new Map<string, SubjectFacts>();
   const lines: TeacherLine[] = [];
-  const verbatim: VerbatimComment[] = [];
-  const seenVerbatim = new Set<string>();
-  const verbatimSet = new Set(verbatimTeacherIds);
+  const seenWeekly = new Set<string>();
+  const excluded = new Set(excludedTeacherIds);
+  let excludedLessons = 0;
+  let total = 0;
 
   const sorted = [...lessons].sort((a, b) => a.lesson_date.localeCompare(b.lesson_date));
   for (const l of sorted) {
+    if (excluded.has(l.teacher_id)) { excludedLessons += 1; continue; }
+    total += 1;
     const f = bySubject.get(l.subject) ?? { subject: l.subject, lessons: 0, absences: 0, ranges: [], homework: [], tests: [], understanding: [] };
     bySubject.set(l.subject, f);
     f.lessons += 1;
@@ -101,21 +112,19 @@ export function collectMaterial(lessons: LessonRow[], verbatimTeacherIds: string
     }
     if (typeof l.understanding_score === 'number') f.understanding.push(l.understanding_score);
 
-    // 원문 그대로 싣는 선생님(영어 이재진): 주간 코멘트는 verbatim, 그 외 메모는 AI 재료에서 제외
-    if (verbatimSet.has(l.teacher_id)) {
-      const ws = cleanLine(l.weekly_summary);
-      const inWeek = l.weekly_summary_week === weekStart || !l.weekly_summary_week;
-      if (ws && inWeek) {
-        const key = `${l.subject}|${ws}`;
-        if (!seenVerbatim.has(key)) {
-          seenVerbatim.add(key);
-          verbatim.push({ subject: l.subject, teacher: l.teacher_display_name || '담당 선생님', text: ws });
-        }
+    const date = md(l.lesson_date);
+
+    // 주간 코멘트: 같은 주에 쓴 것만, 과목당 같은 문장은 한 번만
+    const ws = cleanLine(l.weekly_summary);
+    const inWeek = l.weekly_summary_week === weekStart || !l.weekly_summary_week;
+    if (ws.length >= 6 && inWeek) {
+      const key = `${l.subject}|${ws}`;
+      if (!seenWeekly.has(key)) {
+        seenWeekly.add(key);
+        lines.push({ subject: l.subject, date, kind: '주간 코멘트', text: ws });
       }
-      continue;
     }
 
-    const date = md(l.lesson_date);
     const push = (kind: LineKind, raw: string | null, min: number) => {
       const t = cleanLine(raw);
       if (t.length >= min) lines.push({ subject: l.subject, date, kind, text: t });
@@ -127,24 +136,30 @@ export function collectMaterial(lessons: LessonRow[], verbatimTeacherIds: string
     push('다음 수업 방향', l.next_lesson_goal, 4);
   }
 
+  // 주간 코멘트가 맨 위에 오도록 (같은 종류 안에서는 날짜순 유지)
+  lines.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+
   return {
     subjects: [...bySubject.values()],
     lines,
-    verbatim,
-    totalLessons: lessons.length,
+    totalLessons: total,
+    excludedLessons,
   };
 }
 
-/** 편지를 만들 수 없는 이유. null이면 만들 수 있다. */
+/** 아무것도 만들 수 없는 이유. null이면 편지 또는 약식을 만들 수 있다. */
 export function skipReason(m: Material): SkipReason | null {
-  if (m.totalLessons === 0) return 'no_lessons';
-  const core = m.lines.filter(l => l.kind === '학부모께 한 줄' || l.kind === '학습 이슈' || l.kind === '숙제 관찰');
-  if (core.length === 0 && m.verbatim.length === 0) return 'no_teacher_note';
+  if (m.totalLessons === 0) return m.excludedLessons > 0 ? 'excluded_teacher_only' : 'no_lessons';
   return null;
 }
 
-export function formatHeader(studentName: string, weekStart: string, weekEnd: string): string {
-  return `[더멘토] ${givenName(studentName)} 주간 학습 편지 (${md(weekStart)}~${md(weekEnd)})`;
+/** 선생님 말이 있으면 편지, 없으면 약식(기록만). */
+export function letterMode(m: Material): LetterMode {
+  return m.lines.some(l => CORE_KINDS.has(l.kind)) ? 'letter' : 'facts_only';
+}
+
+export function formatHeader(studentName: string, weekStart: string, weekEnd: string, kind: '편지' | '기록' = '편지'): string {
+  return `[더멘토] ${givenName(studentName)} 주간 학습 ${kind} (${md(weekStart)}~${md(weekEnd)})`;
 }
 
 function homeworkPhrase(hw: string[]): string {
@@ -168,15 +183,10 @@ export function buildFactsCard(m: Material): string {
   return `───\n이번 주 기록\n${rows.join('\n')}`;
 }
 
-export function buildVerbatimBlock(m: Material): string {
-  if (m.verbatim.length === 0) return '';
-  return m.verbatim.map(v => `💬 ${v.subject} ${v.teacher}\n${v.text}`).join('\n\n');
-}
-
 export const LETTER_SYSTEM_PROMPT = `당신은 더멘토학원의 담당 선생님입니다. 아래 "선생님이 직접 쓴 말"을 바탕으로 학부모께 보내는 짧은 편지를 씁니다.
 
 [재료의 우선순위]
-1. 선생님이 직접 쓴 말이 편지의 중심입니다. 뜻을 바꾸지 말고, 학부모께 설명하는 말로 다듬어 옮깁니다. 거기 들어 있는 사실(단원·개념·막힌 지점·시도 횟수·숙제 상태)은 전부 살립니다.
+1. 선생님이 직접 쓴 말이 편지의 중심입니다. 그중 "주간 코멘트"(선생님이 그 주를 돌아보며 이 학생에 대해 남긴 말)가 있으면 그것이 편지의 뼈대이고, 수업별 메모는 그것을 뒷받침하는 데 씁니다. 뜻을 바꾸지 말고, 학부모께 설명하는 말로 다듬어 옮깁니다. 거기 들어 있는 사실(단원·개념·막힌 지점·시도 횟수·숙제 상태)은 전부 살립니다.
 2. 기록된 사실(진도·숙제·테스트)은 선생님 말을 뒷받침할 때만 한 구절로 씁니다.
 3. 그 밖의 것은 쓰지 않습니다. 기록에 없는 장면(표정·손·연필·목소리·웃음·한숨·고개)과 기록에 없는 평가는 만들지 않습니다. 재료가 한 줄이면 한 줄만큼만 씁니다.
 
@@ -230,17 +240,14 @@ export function buildUserPrompt(studentName: string, weekStart: string, weekEnd:
     return `- ${s.subject}: ${parts.join(' / ')}`;
   }).join('\n');
   const lines = m.lines.map(l => `- [${l.subject} ${l.date} · ${l.kind}] ${l.text}`).join('\n');
-  const verbatimNote = m.verbatim.length
-    ? `\n\n[참고] ${m.verbatim.map(v => v.subject).join(', ')} 담당 선생님의 주간 코멘트는 편지 아래에 원문 그대로 따로 실립니다. 그 과목은 편지 본문에서 다루지 않습니다.`
-    : '';
   return `학생 호칭: 주어형 "${topic}", 호격 "${voc}" (이 두 형태만 사용)
 기간: ${weekStart} ~ ${weekEnd}
 
 [기록된 사실]
 ${facts}
 
-[선생님이 직접 쓴 말]
-${lines || '(없음)'}${verbatimNote}
+[선생님이 직접 쓴 말] ("주간 코멘트"가 있으면 그것이 편지의 뼈대)
+${lines || '(없음)'}
 
 위 재료만으로 학부모 편지(parent_letter)와 학생 메모(student_note)를 JSON으로 작성하세요.`;
 }
@@ -309,12 +316,15 @@ export function validateStudentNote(text: string, studentName: string): Validati
   return { ok: v.length === 0, violations: v };
 }
 
-/** 학부모에게 저장되는 최종 문안 */
+/** 학부모에게 저장되는 최종 문안 (편지) */
 export function composeParentMessage(studentName: string, weekStart: string, weekEnd: string, letter: string, m: Material): string {
-  const blocks = [formatHeader(studentName, weekStart, weekEnd), letter.trim(), buildFactsCard(m)];
-  const vb = buildVerbatimBlock(m);
-  if (vb) blocks.push(vb);
-  return blocks.join('\n\n');
+  return [formatHeader(studentName, weekStart, weekEnd), letter.trim(), buildFactsCard(m)].join('\n\n');
+}
+
+/** 약식: 선생님 말이 없을 때 헤더 + 기록 카드만. AI를 쓰지 않는다. */
+export const FACTS_ONLY_INTRO = '이번 주는 수업 기록만 정리해 전해드립니다.';
+export function composeFactsOnlyMessage(studentName: string, weekStart: string, weekEnd: string, m: Material): string {
+  return [formatHeader(studentName, weekStart, weekEnd, '기록'), FACTS_ONLY_INTRO, buildFactsCard(m)].join('\n\n');
 }
 
 export function averageUnderstanding(m: Material): number | null {

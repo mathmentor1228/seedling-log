@@ -623,8 +623,8 @@ export function LessonCloseoutForm({ classId, date, onClose, onDirtyChange }: Pr
                 {/* WEEKLY-LETTER-V1: 학부모께 한 줄 — 주간 편지의 재료. 접지 않고 진도·숙제보다 앞에 둔다 */}
                 <div className="space-y-1 rounded-lg border border-primary/30 bg-primary/5 p-2">
                   <Label className="text-[11px] font-medium text-primary">
-                    ✉ 학부모께 한 줄
-                    <span className="ml-1 font-normal text-muted-foreground">오늘 이 학생에게서 본 것. 이게 없으면 그 주 편지가 나가지 않습니다</span>
+                    ✉ 학부모께 한 줄 <span className="font-normal">(선택)</span>
+                    <span className="ml-1 font-normal text-muted-foreground">오늘 본 것 한 줄. 주 1회 주간 코멘트가 있으면 비워도 됩니다 — 있으면 편지에 보탭니다</span>
                   </Label>
                   <Textarea
                     value={s.notes}

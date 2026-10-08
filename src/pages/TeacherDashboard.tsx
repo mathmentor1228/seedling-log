@@ -5,7 +5,6 @@ import { cn, getTodayKST } from '@/lib/utils';
 import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
-import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { TeacherTodayBoard } from '@/components/teacher/TeacherTodayBoard';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
@@ -92,7 +91,7 @@ function TeacherSideBySide() {
           aria-expanded={showSecondary}
         >
           {showSecondary ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          메모 · 일정 보기 (내신특강 제안 · 주간 요약 포함)
+          메모 · 일정 보기 (내신특강 제안 포함)
         </button>
         {showSecondary && (
           <div className="mt-3 space-y-3">
@@ -101,7 +100,6 @@ function TeacherSideBySide() {
               <AcademyCalendar />
             </div>
             <PrepLectureProposalsWidget />
-            <WeeklySummaryWidget />
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import AssistantDashboard from '@/components/AssistantDashboard';
@@ -2761,6 +2762,11 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
       {(isAdmin(role) || isTeacher(role)) && (
         <AssistantRequestsWidget />
+      )}
+
+      {/* WEEKLY-COMMENT-V2: 수요일부터 이번 주 주간 코멘트 미작성 학생 — 그 자리에서 바로 쓴다 */}
+      {!hideAdminTools && (isAdmin(role) || isTeacher(role)) && (
+        <WeeklySummaryWidget />
       )}
 
       {/* ━━━ 다가오는 시험 D-Day ━━━ */}

@@ -2597,7 +2597,7 @@ export function LessonRecordForm({
 
         {/* 학부모 직접전달 메시지 */}
         <div className="space-y-2">
-          <Label htmlFor="form_notes">✉ 학부모께 한 줄 <span className="text-xs text-muted-foreground font-normal">(학부모 직접전달 · 주간 편지 재료)</span></Label>
+          <Label htmlFor="form_notes">✉ 학부모께 한 줄 <span className="text-xs text-muted-foreground font-normal">(선택 · 학부모 포털 노출 · 주간 편지 보조 재료)</span></Label>
           <Textarea
             id="form_notes"
             value={formData.notes}

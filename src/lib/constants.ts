@@ -50,12 +50,21 @@ export const TEACHERS = [
   { name: '김은수', room: '4층 3강의실' }, // 영어(임시 근무)
 ] as const;
 
-// 주간 핵심 코멘트를 학부모 리포트에 원문 그대로 노출하는 선생님 (원장 방침 2026-07-29).
-// 이 명단에 없는 선생님의 주간 코멘트는 AI 생성 본문이 대신하며, 입력 위젯도 표시하지 않는다.
+// 주간 핵심 코멘트를 (구)주간리포트에 원문 그대로 노출하는 선생님 (원장 방침 2026-07-29).
 // generate-weekly-reports 함수의 VERBATIM_COMMENT_TEACHER_IDS와 반드시 함께 갱신할 것.
 export const VERBATIM_WEEKLY_COMMENT_TEACHER_IDS = [
   '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
 ] as const;
+
+// WEEKLY-COMMENT-V2 (2026-10-09 원장 결정): 주간 코멘트는 모든 선생님(원장 포함)이 주 1회 학생별로 남긴다.
+// 아래 명단만 제외 — 영어 이재진 선생님은 수업 코멘트가 학부모 포털에 그대로 노출되므로 주간 코멘트·편지 대상이 아니다.
+// generate-weekly-letter 함수의 EXCLUDED_TEACHER_IDS 와 함께 갱신할 것.
+export const WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS = [
+  '916c5055-2a8c-46d8-b84c-fd280d7f541f', // 이재진(영어)
+] as const;
+
+// 대시보드 "이번 주 코멘트 미작성" 안내가 뜨기 시작하는 요일 (0=일 … 3=수). 수요일부터 일요일까지.
+export const WEEKLY_COMMENT_REMINDER_FROM_WEEKDAY = 3;
 
 /** 교사별 기본 강의실. 최윤기는 과목별로 다름. */
 export function getTeacherRoom(teacherName: string, subject?: string): string {

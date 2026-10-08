@@ -1,17 +1,20 @@
-// WEEKLY-SUMMARY-V1: Capture the weekly free-text comment that feeds the parent report.
-import { useState, useEffect } from 'react';
+// WEEKLY-COMMENT-V2: 선생님이 주 1회 학생별로 남기는 주간 코멘트 입력창.
+// 막막하지 않도록 질문 셋(해낸 것 / 막힌 지점 / 다음 주)과 규칙·예시를 같이 보여주고,
+// 이번 주 내가 적은 수업 기록(진도·숙제·메모)을 옆에 띄워 기억을 돕는다.
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
-
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, MessageSquareText, HelpCircle } from 'lucide-react';
 import { getMondayOfWeek } from '@/lib/weekUtils';
+import {
+  WEEKLY_COMMENT_QUESTIONS, WEEKLY_COMMENT_RULES, WEEKLY_COMMENT_MIN_CHARS, WEEKLY_COMMENT_IDEAL_MAX_CHARS,
+} from '@/lib/weeklyCommentGuide';
 
 interface Props {
   open: boolean;
@@ -23,33 +26,71 @@ interface Props {
   onSaved?: () => void;
 }
 
+interface WeekLesson {
+  id: string; lesson_date: string; subject: string; lesson_range: string | null; homework_status: string | null;
+  understanding_score: number | null; notes: string | null; learning_issues_note: string | null; attendance_status: string[] | null;
+}
+
+const HW_LABEL: Record<string, string> = { completed: '숙제 완료', partial: '숙제 일부', not_done: '숙제 안 함', incomplete: '숙제 안 함' };
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName, subject = '수학', weekStart, onSaved }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [weekLessons, setWeekLessons] = useState<WeekLesson[]>([]);
   const week = weekStart || getMondayOfWeek(new Date());
+  const weekEnd = useMemo(() => addDays(week, 6), [week]);
 
   useEffect(() => {
     if (!open || !user) return;
     setText('');
+    setWeekLessons([]);
     (async () => {
       setLoading(true);
-      // WEEKLY-SUMMARY-V2: 소유 teacher_id에 관계없이 이번 주 코멘트를 불러와 표시
-      const { data } = await supabase
-        .from('lesson_records')
-        .select('id, weekly_summary')
-        .eq('student_id', studentId)
-        .or(`weekly_summary_week.eq.${week},and(lesson_date.gte.${week},lesson_date.lte.${(() => { const d = new Date(week); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })()})`)
-        .not('weekly_summary', 'is', null)
-        .order('lesson_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data?.weekly_summary) setText(data.weekly_summary);
-      setLoading(false);
+      try {
+        // 이번 주 코멘트 (누가 썼든) + 이번 주 내가 적은 수업 기록
+        const [{ data: existing }, { data: mine }] = await Promise.all([
+          supabase
+            .from('lesson_records')
+            .select('id, weekly_summary')
+            .eq('student_id', studentId)
+            .or(`weekly_summary_week.eq.${week},and(lesson_date.gte.${week},lesson_date.lte.${weekEnd})`)
+            .not('weekly_summary', 'is', null)
+            .order('lesson_date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('lesson_records')
+            .select('id, lesson_date, subject, lesson_range, homework_status, understanding_score, notes, learning_issues_note, attendance_status')
+            .eq('student_id', studentId)
+            .eq('teacher_id', user.id)
+            .gte('lesson_date', week)
+            .lte('lesson_date', weekEnd)
+            .order('lesson_date', { ascending: true }),
+        ]);
+        if (existing?.weekly_summary) setText(existing.weekly_summary);
+        setWeekLessons((mine || []) as WeekLesson[]);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [open, user, studentId, week]);
+  }, [open, user, studentId, week, weekEnd]);
+
+  function insertStem(stem: string) {
+    setText(prev => {
+      const base = prev.trimEnd();
+      return base ? `${base}\n${stem}` : stem;
+    });
+  }
 
   async function save() {
     if (!user) return;
@@ -58,14 +99,12 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
       toast({ title: '코멘트를 입력해주세요', variant: 'destructive' });
       return;
     }
+    if (trimmed.length < WEEKLY_COMMENT_MIN_CHARS) {
+      toast({ title: `조금만 더 적어주세요 (${WEEKLY_COMMENT_MIN_CHARS}자 이상)`, description: '단원이나 문제 이름 하나만 붙여도 충분합니다.', variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     try {
-      // Find most recent lesson_records this week to attach summary to.
-      const weekEnd = (() => {
-        const d = new Date(week);
-        d.setDate(d.getDate() + 6);
-        return d.toISOString().slice(0, 10);
-      })();
       const { data: latest } = await supabase
         .from('lesson_records')
         .select('id')
@@ -84,7 +123,7 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
           .eq('id', latest.id);
         if (error) throw error;
       } else {
-        // No lesson this week yet — create a placeholder draft to hold the comment.
+        // 이번 주 내 수업 기록이 아직 없으면 코멘트를 담을 임시 초안을 만든다.
         const { error } = await safeUpsertLessonRecord({
           teacher_id: user.id,
           student_id: studentId,
@@ -97,9 +136,8 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
           weekly_summary_week: week,
         });
         if (error) throw error;
-
       }
-      toast({ title: '주간 코멘트 저장 완료' });
+      toast({ title: '주간 코멘트 저장 완료', description: `${studentName} · 일요일 밤 주간 편지에 반영됩니다.` });
       onSaved?.();
       onOpenChange(false);
     } catch (e: any) {
@@ -109,31 +147,90 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
     }
   }
 
+  const len = text.trim().length;
+  const lenTone = len === 0 ? 'text-muted-foreground' : len < WEEKLY_COMMENT_MIN_CHARS ? 'text-amber-600' : len > WEEKLY_COMMENT_IDEAL_MAX_CHARS * 2 ? 'text-amber-600' : 'text-emerald-600';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="w-4 h-4 text-primary" />
-            이번 주 핵심 코멘트
+            <MessageSquareText className="w-4 h-4 text-primary" />
+            이번 주 주간 코멘트
+            <Badge variant="outline" className="text-xs font-normal">{studentName}</Badge>
+            <Badge variant="secondary" className="text-xs font-normal">{week.slice(5).replace('-', '/')} ~ {weekEnd.slice(5).replace('-', '/')}</Badge>
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">{studentName}</Badge>
-            <Badge variant="secondary" className="text-xs">주: {week}</Badge>
+
+        <div className="grid gap-3 md:grid-cols-[1fr_220px] py-1">
+          {/* 왼쪽: 질문 칩 + 입력 */}
+          <div className="space-y-2">
+            <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5">
+              <p className="text-[11px] text-muted-foreground">세 질문 중 <b>하나만</b> 골라 답해도 됩니다. 누르면 시작 문구가 들어갑니다.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKLY_COMMENT_QUESTIONS.map(q => (
+                  <Button key={q.key} type="button" variant="outline" size="sm" className="h-7 text-xs" title={q.question}
+                    onClick={() => insertStem(q.stem)} disabled={loading}>
+                    {q.label}
+                  </Button>
+                ))}
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setShowGuide(v => !v)}>
+                  <HelpCircle className="w-3 h-3 mr-1" />{showGuide ? '규칙·예시 접기' : '규칙·예시'}
+                </Button>
+              </div>
+              {showGuide && (
+                <div className="text-[11px] leading-snug space-y-1.5 pt-1 border-t">
+                  <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground">
+                    {WEEKLY_COMMENT_RULES.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                  <div className="space-y-0.5">
+                    {WEEKLY_COMMENT_QUESTIONS.map(q => (
+                      <p key={q.key}><span className="font-medium">{q.label}:</span> <span className="text-muted-foreground">{q.example}</span></p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <Textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              rows={6}
+              placeholder={`예) ${WEEKLY_COMMENT_QUESTIONS[0].example}\n    ${WEEKLY_COMMENT_QUESTIONS[1].example}`}
+              disabled={loading}
+              className="text-sm"
+            />
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground">AI가 학부모 말로 다듬어 주간 편지의 중심 문장이 됩니다. 원문 그대로 나가지 않습니다.</span>
+              <span className={lenTone}>{len}자{len > 0 && len < WEEKLY_COMMENT_MIN_CHARS ? ` (${WEEKLY_COMMENT_MIN_CHARS}자 이상)` : ''}</span>
+            </div>
           </div>
-          <Label className="text-xs text-muted-foreground">
-            이번 주 학습/태도 핵심을 한 단락으로 작성하세요. 학부모 주간 리포트에 그대로 포함됩니다.
-          </Label>
-          <Textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            rows={6}
-            placeholder="예) 이번 주는 함수 단원에 집중. 개념 이해는 빠르나 계산 실수가 잦아 검산 루틴을 잡아주는 중입니다."
-            disabled={loading}
-          />
+
+          {/* 오른쪽: 이번 주 내 기록 (기억 보조) */}
+          <div className="rounded-lg border p-2 text-[11px] space-y-1.5 bg-background">
+            <p className="font-medium text-xs">이번 주 내 수업 기록</p>
+            {loading ? (
+              <p className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> 불러오는 중</p>
+            ) : weekLessons.length === 0 ? (
+              <p className="text-muted-foreground">이번 주 이 학생의 내 수업 기록이 아직 없습니다. 코멘트는 {subject} 임시 초안에 저장됩니다.</p>
+            ) : weekLessons.map(l => {
+              const absent = (l.attendance_status || []).some(a => /결석|미등원/.test(a));
+              return (
+                <div key={l.id} className="border-l-2 border-primary/30 pl-2 space-y-0.5">
+                  <p className="text-muted-foreground">
+                    {l.lesson_date.slice(5).replace('-', '/')} · {l.subject}
+                    {absent && <span className="ml-1 text-destructive">결석</span>}
+                    {l.homework_status && HW_LABEL[l.homework_status] && <span className="ml-1">· {HW_LABEL[l.homework_status]}</span>}
+                    {typeof l.understanding_score === 'number' && <span className="ml-1">· 이해도 {l.understanding_score}</span>}
+                  </p>
+                  {l.lesson_range && !absent && <p className="truncate" title={l.lesson_range}>{l.lesson_range}</p>}
+                  {l.notes && <p className="text-primary/90">✉ {l.notes}</p>}
+                  {l.learning_issues_note && <p className="text-amber-700">! {l.learning_issues_note}</p>}
+                </div>
+              );
+            })}
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} size="sm">취소</Button>
           <Button onClick={save} disabled={saving || loading} size="sm">

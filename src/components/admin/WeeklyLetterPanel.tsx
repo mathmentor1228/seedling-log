@@ -1,6 +1,6 @@
-// WEEKLY-LETTER-V1: 편지형 주간 리포트 생성 패널 (시범 운영)
-// 1) 재료 점검(dry_run): 선생님 말이 있는 학생 / 메모 없는 학생을 먼저 보여준다
-// 2) 편지 생성: 재료가 있는 학생만 작은 묶음으로 생성. 검증 실패는 저장하지 않고 이름을 보여준다
+// WEEKLY-LETTER-V2: 편지형 주간 리포트 생성 패널
+// 1) 재료 점검(dry_run): 편지(선생님 말 있음) / 약식(기록만) / 영어 전용(제외) / 일지 없음 으로 나눠 보여준다
+// 2) 생성: 편지는 AI로, 약식은 AI 없이 기록 카드만. 검증 실패는 저장하지 않고 이름을 보여준다
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,14 +22,14 @@ interface Props {
 }
 
 interface Named { id: string; name: string }
-interface Ready extends Named { lines: number; verbatim: number; subjects: string[] }
+interface Ready extends Named { mode: 'letter' | 'facts_only'; lines: number; subjects: string[] }
 interface Skipped extends Named { reason: string }
 interface Failed extends Named { reason: string }
 
 interface LetterResponse {
   ready: Ready[];
   skipped: Skipped[];
-  generated: Array<Named & { attempts: number }>;
+  generated: Array<Named & { attempts: number; mode?: 'letter' | 'facts_only' }>;
   failed: Failed[];
   protected: Named[];
   exists: Named[];
@@ -39,8 +39,9 @@ interface LetterResponse {
 const BATCH = 8;
 
 const REASON_LABEL: Record<string, string> = {
-  no_teacher_note: '선생님 메모 없음',
+  no_teacher_note: '선생님 말 없음 (약식 끔)',
   no_lessons: '이번 주 제출 일지 없음',
+  excluded_teacher_only: '영어(재진쌤) 수업만 — 포털 코멘트로 갈음',
 };
 
 function names(list: Named[], max = 12): string {
@@ -52,6 +53,7 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
   const [checking, setChecking] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [force, setForce] = useState(false);
+  const [skipFactsOnly, setSkipFactsOnly] = useState(false);
   const [check, setCheck] = useState<LetterResponse | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<{ generated: Named[]; failed: Failed[] } | null>(null);
@@ -67,7 +69,7 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
   const runCheck = async () => {
     setChecking(true); setResult(null);
     try {
-      const res = await invoke({ week_start: weekStart, week_end: weekEnd, dry_run: true, force });
+      const res = await invoke({ week_start: weekStart, week_end: weekEnd, dry_run: true, force, skip_facts_only: skipFactsOnly });
       setCheck(res);
     } catch (e) {
       toast.error(`재료 점검 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -86,7 +88,7 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
     try {
       for (let i = 0; i < ids.length; i += BATCH) {
         const batch = ids.slice(i, i + BATCH);
-        const res = await invoke({ week_start: weekStart, week_end: weekEnd, student_ids: batch, force });
+        const res = await invoke({ week_start: weekStart, week_end: weekEnd, student_ids: batch, force, skip_facts_only: skipFactsOnly });
         generated.push(...res.generated);
         failed.push(...res.failed);
         setProgress({ done: Math.min(i + BATCH, ids.length), total: ids.length });
@@ -96,7 +98,8 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
         }
       }
       setResult({ generated, failed });
-      toast.success(`편지 ${generated.length}건 생성${failed.length ? ` · ${failed.length}건은 검증에 걸려 저장하지 않았습니다` : ''}`);
+      const letters = generated.filter(g => (g as { mode?: string }).mode !== 'facts_only').length;
+      toast.success(`편지 ${letters}건 · 약식 ${generated.length - letters}건 생성${failed.length ? ` · ${failed.length}건은 검증에 걸려 저장하지 않았습니다` : ''}`);
       await onDone?.();
       await runCheck();
     } catch (e) {
@@ -107,6 +110,9 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
       setProgress(null);
     }
   };
+
+  const letterReady = useMemo(() => (check?.ready ?? []).filter(r => r.mode !== 'facts_only'), [check]);
+  const factsReady = useMemo(() => (check?.ready ?? []).filter(r => r.mode === 'facts_only'), [check]);
 
   const skippedByReason = useMemo(() => {
     const map = new Map<string, Skipped[]>();
@@ -125,7 +131,7 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
           <div className="flex items-center gap-2">
             <Mail className="w-5 h-5 text-primary" />
             <CardTitle className="text-lg">편지형 리포트</CardTitle>
-            <Badge variant="outline" className="text-[11px]">시범</Badge>
+            <Badge variant="outline" className="text-[11px]">V2</Badge>
             <Badge variant="outline" className="text-[11px]">{weekStart} ~ {weekEnd}</Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -137,21 +143,21 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
               <AlertDialogTrigger asChild>
                 <Button size="sm" disabled={!check || check.ready.length === 0 || generating} className="gap-1.5">
                   {generating && <Loader2 className="w-4 h-4 animate-spin" />}
-                  편지 생성{check ? ` (${check.ready.length}명)` : ''}
+                  생성{check ? ` (편지 ${letterReady.length} · 약식 ${factsReady.length})` : ''}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{check?.ready.length ?? 0}명의 편지를 만들까요?</AlertDialogTitle>
+                  <AlertDialogTitle>편지 {letterReady.length}건 · 약식 {factsReady.length}건을 만들까요?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    선생님 메모가 있는 학생만 대상입니다. 초안으로만 저장되며 학부모 공개나 발송은 하지 않습니다.
-                    검증에 걸린 문안은 저장하지 않고 이름만 알려드립니다.
+                    선생님 말(주간 코멘트·학부모께 한 줄)이 있는 학생은 AI가 편지를 쓰고, 없는 학생은 AI 없이 이번 주 기록 카드만 담은 약식으로 저장합니다.
+                    초안으로만 저장되며 학부모 공개나 발송은 하지 않습니다. 검증에 걸린 문안은 저장하지 않고 이름만 알려드립니다.
                     {force ? ' 기존 초안은 덮어씁니다(공개·발송본 제외).' : ' 이미 초안이 있는 학생은 건너뜁니다.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>취소</AlertDialogCancel>
-                  <AlertDialogAction onClick={runGenerate}>편지 생성</AlertDialogAction>
+                  <AlertDialogAction onClick={runGenerate}>생성</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -160,12 +166,19 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          선생님이 마감 때 쓴 <b>학부모께 한 줄</b>(학습 이슈·숙제 관찰 포함)을 AI가 학부모 말로 다듬은 4~6문장 편지입니다.
-          메모가 없는 학생은 편지를 만들지 않습니다. 지어낸 장면·뭉뚱그린 말·약속형·점수 나열은 검증에서 걸러 저장하지 않습니다.
+          선생님이 주 1회 남긴 <b>주간 코멘트</b>를 중심으로(수업별 학부모께 한 줄·학습 이슈는 보조) AI가 학부모 말로 다듬은 4~6문장 편지입니다.
+          선생님 말이 없는 학생은 이번 주 기록(진도·숙제·테스트·출결)만 정리한 <b>약식</b>으로 만듭니다. 영어(재진쌤) 수업은 포털 코멘트로 갈음해 제외합니다.
+          지어낸 장면·뭉뚱그린 말·약속형·점수 나열은 검증에서 걸러 저장하지 않습니다.
         </p>
-        <div className="flex items-center gap-2">
-          <Checkbox id="letter-force" checked={force} onCheckedChange={(v) => setForce(v === true)} />
-          <label htmlFor="letter-force" className="text-xs text-muted-foreground cursor-pointer">기존 초안 덮어쓰기 (공개·발송본은 보호)</label>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Checkbox id="letter-force" checked={force} onCheckedChange={(v) => setForce(v === true)} />
+            <label htmlFor="letter-force" className="text-xs text-muted-foreground cursor-pointer">기존 초안 덮어쓰기 (공개·발송본은 보호)</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="letter-skip-facts" checked={skipFactsOnly} onCheckedChange={(v) => setSkipFactsOnly(v === true)} />
+            <label htmlFor="letter-skip-facts" className="text-xs text-muted-foreground cursor-pointer">약식은 만들지 않기 (선생님 말 있는 학생만)</label>
+          </div>
         </div>
 
         {progress && (
@@ -174,10 +187,15 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
 
         {check && (
           <div className="grid gap-2 md:grid-cols-2">
+            <div className="rounded-lg border border-primary/40 p-3">
+              <p className="text-xs text-muted-foreground">편지 (선생님 말 있음)</p>
+              <p className="text-xl font-bold">{letterReady.length}명</p>
+              {letterReady.length > 0 && <p className="text-[11px] text-muted-foreground mt-1">{names(letterReady)}</p>}
+            </div>
             <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">편지 가능 (메모 있음)</p>
-              <p className="text-xl font-bold">{check.ready.length}명</p>
-              {check.ready.length > 0 && <p className="text-[11px] text-muted-foreground mt-1">{names(check.ready)}</p>}
+              <p className="text-xs text-muted-foreground">약식 (기록만 · 선생님 말 없음)</p>
+              <p className="text-xl font-bold">{factsReady.length}명</p>
+              {factsReady.length > 0 && <p className="text-[11px] text-muted-foreground mt-1">{names(factsReady)}</p>}
             </div>
             {skippedByReason.map(([reason, list]) => (
               <div key={reason} className="rounded-lg border border-warning/40 p-3">
@@ -204,7 +222,7 @@ export function WeeklyLetterPanel({ weekStart, weekEnd, onDone }: Props) {
 
         {result && (
           <div className="rounded-lg bg-muted/50 p-3 text-xs space-y-1">
-            <p>생성됨 {result.generated.length}명{result.generated.length ? `: ${names(result.generated, 20)}` : ''}</p>
+            <p>편지 {result.generated.filter(g => (g as { mode?: string }).mode !== 'facts_only').length}명 · 약식 {result.generated.filter(g => (g as { mode?: string }).mode === 'facts_only').length}명{result.generated.length ? `: ${names(result.generated, 20)}` : ''}</p>
             {result.failed.length > 0 && (
               <p className="text-warning">저장 안 함 {result.failed.length}명: {result.failed.map(f => `${f.name}(${f.reason.split(',')[0]})`).join(', ')}</p>
             )}
