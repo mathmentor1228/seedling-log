@@ -163,9 +163,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       {
         label: '시험·자료',
         items: [
-          { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" />, description: '학교별 내신 일정·성적 입력' },
-          { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" />, description: '학교별 기출·학사자료 보관함' },
-          { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, description: '학생별 성적 변화 그래프' },
+          { label: '내신대비', href: '/exam', icon: <ClipboardCheck className="w-4 h-4" />, description: '시험 일정·특강·학생 결과·시험지 분석을 사이클별로 한 화면에' },
           { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '문서 업로드로 단어시험지 생성·인쇄' },
           ...visibleSubjects,
         ],
@@ -236,9 +234,8 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     {
       label: '시험·자료',
       items: [
-        { label: '내신 보드', href: '/exam-board', icon: <ClipboardCheck className="w-4 h-4" />, description: '학교별 내신 일정·성적 입력', allowedRoles: ['admin', 'teacher'] },
-        { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" />, description: '학교별 기출·학사자료 보관함' },
-        { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, description: '학생별 성적 변화 그래프', allowedRoles: ['admin', 'teacher'] },
+        { label: '내신대비', href: '/exam', icon: <ClipboardCheck className="w-4 h-4" />, description: '시험 일정·특강·학생 결과·시험지 분석을 사이클별로 한 화면에', allowedRoles: ['admin', 'teacher'] },
+        { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" />, description: '학교별 기출·학사자료 보관함', allowedRoles: ['assistant'] },
         { label: '단어시험지 제작', href: '/vocab-generator', icon: <BookOpenCheck className="w-4 h-4" />, description: '문서 업로드로 단어시험지 생성·인쇄', allowedRoles: ['admin', 'teacher'] },
       ],
     },
