@@ -15,6 +15,7 @@ import { getMondayOfWeek } from '@/lib/weekUtils';
 import {
   WEEKLY_COMMENT_QUESTIONS, WEEKLY_COMMENT_RULES, WEEKLY_COMMENT_MIN_CHARS, WEEKLY_COMMENT_IDEAL_MAX_CHARS,
 } from '@/lib/weeklyCommentGuide';
+import { WEEKLY_COMMENT_PRESENCE_CHANNEL, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
 
 interface Props {
   open: boolean;
@@ -40,7 +41,7 @@ function addDays(iso: string, n: number): string {
 }
 
 export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName, subject = '수학', weekStart, onSaved }: Props) {
-  const { user } = useAuth();
+  const { user, fullName } = useAuth();
   const { toast } = useToast();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +50,22 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
   const [weekLessons, setWeekLessons] = useState<WeekLesson[]>([]);
   const week = weekStart || getMondayOfWeek(new Date());
   const weekEnd = useMemo(() => addDays(week, 6), [week]);
+
+  // 열려 있는 동안 "작성 중" presence 공유 → 원장 현황판에 파란색으로 보임
+  useEffect(() => {
+    if (!open || !user) return;
+    const ch = supabase.channel(WEEKLY_COMMENT_PRESENCE_CHANNEL, { config: { presence: { key: `${user.id}:${studentId}` } } });
+    const payload: WeeklyCommentEditing = {
+      student_id: studentId, teacher_id: user.id, teacher_name: fullName || '선생님', week_start: week, since: new Date().toISOString(),
+    };
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') ch.track(payload).catch(() => {});
+    });
+    return () => {
+      ch.untrack().catch(() => {});
+      supabase.removeChannel(ch);
+    };
+  }, [open, user, studentId, week, fullName]);
 
   useEffect(() => {
     if (!open || !user) return;

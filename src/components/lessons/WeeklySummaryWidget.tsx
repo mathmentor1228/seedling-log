@@ -88,6 +88,19 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // 다른 기기·다른 선생님이 코멘트를 저장하면 바로 반영
+  useEffect(() => {
+    if (!visible) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ch = supabase.channel('weekly-comment-widget-refresh')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { fetchData(); }, 1500);
+      })
+      .subscribe();
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
+  }, [visible, fetchData]);
+
   if (!visible) return null;
 
   const missing = rows.filter(r => !r.hasSummary);
