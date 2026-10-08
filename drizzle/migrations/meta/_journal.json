@@ -57,6 +57,13 @@
       "when": 1791295596198,
       "tag": "0007_normalize_student_grade_label",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791476331053,
+      "tag": "0008_sync_homework_check_from_lesson",
+      "breakpoints": true
     }
   ]
 }
