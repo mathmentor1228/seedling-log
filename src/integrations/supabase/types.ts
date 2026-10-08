@@ -9094,6 +9094,17 @@ export type Database = {
     }
     Functions: {
       apply_due_office_task_student_sync: { Args: never; Returns: number }
+      apply_lesson_homework_status: {
+        Args: {
+          _lesson_date: string
+          _lesson_id: string
+          _status: string
+          _student_id: string
+          _subject: Database["public"]["Enums"]["subject_type"]
+          _teacher_id: string
+        }
+        Returns: number
+      }
       apply_office_task_student_sync: {
         Args: { _task_id: string }
         Returns: string
@@ -9105,6 +9116,13 @@ export type Database = {
           end_time: string
           start_time: string
           survey_date: string
+        }[]
+      }
+      backfill_homework_check_from_lessons: {
+        Args: { _since: string }
+        Returns: {
+          homework_checked: number
+          lessons_scanned: number
         }[]
       }
       check_math_question_daily_limit: {
