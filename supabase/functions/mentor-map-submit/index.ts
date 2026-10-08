@@ -2,7 +2,7 @@
 // - anon 은 이 함수를 통해서만 INSERT 가능 (테이블 직접 권한 없음)
 // - 목록 조회/수정/삭제 기능 없음
 // - 서버 검증: 필수값, enum, 길이 제한, 전화번호 형식, rate limit, idempotency
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

@@ -1,7 +1,7 @@
 // PARENT-SURVEY-V1: 학부모 설문 알림톡 일괄발송 (솔라피 연동, admin 전용)
 // 요청: { student_ids: string[], dry_run?: boolean, test_phone?: string }
 // 응답: { results: [...], sent, failed, skipped, template_variables? }
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const SURVEY_BASE = 'https://seedling-log.lovable.app/parent/survey';

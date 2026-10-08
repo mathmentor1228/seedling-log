@@ -1,7 +1,7 @@
 // TEXTBOOK-BILL-V1: 교재비 청구 알림톡 발송 (솔라피 연동)
 // 요청: { targets: [{ student_id: string, dist_ids: string[] }], mode: 'before' | 'after' }
 // 응답: { results: [{ student_id, student_name, ok, reason? }], sent, failed }
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';

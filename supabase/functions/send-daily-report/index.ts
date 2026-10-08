@@ -6,7 +6,7 @@
 //  - testPhone: 모든 메시지를 이 번호로만 발송 (실발송 테스트용, 로그 기록 안 함)
 //  - force: 이미 발송된 학생도 재발송
 // 응답: { results: [{ student_id, student_name, ok, reason?, preview? }], sent, failed, skipped }
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 function json(body: unknown, status = 200) {
