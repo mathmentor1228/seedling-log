@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { RootErrorBoundary } from "@/components/RootErrorBoundary";
 import "./index.css";
 
 // Always unregister any previously installed service workers and wipe their caches.
