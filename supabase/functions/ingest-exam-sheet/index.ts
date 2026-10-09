@@ -155,9 +155,10 @@ Deno.serve(async (req) => {
     }
     // Storage 복사
     const bytes = Uint8Array.from(atob(f.data_base64), c => c.charCodeAt(0));
-    const path = `sheet/${parsed.key.year}-${period}/${normalizeSchool(parsed.school)}/${parsed.subject}/${m.student.id}.pdf`;
+    // Storage 키는 ASCII만 (한글 학교·과목명은 거부될 수 있음) — 학교·과목은 DB 행에 있으므로 경로엔 결과 id만
+    const path = `sheet/${parsed.key.year}-${period}/${result.id}.pdf`;
     const { error: upErr } = await admin.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
-    if (upErr) { await log(false, 'storage: ' + upErr.message); return json({ ok: false, reason: upErr.message }, 500); }
+    if (upErr) { await log(false, 'storage: ' + upErr.message); return json({ ok: false, reason: 'storage: ' + upErr.message }, 500); }
     const { data: pdfRow } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('source', 'drive').maybeSingle();
     const pdfPatch = { storage_path: path, display_title: f.name.replace(/\.pdf$/i, ''), file_size: f.size ?? bytes.length, source: 'drive', drive_file_id: f.drive_file_id ?? null, drive_file_name: f.name, drive_modified_at: f.modified ?? null, generated_by_name: '드라이브 시험지 동기화' };
     if (pdfRow) await admin.from('student_exam_result_pdfs').update(pdfPatch).eq('id', pdfRow.id);
