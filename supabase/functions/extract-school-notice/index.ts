@@ -51,11 +51,11 @@ function examTypeOf(text: string, month: number | null): '중간고사' | '기�
   return '중간고사';
 }
 
-async function readAttachment(supabaseUrl: string, serviceKey: string, schoolName: string, att: { name: string; url: string }): Promise<Extracted | null> {
+async function readAttachment(supabaseUrl: string, serviceKey: string, schoolName: string, att: { name: string; url: string }, gradeFilter: number | null): Promise<Extracted | null> {
   const res = await fetch(`${supabaseUrl}/functions/v1/analyze-school-document`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileUrl: att.url, fileName: att.name || att.url.split('/').pop(), fileType: 'evaluation_plan', schoolName }),
+    body: JSON.stringify({ fileUrl: att.url, fileName: att.name || att.url.split('/').pop(), fileType: 'evaluation_plan', schoolName, gradeFilter: gradeFilter ?? undefined }),
   });
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.success) { console.warn('[extract] analyze failed', att.url, res.status, body?.error); return null; }
@@ -77,7 +77,7 @@ function mergeExtracted(list: Extracted[]): Extracted {
   return out;
 }
 
-async function applyToCycles(admin: any, school: School, post: Post, data: Extracted) {
+async function applyToCycles(admin: any, school: School, post: Post, data: Extracted, targetGrade: number | null) {
   // ── 사이클 키 결정 ──
   const dates = (data.exam_schedule || []).map(r => String(r.date || '')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   const firstDate = dates[0] || null;
@@ -91,11 +91,19 @@ async function applyToCycles(admin: any, school: School, post: Post, data: Extra
   const docGrade = toGrade(data.grade);
   const rowGrades = new Set<number>();
   for (const r of [...(data.exam_schedule || []), ...(data.exam_scope || []), ...(data.performance_assessments || [])]) { const g = toGrade((r as any).grade); if (g) rowGrades.add(g); }
-  let grades = docGrade ? [docGrade] : rowGrades.size > 0 ? [...rowGrades] : [...(school.grades || [])];
-  if (school.grades?.length) grades = grades.filter(g => school.grades.includes(g));
-  if (grades.length === 0) return { cycles: [] as string[], subjects: 0, warnings: ['학년을 알 수 없고 학교 담당 학년도 비어 있음'] };
+  let grades = targetGrade ? [targetGrade] : docGrade ? [docGrade] : rowGrades.size > 0 ? [...rowGrades] : [...(school.grades || [])];
+  if (school.grades?.length && !targetGrade) grades = grades.filter(g => school.grades.includes(g));
+  if (grades.length === 0) return { cycles: [] as string[], subjects: 0, warnings: ['학년을 알 수 없고 학교 담당 학년도 비어 있음'], ungraded: 0 };
+
+  // 학년이 안 적힌 행을 어느 학년으로 볼지: 화면에서 지정한 학년 → 문서 전체 학년 → 학교 담당 학년이 하나뿐이면 그 학년 → 그 외는 건너뜀(모든 학년에 복사하지 않는다)
+  const fallbackGrade: number | null = targetGrade ?? docGrade ?? (grades.length === 1 ? grades[0] : null);
+  const rowGrade = (r: { grade?: unknown }): number | null => toGrade(r.grade) ?? fallbackGrade;
+  let ungraded = 0;
+  const countUngraded = () => { for (const r of [...(data.exam_schedule || []), ...(data.exam_scope || []), ...(data.performance_assessments || [])]) if (!toGrade((r as any).grade) && !fallbackGrade) ungraded++; };
+  countUngraded();
 
   const warnings: string[] = [];
+  if (ungraded > 0) warnings.push(`학년이 적히지 않은 항목 ${ungraded}건은 어느 학년인지 알 수 없어 건너뜀 (해당 사이클에서 'AI로 읽어 채우기'를 누르면 그 학년으로 읽습니다)`);
   const cycleIds: string[] = [];
   let subjectsTouched = 0;
 
@@ -103,7 +111,7 @@ async function applyToCycles(admin: any, school: School, post: Post, data: Extra
     // 사이클 찾기 / 없으면 초안 생성
     let { data: cycle } = await admin.from('exam_cycles').select('id, status, start_date, end_date')
       .eq('school_name', school.name).eq('grade_year', grade).eq('academic_year', academicYear).eq('semester', semester).eq('exam_type', examType).maybeSingle();
-    const gradeDates = (data.exam_schedule || []).filter(r => { const g = toGrade(r.grade); return !g || g === grade; })
+    const gradeDates = (data.exam_schedule || []).filter(r => rowGrade(r) === grade)
       .map(r => String(r.date || '')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
     if (!cycle) {
       const { data: created, error } = await admin.from('exam_cycles').insert({
@@ -123,7 +131,7 @@ async function applyToCycles(admin: any, school: School, post: Post, data: Extra
     const acc = new Map<string, Acc>();
     const get = (subj: string) => acc.get(subj) || acc.set(subj, { perf: [], others: [] }).get(subj)!;
     for (const r of data.exam_schedule || []) {
-      const g = toGrade(r.grade); if (g && g !== grade) continue;
+      if (rowGrade(r) !== grade) continue;
       const subj = mapSubject(r.subject); if (!subj) continue;
       const a = get(subj);
       if (!a.exam_date && /^\d{4}-\d{2}-\d{2}$/.test(String(r.date || ''))) a.exam_date = String(r.date);
@@ -131,14 +139,14 @@ async function applyToCycles(admin: any, school: School, post: Post, data: Extra
       if (r.subject && r.subject !== subj) a.others.push(String(r.subject));
     }
     for (const r of data.exam_scope || []) {
-      const g = toGrade(r.grade); if (g && g !== grade) continue;
+      if (rowGrade(r) !== grade) continue;
       const subj = mapSubject(r.subject); if (!subj) continue;
       const a = get(subj);
       const text = [r.scope_text, r.pages ? `(${r.pages})` : null, r.chapters?.length ? r.chapters.join(', ') : null].filter(Boolean).join(' ').trim();
       if (text) a.scope = a.scope ? `${a.scope}\n${r.subject && r.subject !== subj ? `[${r.subject}] ` : ''}${text}` : `${r.subject && r.subject !== subj ? `[${r.subject}] ` : ''}${text}`;
     }
     for (const r of data.performance_assessments || []) {
-      const g = toGrade(r.grade); if (g && g !== grade) continue;
+      if (rowGrade(r) !== grade) continue;
       const subj = mapSubject(r.subject); if (!subj) continue;
       const line = [r.type, r.title, r.ratio != null && r.ratio !== '' ? `${r.ratio}%` : null, r.period].filter(Boolean).join(' · ');
       if (line) get(subj).perf.push(line);
@@ -173,7 +181,7 @@ async function applyToCycles(admin: any, school: School, post: Post, data: Extra
       if (error) warnings.push(`${grade}학년 ${subject} 갱신 실패: ${error.message}`); else subjectsTouched++;
     }
   }
-  return { cycles: cycleIds, subjects: subjectsTouched, warnings };
+  return { cycles: cycleIds, subjects: subjectsTouched, warnings, ungraded };
 }
 
 Deno.serve(async (req) => {
@@ -202,6 +210,7 @@ Deno.serve(async (req) => {
   if (!allowed) return json({ error: 'Unauthorized' }, 401);
   if (!Deno.env.get('LOVABLE_API_KEY')) return json({ error: 'AI 키(LOVABLE_API_KEY)가 없어 첨부를 읽을 수 없습니다.' }, 500);
 
+  const targetGrade: number | null = toGrade(body?.grade);
   // 대상 글: 지정 1건 또는 새 글(첨부 있음) 최대 N건
   let posts: Post[] = [];
   if (typeof body?.post_id === 'string') {
@@ -230,17 +239,17 @@ Deno.serve(async (req) => {
       report.push(r); continue;
     }
     const results: Extracted[] = [];
-    for (const att of readable) { const e = await readAttachment(supabaseUrl, serviceKey, school.name, att); if (e) results.push(e); }
+    for (const att of readable) { const e = await readAttachment(supabaseUrl, serviceKey, school.name, att, targetGrade); if (e) results.push(e); }
     if (results.length === 0) {
       r.error = '첨부를 읽지 못함';
       await admin.from('school_watch_log').update({ extracted: { error: r.error, tried: readable.map(a => a.url) } }).eq('id', post.id);
       report.push(r); continue;
     }
     const merged = mergeExtracted(results);
-    const applied = await applyToCycles(admin, school, post, merged);
+    const applied = await applyToCycles(admin, school, post, merged, targetGrade);
     const summary = {
       schedule: (merged.exam_schedule || []).length, scope: (merged.exam_scope || []).length, performance: (merged.performance_assessments || []).length,
-      cycles: applied.cycles.length, subjects: applied.subjects, warnings: applied.warnings, skipped, read: readable.map(a => a.name || a.url.split('/').pop()),
+      cycles: applied.cycles.length, subjects: applied.subjects, warnings: applied.warnings, ungraded: applied.ungraded, grade: targetGrade, skipped, read: readable.map(a => a.name || a.url.split('/').pop()),
       extracted_at: new Date().toISOString(),
     };
     await admin.from('school_watch_log').update({

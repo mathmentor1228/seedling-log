@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Bell, CheckCircle2, ExternalLink, Loader2, Pencil, RefreshCw, Save, Settings2, Sparkles, X } from 'lucide-react';
+import { Bell, CheckCircle2, Eraser, ExternalLink, Loader2, Pencil, RefreshCw, Save, Settings2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import type { ArchiveRow, Cycle, CycleSubject, TextbookRow, WatchPost } from './examHubUtils';
@@ -103,15 +103,21 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
   async function extractPost(p: WatchPost) {
     setExtracting(p.id);
     try {
-      const { data, error } = await supabase.functions.invoke('extract-school-notice', { body: { post_id: p.id } });
+      const { data, error } = await supabase.functions.invoke('extract-school-notice', { body: { post_id: p.id, grade: cycle.grade_year } });
       if (error) throw new Error(error.message);
       const r = data?.report?.[0];
       if (!r || r.error) throw new Error(r?.error || '결과 없음');
-      toast.success(`읽기 완료 — 일정 ${r.schedule}건 · 범위 ${r.scope}건 · 수행 ${r.performance}건 → 과목 ${r.subjects}개 채움${r.warnings?.length ? ` (주의 ${r.warnings.length})` : ''}`);
+      toast.success(`${cycle.grade_year}학년 기준 읽기 완료 — 일정 ${r.schedule}건 · 범위 ${r.scope}건 · 수행 ${r.performance}건 → 과목 ${r.subjects}개 채움${r.ungraded ? ` · 학년 미상 ${r.ungraded}건 건너뜀` : ''}${r.warnings?.length ? ` (주의 ${r.warnings.length})` : ''}`);
       onChanged();
     } catch (e: any) {
       toast.error('AI 읽기 실패: ' + (e.message || e));
     } finally { setExtracting(null); }
+  }
+  async function clearAuto(cs: CycleSubject) {
+    if (!window.confirm(`${cs.subject}의 자동 수집 값(시험일·시간·범위·수행평가)을 비울까요? 다시 'AI로 읽어 채우기'를 누르면 이 학년 기준으로 다시 채워집니다.`)) return;
+    const { error } = await db.from('exam_cycle_subjects').update({ exam_date: null, exam_time: null, period: null, scope: null, notes: null, updated_at: new Date().toISOString() }).eq('id', cs.id);
+    if (error) { toast.error('비우기 실패: ' + error.message); return; }
+    toast.success(`${cs.subject} 자동값 비움`); onChanged();
   }
   async function setPostStatus(p: WatchPost, status: string) {
     const { error } = await db.from('school_watch_log').update({ status }).eq('id', p.id);
@@ -200,7 +206,7 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
                       {isEditing ? (
                         <Textarea rows={3} value={draft.scope} onChange={e => setDraft(d => ({ ...d, scope: e.target.value }))} className="text-xs" placeholder="시험 범위" />
                       ) : (
-                        <div className="text-sm whitespace-pre-wrap">{cs?.scope || ar?.exam_scope || <span className="text-muted-foreground">범위 미입력</span>}</div>
+                        <ScopeText text={cs?.scope || ar?.exam_scope || null} />
                       )}
                     </TableCell>
                     <TableCell className="align-top text-sm">
@@ -226,7 +232,10 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(null)}><X className="w-3.5 h-3.5" /></Button>
                           </div>
                         ) : (
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(cs)}><Pencil className="w-3.5 h-3.5" /></Button>
+                          <div className="flex flex-col gap-0.5">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(cs)} title="수정"><Pencil className="w-3.5 h-3.5" /></Button>
+                            {needsCheck && <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => clearAuto(cs)} title="자동값 지우기"><Eraser className="w-3.5 h-3.5" /></Button>}
+                          </div>
                         ))}
                       </TableCell>
                     )}
@@ -299,6 +308,21 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
       <p className="text-xs text-muted-foreground">
         교과서는 학교 교과서 등록(자료실) 자료를, 수행평가는 학교 공지에서 AI가 읽은 내용(없으면 내신 자료실 기록)을 보여줍니다. hwp·xlsx 첨부는 AI가 읽지 못하므로 직접 열어 옮겨 적어야 합니다.
       </p>
+    </div>
+  );
+}
+
+/** 긴 범위(세부 과목 여러 개)는 앞 3줄만 보여주고 펼친다 */
+function ScopeText({ text }: { text: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return <span className="text-sm text-muted-foreground">범위 미입력</span>;
+  const lines = text.split('\n');
+  const long = lines.length > 3 || text.length > 220;
+  const shown = open || !long ? text : lines.slice(0, 3).join('\n').slice(0, 220) + '…';
+  return (
+    <div className="text-sm whitespace-pre-wrap">
+      {shown}
+      {long && <button type="button" onClick={() => setOpen(o => !o)} className="ml-1 text-xs text-primary hover:underline">{open ? '접기' : `더보기 (${lines.length}줄)`}</button>}
     </div>
   );
 }

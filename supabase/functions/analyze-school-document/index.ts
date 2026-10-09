@@ -222,7 +222,8 @@ const EXAM_NOTICE_PARSE_SYSTEM_PROMPT = `당신은 한국 중고등학교 내신
   ],
   "exam_scope": [
     {
-      "subject": "과목명",
+      "subject": "과목명 (세부 과목명 그대로. 예: 공통수학2, 물리학Ⅰ, 문학)",
+      "grade": "해당 학년 (1/2/3). 문서에 학년 구분이 있으면 반드시 채움",
       "scope_text": "시험범위 원문 그대로",
       "chapters": ["단원명1", "단원명2"],
       "pages": "페이지 범위 (예: p.1~p.85)"
@@ -230,7 +231,8 @@ const EXAM_NOTICE_PARSE_SYSTEM_PROMPT = `당신은 한국 중고등학교 내신
   ],
   "performance_assessments": [
     {
-      "subject": "과목명",
+      "subject": "과목명 (세부 과목명 그대로)",
+      "grade": "해당 학년 (1/2/3). 문서에 학년 구분이 있으면 반드시 채움",
       "type": "수행평가 유형 (서술형/논술형/실기/포트폴리오/발표 등)",
       "title": "수행평가 제목/내용",
       "ratio": "비율 (숫자만)",
@@ -247,7 +249,9 @@ const EXAM_NOTICE_PARSE_SYSTEM_PROMPT = `당신은 한국 중고등학교 내신
 3. 연도가 명시되지 않으면 현재 연도 사용
 4. 과목명은 약어 사용 금지 (수학→수학, 영어→영어, 국어→국어)
 5. 범위가 불명확하면 원문 그대로 scope_text에 기록
-6. 없는 정보는 빈 배열[] 또는 null로 처리`;
+6. 없는 정보는 빈 배열[] 또는 null로 처리
+7. 한 문서에 여러 학년이 있으면 exam_schedule·exam_scope·performance_assessments 의 모든 항목에 grade를 채우고, 학년이 다른 과목·범위를 절대 섞지 않는다
+8. 같은 학년에 과학·사회 등 세부 과목이 여러 개면(물리학Ⅰ·화학Ⅰ·생명과학Ⅰ…) 각각 별도 항목으로 적는다`;
 
 const TEMPLATE_PARSE_PROMPT = `이 시험지 이미지에서 아래 정보를 추출해주세요.
 
@@ -305,7 +309,7 @@ serve(async (req) => {
       );
     }
 
-    const { fileUrl, fileDataUrl, fileType, subjectFilter, schoolName, fileName, fileMimeType } = await req.json();
+    const { fileUrl, fileDataUrl, fileType, subjectFilter, schoolName, fileName, fileMimeType, gradeFilter } = await req.json();
     const sourceUrl =
       typeof fileDataUrl === "string" && fileDataUrl.startsWith("data:")
         ? fileDataUrl
@@ -381,6 +385,7 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
 
 문서는 ${schoolName}의 시험 공고문 또는 평가계획 문서입니다.
 ${subjectInstruction}
+${Number(gradeFilter) >= 1 ? `이 요청은 ${Number(gradeFilter)}학년 전용입니다. ${Number(gradeFilter)}학년에 해당하는 일정·범위·수행평가만 추출하고 다른 학년 내용은 모두 제외하세요. 모든 항목의 grade는 ${Number(gradeFilter)} 입니다.` : '학년 구분이 있는 문서면 모든 항목에 grade를 반드시 채우세요.'}
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
