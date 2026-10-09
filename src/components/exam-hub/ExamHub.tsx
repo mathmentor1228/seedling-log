@@ -19,7 +19,7 @@ import { AlertTriangle, Bell, CalendarClock, CalendarDays, ClipboardCheck, FileB
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { useExamHubData } from './useExamHubData';
 import {
-  ambiguityReasons, buildStudentSubjectRows, cycleKey, cycleTitle, ddayLabel, ddayState, gradeLabel, periodKey, reportInCycle, studentInCycle,
+  ambiguityReasons, buildStudentSubjectRows, cycleKey, cycleTitle, ddayLabel, ddayState, gradeLabel, isResultTracked, periodKey, reportInCycle, studentInCycle, RESULT_TRACKING_SINCE,
   type Cycle, type Participant,
 } from './examHubUtils';
 import { ExamInfoTab } from './ExamInfoTab';
@@ -42,8 +42,8 @@ const MODES = ['schedule', 'review', 'history'] as const;
 type Mode = (typeof MODES)[number];
 const MODE_META: Record<Mode, { label: string; icon: React.ElementType; help: string }> = {
   schedule: { label: '일정', icon: CalendarDays, help: '다가오는 시험과 진행 중인 시험. 시험일·범위·수행평가·특강 준비.' },
-  review: { label: '마감 점검', icon: ListChecks, help: '최근 끝난 시험의 점수·시험지·분석지가 다 들어왔는지 과목×선생님 격자로.' },
-  history: { label: '기록', icon: History, help: '과거 시험까지 학생×과목 점수 표. 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.' },
+  review: { label: '마감 점검', icon: ListChecks, help: `최근 끝난 시험의 점수·시험지·분석지가 다 들어왔는지 과목×선생님 격자로. 기록 기준점은 ${RESULT_TRACKING_SINCE.label}이며 그 이전 시험은 점검하지 않습니다.` },
+  history: { label: '기록', icon: History, help: `과거 시험까지 학생×과목 점수 표. ${RESULT_TRACKING_SINCE.label}부터 전부 기록하고, 그 이전은 찾는 대로 채웁니다(빈 칸은 미입력이 아님). 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.` },
 };
 
 const TAB_HELP: Record<Tab, string> = {
@@ -123,12 +123,13 @@ export function ExamHub() {
       const targets = allTargets.filter(s => !excluded.has(s.id));
       const mine = targets.some(s => myStudentIds.has(s.id));
       const st = ddayState(c, today);
-      const expected = rows.filter(r => r.status !== 'absent').length;
+      const tracked = isResultTracked(key);
+      const expected = rows.filter(r => r.status !== 'absent' && r.status !== 'untracked').length;
       const done = rows.filter(r => r.status === 'done').length;
       const missing = rows.filter(r => r.status === 'missing' || r.status === 'score_empty').length;
       const scoped = subs.filter(s => !!s.scope).length;
       const newPosts = data.posts.filter(p => p.status === 'new' && normalizeSchool(p.school_name) === normalizeSchool(c.school_name)).length;
-      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts };
+      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts, tracked };
     });
   }, [data, myStudentIds, today, participantByKey, subjectsOf]);
 
@@ -197,8 +198,9 @@ export function ExamHub() {
   function select(c: Cycle, t?: Tab) { const p = new URLSearchParams(params); p.set('cycle', c.id); if (t) p.set('tab', t); setParams(p); }
   function setTab(t: string) { const p = new URLSearchParams(params); p.set('tab', t); setParams(p); }
   function setMode(m: Mode) { const p = new URLSearchParams(params); p.delete('view'); if (m === 'schedule') p.delete('mode'); else p.set('mode', m); setParams(p); }
+  // 마감 점검은 기록 기준점(2026 2학기 중간) 이후 시험만
   const reviewCards = useMemo(() => cycleCards
-    .filter(cc => cc.st.kind === 'after' && cc.st.days <= REVIEW_WINDOW_DAYS && (!isTeacher || allCycles || cc.mine))
+    .filter(cc => cc.tracked && cc.st.kind === 'after' && cc.st.days <= REVIEW_WINDOW_DAYS && (!isTeacher || allCycles || cc.mine))
     .sort((a, b) => (a.st.kind === 'after' && b.st.kind === 'after' ? a.st.days - b.st.days : 0)), [cycleCards, isTeacher, allCycles]);
   const lastResultLabel = useMemo(() => {
     const ks = data.results.filter(r => r.exam_type !== 'performance').map(r => periodKey(r.exam_year, r.exam_period, r.exam_type));

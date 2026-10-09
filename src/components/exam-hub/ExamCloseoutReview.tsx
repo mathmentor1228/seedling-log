@@ -35,7 +35,7 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen 
     for (const r of cc.rows) {
       const k = `${r.subject}|${r.teacherId || ''}`;
       const l = byKey.get(k) || { subject: r.subject, teacherId: r.teacherId, teacherName: r.teacherName || '담당 미지정', n: 0, done: 0, scoreEmpty: 0, missing: 0, pdf: 0, absent: 0 };
-      if (r.status === 'absent') l.absent += 1; else { l.n += 1; if (r.status === 'done') l.done += 1; else if (r.status === 'score_empty') l.scoreEmpty += 1; else l.missing += 1; if (r.pdf) l.pdf += 1; }
+      if (r.status === 'absent' || r.status === 'untracked') { if (r.status === 'absent') l.absent += 1; } else { l.n += 1; if (r.status === 'done') l.done += 1; else if (r.status === 'score_empty') l.scoreEmpty += 1; else l.missing += 1; if (r.pdf) l.pdf += 1; }
       byKey.set(k, l);
     }
     const lines = [...byKey.values()].sort((a, b) => a.subject.localeCompare(b.subject, 'ko') || a.teacherName.localeCompare(b.teacherName, 'ko'));

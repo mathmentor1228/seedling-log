@@ -92,7 +92,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
     if (subject !== 'all' && r.subject !== subject) return false;
     if (teacher !== 'all' && (r.teacherName || '담당 미지정') !== teacher) return false;
     if (mineOnly && currentUserId && r.teacherId !== currentUserId) return false;
-    if (missingOnly && (r.status === 'done' || r.status === 'absent')) return false;
+    if (missingOnly && (r.status === 'done' || r.status === 'absent' || r.status === 'untracked')) return false;
     return true;
   }), [rows, subject, teacher, mineOnly, missingOnly, currentUserId]);
 
@@ -103,7 +103,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
     const byTeacher = new Map<string, Agg>();
     const feed = (m: Map<string, Agg>, key: string, r: StudentSubjectRow) => {
       const a = m.get(key) || m.set(key, make(key)).get(key)!;
-      if (r.status === 'absent') return;
+      if (r.status === 'absent' || r.status === 'untracked') return;
       a.total += 1;
       if (r.status === 'done') {
         a.done += 1; a.sum += r.result!.actual_score!;

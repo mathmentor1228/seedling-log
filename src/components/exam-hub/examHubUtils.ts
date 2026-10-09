@@ -144,7 +144,16 @@ export function ddayLabel(st: DdayState): string {
   return '날짜 미정';
 }
 
-export type ResultStatus = 'done' | 'score_empty' | 'missing' | 'absent';
+/**
+ * 학생 개별 성적 기록 기준점 (원장 2026-10-10): 2026년 2학기 중간고사부터 전부 기록한다.
+ * 그 이전 회차는 값이 없어도 '미입력'으로 잡지 않는다(과거 기록은 찾는 대로 채움).
+ */
+export const RESULT_TRACKING_SINCE = { year: 2026, period: '2-a' as const, label: '2026년 2학기 중간고사' };
+export function isResultTracked(key: { year: number; period: string }): boolean {
+  return periodKey(key.year, key.period, null) >= periodKey(RESULT_TRACKING_SINCE.year, RESULT_TRACKING_SINCE.period, null);
+}
+
+export type ResultStatus = 'done' | 'score_empty' | 'missing' | 'absent' | 'untracked';
 
 export type StudentSubjectRow = {
   student: StudentRow;
@@ -211,7 +220,10 @@ export function buildStudentSubjectRows(args: {
         .filter(r => periodSortKey(r.exam_year, r.exam_period, null) < curKey && r.actual_score != null)
         .sort((a, b) => periodSortKey(b.exam_year, b.exam_period, b.exam_date) - periodSortKey(a.exam_year, a.exam_period, a.exam_date))[0] || null;
       const absent = !!result?.note && result.note.includes('미응시');
-      const status: ResultStatus = absent ? 'absent' : !result ? 'missing' : result.actual_score == null ? 'score_empty' : 'done';
+      const tracked = isResultTracked(key);
+      const status: ResultStatus = absent ? 'absent'
+        : !result ? (tracked ? 'missing' : 'untracked')
+          : result.actual_score == null ? (tracked ? 'score_empty' : 'untracked') : 'done';
       const teacherName = (teacherId ? nameById.get(teacherId) : null) || result?.sheet_teacher_name || null;
       const previousScore = result?.previous_score ?? previous?.actual_score ?? null;
       rows.push({ student: s, subject, teacherName, teacherId, result, previous, previousScore, pdf: result ? pdfByResult.get(result.id) || null : null, status });
@@ -226,4 +238,5 @@ export const STATUS_META: Record<ResultStatus, { label: string; cls: string }> =
   score_empty: { label: '점수 비어 있음', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' },
   missing: { label: '미입력', cls: 'bg-muted text-muted-foreground' },
   absent: { label: '미응시', cls: 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  untracked: { label: '기록 전', cls: 'bg-muted text-muted-foreground/70' },
 };
