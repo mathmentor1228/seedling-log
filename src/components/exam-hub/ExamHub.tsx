@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Bell, CalendarClock, CalendarDays, ClipboardCheck, FileBarChart2, GraduationCap, History, ListChecks, Loader2, RefreshCw, Search, Users, UserCog } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarClock, CalendarDays, ClipboardCheck, FileBarChart2, GraduationCap, History, ListChecks, Loader2, RefreshCw, Search, UserRound, Users, UserCog } from 'lucide-react';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { useExamHubData } from './useExamHubData';
 import {
@@ -26,6 +26,7 @@ import { ExamInfoTab } from './ExamInfoTab';
 import { ExamHistoryView } from './ExamHistoryView';
 import { ParticipantsConfirmPanel, ParticipantsManageList, type ParticipantCell } from './ExamParticipantsPanel';
 import { ExamCloseoutReview } from './ExamCloseoutReview';
+import { ExamStudentView } from './ExamStudentView';
 import { HelpTip } from '@/components/ui/help-tip';
 import { StudentResultsTab } from './StudentResultsTab';
 import { PaperAnalysisTab } from './PaperAnalysisTab';
@@ -38,12 +39,13 @@ type Tab = (typeof TABS)[number];
 const PAST_WINDOW_DAYS = 45;
 const SCOPE_ALERT_DAYS = 21;
 const REVIEW_WINDOW_DAYS = 60;
-const MODES = ['schedule', 'review', 'history'] as const;
+const MODES = ['schedule', 'review', 'student', 'history'] as const;
 type Mode = (typeof MODES)[number];
 const MODE_META: Record<Mode, { label: string; icon: React.ElementType; help: string }> = {
   schedule: { label: '일정', icon: CalendarDays, help: '다가오는 시험과 진행 중인 시험. 시험일·범위·수행평가·특강 준비.' },
   review: { label: '마감 점검', icon: ListChecks, help: `최근 끝난 시험의 점수·시험지·분석지가 다 들어왔는지 과목×선생님 격자로. 기록 기준점은 ${RESULT_TRACKING_SINCE.label}이며 그 이전 시험은 점검하지 않습니다.` },
-  history: { label: '기록', icon: History, help: `과거 시험까지 학생×과목 점수 표. ${RESULT_TRACKING_SINCE.label}부터 전부 기록하고, 그 이전은 찾는 대로 채웁니다(빈 칸은 미입력이 아님). 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.` },
+  student: { label: '기록·학생', icon: UserRound, help: '학생 한 명의 과목별 점수 흐름과 학원의 조치(특강·클리닉·주간 코멘트·조치 메모). 원장은 전 과목 통합 상담 자료로, 과목 선생님은 자기 과목만 봅니다. "상담 요약 복사"로 바로 꺼내 씁니다.' },
+  history: { label: '기록·표', icon: History, help: `과거 시험까지 학생×과목 점수 표. ${RESULT_TRACKING_SINCE.label}부터 전부 기록하고, 그 이전은 찾는 대로 채웁니다(빈 칸은 미입력이 아님). 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.` },
 };
 
 const TAB_HELP: Record<Tab, string> = {
@@ -55,7 +57,7 @@ const TAB_HELP: Record<Tab, string> = {
 };
 
 export function ExamHub() {
-  const { user, role } = useAuth();
+  const { user, role, fullName } = useAuth();
   const isAdmin = role === 'admin';
   const isTeacher = role === 'teacher';
   const data = useExamHubData();
@@ -254,6 +256,13 @@ export function ExamHub() {
           <div className="flex items-center gap-2"><History className="w-4 h-4 text-muted-foreground" /><span className="font-semibold">시험 기록</span><span className="text-xs text-muted-foreground">재원생 기준 · 실점수 · 회차는 오래된 순{lastResultLabel ? ` · ${lastResultLabel}` : ''}</span></div>
           <ExamHistoryView students={data.students} results={data.results} />
         </div>
+      )}
+
+      {/* ④ 기록·학생 */}
+      {mode === 'student' && !data.loading && (
+        <ExamStudentView students={data.students} results={data.results} links={data.links} classInfos={data.classInfos} teachers={data.teachers}
+          currentUserId={user?.id ?? null} currentUserName={fullName ?? null} isAdmin={isAdmin} isTeacher={isTeacher} myStudentIds={myStudentIds}
+          selectedId={params.get('student')} onSelect={id => { const p = new URLSearchParams(params); p.set('mode', 'student'); p.set('student', id); setParams(p); }} />
       )}
 
       {/* ② 마감 점검 */}
