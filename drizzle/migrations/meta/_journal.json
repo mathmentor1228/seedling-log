@@ -85,6 +85,13 @@
       "when": 1791569112064,
       "tag": "0011_exam_cycle_participants",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791569588077,
+      "tag": "0012_exam_sheet_sync",
+      "breakpoints": true
     }
   ]
 }
