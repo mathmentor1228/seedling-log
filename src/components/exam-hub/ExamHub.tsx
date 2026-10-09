@@ -3,6 +3,7 @@
 // A-2(직관성): 맨 위 "오늘" 줄(가장 가까운 시험 D-day + 확인 필요 할 일) · 빈 배지 숨김 · 탭에 건수·설명.
 // A-3(2026-10-10 원장): ① 응시 여부(EXAM-PARTICIPANTS-V1) — 애매한 학생은 맨 위에서 응시/미응시 확정, 미응시는 대상·일정·특강에서 제외
 //                     ② 기록 보기(EXAM-HISTORY-V1) — 과거 시험까지 학생×과목 행에 회차를 가로로 펼친 점수 표
+// EXAM-MODES-V1(2026-10-10 원장, vault 19 §19): 역할·시점별 모드 탭 — 일정 / 마감 점검 / 기록. 소음 제거(할 일 3개, 응시 확인 접힘, 0 카운트·개발 메모·설명글 숨김, 시험 전 결과 탭 간소화).
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -14,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Bell, CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, History, Loader2, RefreshCw, Search, Users, UserCog } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarClock, CalendarDays, ClipboardCheck, FileBarChart2, GraduationCap, History, ListChecks, Loader2, RefreshCw, Search, Users, UserCog } from 'lucide-react';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { useExamHubData } from './useExamHubData';
 import {
@@ -24,6 +25,8 @@ import {
 import { ExamInfoTab } from './ExamInfoTab';
 import { ExamHistoryView } from './ExamHistoryView';
 import { ParticipantsConfirmPanel, ParticipantsManageList, type ParticipantCell } from './ExamParticipantsPanel';
+import { ExamCloseoutReview } from './ExamCloseoutReview';
+import { HelpTip } from '@/components/ui/help-tip';
 import { StudentResultsTab } from './StudentResultsTab';
 import { PaperAnalysisTab } from './PaperAnalysisTab';
 
@@ -34,6 +37,14 @@ const TABS = ['info', 'prep', 'results', 'papers', 'principal'] as const;
 type Tab = (typeof TABS)[number];
 const PAST_WINDOW_DAYS = 45;
 const SCOPE_ALERT_DAYS = 21;
+const REVIEW_WINDOW_DAYS = 60;
+const MODES = ['schedule', 'review', 'history'] as const;
+type Mode = (typeof MODES)[number];
+const MODE_META: Record<Mode, { label: string; icon: React.ElementType; help: string }> = {
+  schedule: { label: '일정', icon: CalendarDays, help: '다가오는 시험과 진행 중인 시험. 시험일·범위·수행평가·특강 준비.' },
+  review: { label: '마감 점검', icon: ListChecks, help: '최근 끝난 시험의 점수·시험지·분석지가 다 들어왔는지 과목×선생님 격자로.' },
+  history: { label: '기록', icon: History, help: '과거 시험까지 학생×과목 점수 표. 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.' },
+};
 
 const TAB_HELP: Record<Tab, string> = {
   info: '과목별 시험일·범위·교과서·수행평가. 학교 공지에서 AI가 읽어 초안으로 채우고, 원장이 확인해 확정합니다.',
@@ -52,8 +63,11 @@ export function ExamHub() {
   const [query, setQuery] = useState('');
   const [showPast, setShowPast] = useState(false);
   const [allCycles, setAllCycles] = useState(!isTeacher);
-  const [historyMode, setHistoryMode] = useState(params.get('view') === 'history');
+  const mode: Mode = params.get('view') === 'history' ? 'history' : ((MODES as readonly string[]).includes(params.get('mode') || '') ? (params.get('mode') as Mode) : 'schedule');
+  const historyMode = mode === 'history';
   const [manageOpen, setManageOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [moreTodos, setMoreTodos] = useState(false);
   const today = getTodayKST();
 
   const tab: Tab = (TABS as readonly string[]).includes(params.get('tab') || '') ? (params.get('tab') as Tab) : 'info';
@@ -162,7 +176,7 @@ export function ExamHub() {
     // 같은 학교 공지는 한 번만
     const seen = new Set<string>();
     const dedup = todos.filter(t => { const k = t.label; if (seen.has(k)) return false; seen.add(k); return true; });
-    return { live, next, todos: dedup.slice(0, 6) };
+    return { live, next, todos: dedup };
   }, [visibleCards]);
 
   // 응시 확인 패널: 아직 안 끝난 사이클의 애매한 학생 (강사는 내 학생만)
@@ -182,10 +196,10 @@ export function ExamHub() {
 
   function select(c: Cycle, t?: Tab) { const p = new URLSearchParams(params); p.set('cycle', c.id); if (t) p.set('tab', t); setParams(p); }
   function setTab(t: string) { const p = new URLSearchParams(params); p.set('tab', t); setParams(p); }
-  function toggleHistory() {
-    const next = !historyMode; setHistoryMode(next);
-    const p = new URLSearchParams(params); if (next) p.set('view', 'history'); else p.delete('view'); setParams(p);
-  }
+  function setMode(m: Mode) { const p = new URLSearchParams(params); p.delete('view'); if (m === 'schedule') p.delete('mode'); else p.set('mode', m); setParams(p); }
+  const reviewCards = useMemo(() => cycleCards
+    .filter(cc => cc.st.kind === 'after' && cc.st.days <= REVIEW_WINDOW_DAYS && (!isTeacher || allCycles || cc.mine))
+    .sort((a, b) => (a.st.kind === 'after' && b.st.kind === 'after' ? a.st.days - b.st.days : 0)), [cycleCards, isTeacher, allCycles]);
   const lastResultLabel = useMemo(() => {
     const ks = data.results.filter(r => r.exam_type !== 'performance').map(r => periodKey(r.exam_year, r.exam_period, r.exam_type));
     return ks.length ? `${data.results.length}건` : '';
@@ -211,37 +225,46 @@ export function ExamHub() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      {/* 헤더 */}
+      {/* 헤더 + 모드 탭 */}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold flex items-center gap-2"><ClipboardCheck className="w-5 h-5" />내신대비</h1>
+        <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 ml-1">
+          {MODES.map(m => { const M = MODE_META[m]; const Icon = M.icon; const cnt = m === 'review' ? reviewCards.filter(cc => cc.missing > 0 || cc.reports.length < Math.max(cc.subs.length, 1)).length : 0; return (
+            <button key={m} type="button" onClick={() => setMode(m)} title={M.help}
+              className={cn('inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <Icon className="w-3.5 h-3.5" />{M.label}{cnt > 0 && <span className="ml-0.5 rounded-full bg-red-500 text-white text-[10px] px-1.5">{cnt}</span>}
+            </button>); })}
+        </div>
+        <HelpTip>{MODE_META[mode].help}</HelpTip>
         <span className="flex-1" />
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="학교·학생·과목·연도" className="h-8 pl-7 w-[200px] text-xs" />
         </div>
         {isTeacher && <label className="flex items-center gap-1.5 text-xs"><Switch checked={allCycles} onCheckedChange={setAllCycles} />전체 학교</label>}
-        {!historyMode && <label className="flex items-center gap-1.5 text-xs"><Switch checked={showPast} onCheckedChange={setShowPast} />지난 시험</label>}
-        <Button size="sm" variant={historyMode ? 'default' : 'outline'} className="h-8 text-xs gap-1" onClick={toggleHistory} title="과거 시험까지 학생×과목 점수 표로">
-          <History className="w-3.5 h-3.5" />{historyMode ? '사이클로 돌아가기' : `기록 보기${lastResultLabel ? ` · ${lastResultLabel}` : ''}`}
-        </Button>
+        {mode === 'schedule' && <label className="flex items-center gap-1.5 text-xs"><Switch checked={showPast} onCheckedChange={setShowPast} />지난 시험</label>}
         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={data.reload} title="새로고침"><RefreshCw className="w-3.5 h-3.5" /></Button>
       </div>
 
-      {/* 기록 보기: 과거 시험까지 한 표 */}
-      {historyMode && !data.loading && (
+      {/* ③ 기록: 과거 시험까지 한 표 */}
+      {mode === 'history' && !data.loading && (
         <div className="rounded-lg border p-3 md:p-4 space-y-2">
-          <div className="flex items-center gap-2"><History className="w-4 h-4 text-muted-foreground" /><span className="font-semibold">시험 기록</span><span className="text-xs text-muted-foreground">재원생 기준 · 실점수 · 회차는 오래된 순</span></div>
+          <div className="flex items-center gap-2"><History className="w-4 h-4 text-muted-foreground" /><span className="font-semibold">시험 기록</span><span className="text-xs text-muted-foreground">재원생 기준 · 실점수 · 회차는 오래된 순{lastResultLabel ? ` · ${lastResultLabel}` : ''}</span></div>
           <ExamHistoryView students={data.students} results={data.results} />
         </div>
       )}
 
-      {/* 응시 확인 필요 — 위에서 한 번 더 묻고 확정 */}
-      {!historyMode && !data.loading && (isAdmin || isTeacher) && (
-        <ParticipantsConfirmPanel cells={confirmCells} onSet={data.setParticipant} onSelectCycle={c => select(c)} />
+      {/* ② 마감 점검 */}
+      {mode === 'review' && !data.loading && (
+        <ExamCloseoutReview
+          cards={reviewCards.map(cc => ({ cycle: cc.cycle, st: cc.st, rows: cc.rows, reports: cc.reports, cycleSubjects: cc.cycleSubjects }))}
+          deepByReport={data.deepByReport} currentUserId={user?.id ?? null}
+          onOpen={(c, t) => { setMode('schedule'); const p = new URLSearchParams(); p.set('cycle', c.id); p.set('tab', t); setParams(p); }}
+        />
       )}
 
       {/* 오늘 줄 */}
-      {!historyMode && !data.loading && visibleCards.length > 0 && (
+      {mode === 'schedule' && !data.loading && visibleCards.length > 0 && (
         <div className="rounded-lg border bg-card p-3 md:p-4 flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0">
             {todayLine.live.map(cc => (
@@ -260,22 +283,40 @@ export function ExamHub() {
               <span className="text-sm text-muted-foreground">다가오는 시험이 없습니다. 최근 끝난 시험의 결과를 정리할 때입니다.</span>
             )}
           </div>
-          <div className="md:ml-auto flex flex-wrap gap-1.5">
+          <div className="md:ml-auto flex flex-wrap gap-1.5 items-center">
             {todayLine.todos.length === 0 ? (
               <Chip tone="ok">확인할 것 없음</Chip>
-            ) : todayLine.todos.map((t, i) => (
+            ) : (moreTodos ? todayLine.todos : todayLine.todos.slice(0, 3)).map((t, i) => (
               <button key={i} onClick={() => { const c = data.cycles.find(x => x.id === t.cycleId); if (c) select(c, t.tab); }}
                 className={cn('rounded-full border px-2.5 py-1 text-xs inline-flex items-center gap-1 hover:bg-accent',
                   t.tone === 'warn' ? 'border-amber-300 text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30' : 'border-primary/40 text-primary bg-primary/5')}>
                 {t.tone === 'warn' ? <AlertTriangle className="w-3 h-3" /> : <Bell className="w-3 h-3" />}{t.label}
               </button>
             ))}
+            {todayLine.todos.length > 3 && (
+              <button type="button" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2" onClick={() => setMoreTodos(v => !v)}>
+                {moreTodos ? '접기' : `+${todayLine.todos.length - 3}`}
+              </button>
+            )}
           </div>
         </div>
       )}
 
+      {/* 응시 확인 — 한 줄로 접힘, 펼치면 학생별 응시/미응시 */}
+      {mode === 'schedule' && !data.loading && (isAdmin || isTeacher) && confirmCells.length > 0 && (
+        <div className="rounded-lg border border-amber-300/60">
+          <button type="button" onClick={() => setConfirmOpen(v => !v)} className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-700" />
+            <span className="font-medium">응시 확인 필요 {confirmCells.length}명</span>
+            <span className="text-xs text-muted-foreground truncate">{Array.from(new Set(confirmCells.map(c => c.student.name))).slice(0, 6).join(', ')}{confirmCells.length > 6 ? ' …' : ''}</span>
+            <span className="ml-auto text-xs text-primary">{confirmOpen ? '접기' : '펼쳐서 확정'}</span>
+          </button>
+          {confirmOpen && <div className="px-3 pb-3"><ParticipantsConfirmPanel cells={confirmCells} onSet={data.setParticipant} onSelectCycle={c => select(c)} /></div>}
+        </div>
+      )}
+
       {/* 사이클 타임라인 */}
-      {historyMode ? null : data.loading ? (
+      {mode !== 'schedule' ? null : data.loading ? (
         <div className="flex gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-[92px] w-[230px] rounded-lg" />)}</div>
       ) : visibleCards.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">
@@ -317,7 +358,7 @@ export function ExamHub() {
       )}
 
       {/* 선택 사이클 상세 */}
-      {!historyMode && selected && (
+      {mode === 'schedule' && selected && (
         <div className="rounded-lg border">
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             <GraduationCap className="w-4 h-4 text-muted-foreground" />
@@ -335,32 +376,46 @@ export function ExamHub() {
           )}
           <Tabs value={tab} onValueChange={setTab} className="px-4 pb-4">
             <TabsList className="mt-3 h-9">
-              <TabsTrigger value="info" className="text-xs">시험 정보<span className="ml-1 text-muted-foreground">{selected.subs.length > 0 ? `${selected.scoped}/${selected.subs.length}` : ''}</span>{selected.newPosts > 0 && <span className="ml-1 rounded-full bg-primary text-primary-foreground text-[10px] px-1.5">{selected.newPosts}</span>}</TabsTrigger>
+              <TabsTrigger value="info" className="text-xs">시험 정보{selected.subs.length > 0 && selected.scoped < selected.subs.length && selected.st.kind !== 'after' && <span className="ml-1 rounded-full bg-amber-500 text-white text-[10px] px-1.5">범위 {selected.subs.length - selected.scoped}</span>}{selected.newPosts > 0 && <span className="ml-1 rounded-full bg-primary text-primary-foreground text-[10px] px-1.5">{selected.newPosts}</span>}</TabsTrigger>
               <TabsTrigger value="prep" className="text-xs">특강</TabsTrigger>
-              <TabsTrigger value="results" className="text-xs">학생 결과<span className="ml-1 text-muted-foreground">{selected.expected > 0 ? `${selected.done}/${selected.expected}` : ''}</span>{selected.missing > 0 && selected.st.kind === 'after' && <span className="ml-1 rounded-full bg-amber-500 text-white text-[10px] px-1.5">{selected.missing}</span>}</TabsTrigger>
-              <TabsTrigger value="papers" className="text-xs"><FileBarChart2 className="w-3.5 h-3.5 mr-1" />시험지 분석<span className="ml-1 text-muted-foreground">{selected.subs.length > 0 || selected.reports.length > 0 ? `${selected.reports.length}/${Math.max(selected.subs.length, selected.reports.length)}` : ''}</span></TabsTrigger>
+              <TabsTrigger value="results" className="text-xs">학생 결과{selected.st.kind === 'after' && selected.expected > 0 && <span className="ml-1 text-muted-foreground">{selected.done}/{selected.expected}</span>}{selected.missing > 0 && selected.st.kind === 'after' && <span className="ml-1 rounded-full bg-amber-500 text-white text-[10px] px-1.5">{selected.missing}</span>}</TabsTrigger>
+              <TabsTrigger value="papers" className="text-xs"><FileBarChart2 className="w-3.5 h-3.5 mr-1" />시험지 분석{selected.st.kind === 'after' && selected.subs.length > 0 && <span className="ml-1 text-muted-foreground">{selected.reports.length}/{Math.max(selected.subs.length, selected.reports.length)}</span>}</TabsTrigger>
               {isAdmin && <TabsTrigger value="principal" className="text-xs">원장 디렉션</TabsTrigger>}
+              <span className="ml-2 inline-flex items-center"><HelpTip>{TAB_HELP[tab]}</HelpTip></span>
             </TabsList>
-            <p className="mt-2 text-xs text-muted-foreground">{TAB_HELP[tab]}</p>
 
             <TabsContent value="info" className="mt-3">
               <ExamInfoTab cycle={selected.cycle} subjects={selected.subs} textbooks={data.textbooks} archives={data.archives} posts={data.posts}
                 canEdit={isAdmin || isTeacher} isAdmin={isAdmin} onChanged={data.reload} />
             </TabsContent>
             <TabsContent value="prep" className="mt-3">
-              <div className="mb-2 text-xs text-muted-foreground">특강 편성은 당분간 기존 화면을 그대로 씁니다. 선생님 시간 잠금·선착순 예약(E단계)에서 이 사이클 기준으로 교체됩니다.</div>
               <Suspense fallback={<div className="flex items-center gap-2 text-sm text-muted-foreground p-6"><Loader2 className="w-4 h-4 animate-spin" />불러오는 중</div>}>
                 <ExamPrepScheduleManager />
               </Suspense>
             </TabsContent>
             <TabsContent value="results" className="mt-3">
+              {selected.st.kind !== 'after' && selected.done === 0 ? (
+                <div className="rounded-md border p-4 text-sm space-y-2">
+                  <div className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" /><span className="font-medium">응시 대상 {selected.targets.length}명 · {selected.rows.length}과목 행</span><span className="text-xs text-muted-foreground">점수는 시험이 끝나면 성적취합표에서 자동으로 들어옵니다.</span></div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {Array.from(selected.rows.reduce((m, r) => { const k = `${r.subject} · ${r.teacherName || '담당 미지정'}`; m.set(k, (m.get(k) || 0) + 1); return m; }, new Map<string, number>()).entries())
+                      .sort((a, b) => a[0].localeCompare(b[0], 'ko')).map(([k, n]) => <span key={k}>{k} <b className="text-foreground">{n}</b></span>)}
+                  </div>
+                  {selected.excluded.size > 0 && <div className="text-xs text-muted-foreground">미응시 {selected.excluded.size}명 제외 (응시 대상 관리에서 변경)</div>}
+                </div>
+              ) : (
               <StudentResultsTab rows={selected.rows} examLabel={`${selected.key.year} ${selected.cycle.semester} ${selected.cycle.exam_type}`}
                 syncs={data.syncs.filter(x => x.exam_year === selected.key.year && x.exam_period === selected.key.period)}
                 isTeacher={isTeacher} currentUserId={user?.id ?? null} />
+              )}
             </TabsContent>
             <TabsContent value="papers" className="mt-3">
+              {selected.st.kind !== 'after' && selected.reports.length === 0 ? (
+                <div className="rounded-md border p-4 text-sm text-muted-foreground">시험지 분석은 시험이 끝난 뒤 과목별로 작성합니다. 지금은 작성할 것이 없습니다.</div>
+              ) : (
               <PaperAnalysisTab cycle={selected.cycle} reports={selected.reports} subjects={selected.cycleSubjects}
                 deepByReport={data.deepByReport} itemCountByReport={data.itemCountByReport} />
+              )}
             </TabsContent>
             {isAdmin && (
               <TabsContent value="principal" className="mt-3">

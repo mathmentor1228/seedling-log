@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle2, Circle, ExternalLink, FileText, Images, ListOrdered, NotebookPen, PenLine } from 'lucide-react';
+import { CheckCircle2, Circle, ExternalLink, FileText, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Cycle, DeepReportRow, ReportRow } from './examHubUtils';
 
@@ -93,12 +93,6 @@ export function PaperAnalysisTab({ cycle, reports, subjects, deepByReport, itemC
           })}
         </div>
       )}
-      <div className="rounded-md border p-3 text-xs text-muted-foreground flex items-start gap-2">
-        <NotebookPen className="w-4 h-4 shrink-0 mt-0.5" />
-        <div>
-          <div className="flex items-center gap-2"><ListOrdered className="w-3.5 h-3.5" />동향(같은 학교·과목의 사이클 간 비교)과 <Images className="w-3.5 h-3.5" />카드뉴스 미리보기는 D단계에서 이 탭에 들어옵니다.</div>
-        </div>
-      </div>
     </div>
   );
 }

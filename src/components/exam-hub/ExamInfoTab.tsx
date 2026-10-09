@@ -13,6 +13,8 @@ import { Bell, CheckCircle2, Eraser, ExternalLink, Loader2, Pencil, RefreshCw, S
 import { cn } from '@/lib/utils';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import type { ArchiveRow, Cycle, CycleSubject, TextbookRow, WatchPost } from './examHubUtils';
+import { PerfItemsCell } from './PerformanceItems';
+import { HelpTip } from '@/components/ui/help-tip';
 
 const db = supabase as any;
 const SOURCE_LABEL: Record<string, string> = { manual: '직접 입력', archive: '내신 자료실', neis: '나이스', homepage: '학교 홈페이지' };
@@ -165,7 +167,48 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
           아직 과목 정보가 없습니다. 아래 학교 공지에서 "AI로 읽어 채우기"를 누르거나 <Link to="/admin/exam-schools" className="text-primary underline">학교·시험 일정</Link>에서 과목을 채우세요.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <>
+        {/* 모바일: 과목 카드 (표는 휴대폰에서 글자가 세로로 찌그러짐) */}
+        <div className="md:hidden space-y-2">
+          {rows.map(({ subject, cs }) => {
+            const tb = textbookBySubject.get(subject);
+            const ar = archiveBySubject.get(subject);
+            const isEditing = cs && editing === cs.id;
+            const needsCheck = cs && cs.source !== 'manual' && cs.source !== 'archive';
+            const perf = perfLines(cs);
+            return (
+              <div key={subject} className={cn('rounded-lg border p-3 space-y-1.5', needsCheck && 'bg-amber-50/50 dark:bg-amber-950/10')}>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{subject}</span>
+                  <span className="text-sm">{cs?.exam_date ? fmtDate(cs.exam_date) : <span className="text-muted-foreground">시험일 -</span>}{cs?.period != null ? ` ${cs.period}교시` : ''}{cs?.exam_time ? ` ${cs.exam_time}` : ''}</span>
+                  {needsCheck && <Badge variant="outline" className="text-[10px]">확인 필요</Badge>}
+                  <span className="flex-1" />
+                  {canEdit && cs && !isEditing && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(cs)} title="수정"><Pencil className="w-3.5 h-3.5" /></Button>}
+                </div>
+                {isEditing ? (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <Input type="date" value={draft.exam_date} onChange={e => setDraft(d => ({ ...d, exam_date: e.target.value }))} className="h-8 text-xs" />
+                      <Input type="number" min={1} max={8} placeholder="교시" value={draft.period} onChange={e => setDraft(d => ({ ...d, period: e.target.value }))} className="h-8 w-20 text-xs" />
+                    </div>
+                    <Textarea rows={3} value={draft.scope} onChange={e => setDraft(d => ({ ...d, scope: e.target.value }))} className="text-xs" placeholder="시험 범위" />
+                    <div className="flex gap-1 justify-end">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(null)}>취소</Button>
+                      <Button size="sm" className="h-7 text-xs" disabled={saving} onClick={() => saveEdit(cs!)}>저장</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-sm"><span className="text-xs text-muted-foreground mr-1">범위</span><ScopeText text={cs?.scope || ar?.exam_scope || null} /></div>
+                    <div className="text-xs text-muted-foreground">교과서 {tb ? `${tb.publisher || '-'}${tb.textbook_name ? ` · ${tb.textbook_name}` : ''}` : ar?.textbook_publisher || '-'}</div>
+                    <PerfItemsCell lines={perf} fallback={ar?.performance_assessment_info || null} />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -173,7 +216,7 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
                 <TableHead className="w-[120px]">시험일·시간</TableHead>
                 <TableHead>범위</TableHead>
                 <TableHead className="w-[160px]">교과서(출판사)</TableHead>
-                <TableHead className="w-[230px]">수행평가</TableHead>
+                <TableHead className="w-[200px]">수행평가</TableHead>
                 <TableHead className="w-[96px]">출처</TableHead>
                 {canEdit && <TableHead className="w-[60px]" />}
               </TableRow>
@@ -213,8 +256,8 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
                       {tb ? (<div><div>{tb.publisher || '-'}</div>{tb.textbook_name && <div className="text-xs text-muted-foreground">{tb.textbook_name}</div>}</div>)
                         : ar?.textbook_publisher ? ar.textbook_publisher : <span className="text-muted-foreground">-</span>}
                     </TableCell>
-                    <TableCell className="align-top text-xs whitespace-pre-wrap">
-                      {perf.length > 0 ? perf.map((l, i) => <div key={i}>• {l}</div>) : ar?.performance_assessment_info || <span className="text-muted-foreground">-</span>}
+                    <TableCell className="align-top">
+                      <PerfItemsCell lines={perf} fallback={ar?.performance_assessment_info || null} />
                     </TableCell>
                     <TableCell className="align-top text-xs">
                       {cs ? (
@@ -245,6 +288,7 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       {/* 학교 공지 — 매일 06:00 자동 수집 + AI 읽기 */}
@@ -305,9 +349,7 @@ export function ExamInfoTab({ cycle, subjects, textbooks, archives, posts, canEd
           </ul>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        교과서는 학교 교과서 등록(자료실) 자료를, 수행평가는 학교 공지에서 AI가 읽은 내용(없으면 내신 자료실 기록)을 보여줍니다. hwp·xlsx 첨부는 AI가 읽지 못하므로 직접 열어 옮겨 적어야 합니다.
-      </p>
+      <div className="text-xs"><HelpTip>교과서는 학교 교과서 등록(자료실) 자료를, 수행평가는 학교 공지에서 AI가 읽은 내용(없으면 내신 자료실 기록)을 보여줍니다. 수행평가는 비율 높은 순이며 빨강 = 20% 이상, 노랑 = 서술·논술형입니다. hwp·xlsx 첨부는 AI가 읽지 못하므로 직접 열어 옮겨 적어야 합니다.</HelpTip></div>
     </div>
   );
 }
