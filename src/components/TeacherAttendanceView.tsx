@@ -3,6 +3,8 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
+import { QuickLessonForm } from '@/components/lessons/QuickLessonForm';
+import { ChevronRight, NotebookPen } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,10 +59,15 @@ interface ScheduleSlot {
 }
 
 /* ------------------------------------------------------------------ */
-function StudentRow({ student, onStatusChange, isLoading }: {
+function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, onToggle, children }: {
   student: StudentAttendance;
   onStatusChange: (studentId: string, status: AttendanceStatus) => void;
   isLoading: boolean;
+  /** QUICK-LESSON-V1: 정규 반이면 줄 아래에 일지 입력을 펼칠 수 있다 */
+  expandable?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  children?: React.ReactNode;
 }) {
   const timeLabel = student.checkedInAt
     ? new Date(student.checkedInAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -68,14 +75,15 @@ function StudentRow({ student, onStatusChange, isLoading }: {
 
   return (
     <div className={cn(
-      "flex items-center gap-3 py-2.5 px-3 rounded-xl border transition-all duration-200",
+      "rounded-xl border transition-all duration-200",
       student.status === '결석' && "bg-red-500/5 border-red-500/20",
       student.status === '지각' && "bg-amber-500/5 border-amber-500/20",
       student.status === '등원' && "bg-emerald-500/5 border-emerald-500/20",
       student.status === '미등원' && "bg-card border-border",
       isLoading && "opacity-50 pointer-events-none"
     )}>
-      <div className="flex-1 min-w-0">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 px-3">
+      <div className="flex-1 min-w-[140px]">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">{student.name}</span>
           {timeLabel && (
@@ -125,7 +133,19 @@ function StudentRow({ student, onStatusChange, isLoading }: {
             </button>
           );
         })}
+        {expandable && (
+          <button type="button" onClick={onToggle} title={expanded ? '일지 접기' : '이 자리에서 일지 쓰기'}
+            className={cn("ml-1 text-[11px] px-2 py-1.5 rounded-lg font-semibold border flex items-center gap-0.5",
+              expanded ? "bg-primary/10 text-primary border-primary/30" : "bg-transparent text-muted-foreground/70 border-transparent hover:bg-muted")}>
+            <NotebookPen className="w-3.5 h-3.5" /> 일지
+            <ChevronRight className={cn('w-3 h-3 transition-transform', expanded && 'rotate-90')} />
+          </button>
+        )}
       </div>
+    </div>
+    {expandable && expanded && (
+      <div className="px-3 pb-3 pt-1 border-t border-border/50">{children}</div>
+    )}
     </div>
   );
 }
@@ -517,6 +537,11 @@ export function TeacherAttendanceView() {
 
   const activeSlot = useMemo(() => slots.find(s => s.id === activeSlotId) || null, [slots, activeSlotId]);
   const activeStudents = activeSlotId ? (studentMap[activeSlotId] || []) : [];
+  // QUICK-LESSON-V1: 정규 반(class_id 있음)만 줄 아래 일지 입력 가능. 내신특강·보충·선착순은 기존 화면에서.
+  const quickLessonOk = !!activeSlot && !!activeSlot.classId && !activeSlot.isExamPrep && !activeSlot.isSupplementary && !activeSlot.isSignup;
+  const [openLesson, setOpenLesson] = useState<Set<string>>(new Set());
+  useEffect(() => { setOpenLesson(new Set()); }, [activeSlotId]);
+  const toggleLesson = (id: string) => setOpenLesson(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const statusCounts = useMemo(() => {
     const c = { '미등원': 0, '등원': 0, '지각': 0, '결석': 0 };
@@ -870,6 +895,15 @@ export function TeacherAttendanceView() {
         ))}
       </div>
 
+      {quickLessonOk && activeStudents.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 -mt-1">
+          <p className="text-[11px] text-muted-foreground">줄 오른쪽 <b>일지</b>를 누르면 그 자리에서 진도·이해도·숙제·다음 목표·학부모께 한 줄을 쓰고 마감할 수 있습니다.</p>
+          <button type="button" className="text-[11px] text-primary hover:underline whitespace-nowrap"
+            onClick={() => setOpenLesson(openLesson.size === activeStudents.length ? new Set() : new Set(activeStudents.map(s => s.id)))}>
+            {openLesson.size === activeStudents.length ? '일지 모두 접기' : '일지 모두 펼치기'}
+          </button>
+        </div>
+      )}
       <div className="space-y-1.5">
         {activeStudents.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">이 수업에 배정된 학생이 없습니다</p>
@@ -880,7 +914,22 @@ export function TeacherAttendanceView() {
               student={student}
               onStatusChange={handleStatusChange}
               isLoading={actionLoading.has(student.id)}
-            />
+              expandable={quickLessonOk}
+              expanded={openLesson.has(student.id)}
+              onToggle={() => toggleLesson(student.id)}
+            >
+              {quickLessonOk && activeSlot && openLesson.has(student.id) && (
+                <QuickLessonForm
+                  studentId={student.id}
+                  studentName={student.name}
+                  classId={activeSlot.classId}
+                  subject={activeSlot.subject}
+                  date={today}
+                  teacherId={teacherId}
+                  attendanceMarked={student.status !== '미등원'}
+                />
+              )}
+            </StudentRow>
           ))
         )}
       </div>
