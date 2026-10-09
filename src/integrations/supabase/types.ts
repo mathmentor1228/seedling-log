@@ -2205,6 +2205,60 @@ export type Database = {
           },
         ]
       }
+      exam_sheet_syncs: {
+        Row: {
+          detail: Json | null
+          errors: Json
+          exam_period: string | null
+          exam_type: string | null
+          exam_year: number | null
+          files_matched: number
+          files_total: number
+          id: string
+          kind: string
+          received_at: string
+          rows_matched: number
+          rows_total: number
+          spreadsheet_id: string | null
+          spreadsheet_name: string | null
+          unmatched: Json
+        }
+        Insert: {
+          detail?: Json | null
+          errors?: Json
+          exam_period?: string | null
+          exam_type?: string | null
+          exam_year?: number | null
+          files_matched?: number
+          files_total?: number
+          id?: string
+          kind: string
+          received_at?: string
+          rows_matched?: number
+          rows_total?: number
+          spreadsheet_id?: string | null
+          spreadsheet_name?: string | null
+          unmatched?: Json
+        }
+        Update: {
+          detail?: Json | null
+          errors?: Json
+          exam_period?: string | null
+          exam_type?: string | null
+          exam_year?: number | null
+          files_matched?: number
+          files_total?: number
+          id?: string
+          kind?: string
+          received_at?: string
+          rows_matched?: number
+          rows_total?: number
+          spreadsheet_id?: string | null
+          spreadsheet_name?: string | null
+          unmatched?: Json
+        }
+        Relationships: []
+      }
       exam_student_self_checks: {
         Row: {
           id: string
@@ -6478,6 +6532,9 @@ export type Database = {
       student_exam_result_pdfs: {
         Row: {
           display_title: string
+          drive_file_id: string | null
+          drive_file_name: string | null
+          drive_modified_at: string | null
           file_size: number | null
           generated_at: string
           generated_by: string | null
@@ -6485,10 +6542,14 @@ export type Database = {
           id: string
           page_count: number | null
           result_id: string
+          source: string | null
           storage_path: string
         }
         Insert: {
           display_title: string
+          drive_file_id?: string | null
+          drive_file_name?: string | null
+          drive_modified_at?: string | null
           file_size?: number | null
           generated_at?: string
           generated_by?: string | null
@@ -6496,10 +6557,14 @@ export type Database = {
           id?: string
           page_count?: number | null
           result_id: string
+          source?: string | null
           storage_path: string
         }
         Update: {
           display_title?: string
+          drive_file_id?: string | null
+          drive_file_name?: string | null
+          drive_modified_at?: string | null
           file_size?: number | null
           generated_at?: string
           generated_by?: string | null
@@ -6507,6 +6572,7 @@ export type Database = {
           id?: string
           page_count?: number | null
           result_id?: string
+          source?: string | null
           storage_path?: string
         }
         Relationships: [
@@ -6575,12 +6641,17 @@ export type Database = {
           locked_at: string | null
           locked_by: string | null
           note: string | null
+          previous_score: number | null
           review_status: string | null
           school_name: string
           score_locked: boolean
+          sheet_row_no: number | null
+          sheet_teacher_name: string | null
+          source: string | null
           student_id: string
           subject: string
           submitted_at: string
+          synced_at: string | null
           updated_at: string
           uploaded_by_staff: string | null
           uploaded_by_staff_name: string | null
@@ -6599,12 +6670,17 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           note?: string | null
+          previous_score?: number | null
           review_status?: string | null
           school_name: string
           score_locked?: boolean
+          sheet_row_no?: number | null
+          sheet_teacher_name?: string | null
+          source?: string | null
           student_id: string
           subject: string
           submitted_at?: string
+          synced_at?: string | null
           updated_at?: string
           uploaded_by_staff?: string | null
           uploaded_by_staff_name?: string | null
@@ -6623,12 +6699,17 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           note?: string | null
+          previous_score?: number | null
           review_status?: string | null
           school_name?: string
           score_locked?: boolean
+          sheet_row_no?: number | null
+          sheet_teacher_name?: string | null
+          source?: string | null
           student_id?: string
           subject?: string
           submitted_at?: string
+          synced_at?: string | null
           updated_at?: string
           uploaded_by_staff?: string | null
           uploaded_by_staff_name?: string | null
