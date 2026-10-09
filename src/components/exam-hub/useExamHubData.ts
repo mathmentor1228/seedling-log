@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import type {
-  ArchiveRow, ClassInfo, Cycle, CycleSubject, DeepReportRow, ExamResult, Participant, ReportItemCount, ReportRow,
+  ArchiveRow, ClassInfo, Cycle, CycleSubject, DeepReportRow, ExamResult, Participant, ReportItemCount, ReportRow, ResultPdf, SheetSync,
   StudentRow, SubjectTeacherLink, Teacher, TextbookRow, WatchPost,
 } from './examHubUtils';
 
@@ -31,6 +31,9 @@ export type ExamHubData = {
   participants: Participant[];
   recentActiveIds: Set<string>;
   setParticipant: (cycleId: string, studentId: string, status: 'taking' | 'not_taking' | null, reason?: string | null) => Promise<string | null>;
+  /** EXAM-SHEET-SYNC-V1 */
+  pdfs: ResultPdf[];
+  syncs: SheetSync[];
   reload: () => Promise<void>;
 };
 
@@ -52,13 +55,15 @@ export function useExamHubData(): ExamHubData {
   const [posts, setPosts] = useState<WatchPost[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [recentActiveIds, setRecentActiveIds] = useState<Set<string>>(new Set());
+  const [pdfs, setPdfs] = useState<ResultPdf[]>([]);
+  const [syncs, setSyncs] = useState<SheetSync[]>([]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const since = new Date(Date.now() + 9 * 3600 * 1000 - RECENT_DAYS * 86400000).toISOString().slice(0, 10);
-      const [cy, su, st, ci, ln, tc, rs, rp, dp, it, tb, ar, po, pa, la] = await Promise.all([
+      const [cy, su, st, ci, ln, tc, rs, rp, dp, it, tb, ar, po, pa, la, pf, sy] = await Promise.all([
         db.from('exam_cycles').select('*').neq('status', 'cancelled').order('start_date', { ascending: true, nullsFirst: false }),
         db.from('exam_cycle_subjects').select('*').order('subject'),
         db.from('students').select('id, name, grade, school, school_level, grade_year, enrollment_status')
@@ -67,7 +72,7 @@ export function useExamHubData(): ExamHubData {
         db.from('student_subject_teachers').select('student_id, subject, teacher_id'),
         db.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
         db.from('student_exam_results')
-          .select('id, student_id, subject, exam_type, exam_year, exam_period, actual_score, expected_score, exam_date, submitted_at, note, review_status'),
+          .select('id, student_id, subject, exam_type, exam_year, exam_period, actual_score, expected_score, exam_date, submitted_at, note, review_status, source, sheet_teacher_name, previous_score, synced_at'),
         db.from('exam_analysis_reports')
           .select('id, school_name, grade, subject, exam_year, exam_period, exam_type, is_published, published_at, original_pdf_path, answer_pdf_path, exam_difficulty, avg_score, card_image_paths, updated_at, created_by_name'),
         db.from('exam_deep_analysis_reports').select('id, analysis_report_id, status, teacher_notes, published_at'),
@@ -79,6 +84,9 @@ export function useExamHubData(): ExamHubData {
         // 테이블이 아직 없으면(마이그레이션 전) 빈 배열로
         db.from('exam_cycle_participants').select('cycle_id, student_id, status, reason, decided_at').then((r: any) => r, () => ({ data: [] })),
         db.from('lesson_records').select('student_id').eq('submitted', true).gte('lesson_date', since),
+        // EXAM-SHEET-SYNC-V1 (마이그레이션 전이면 빈 배열)
+        db.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title, source, drive_file_name, drive_modified_at').then((r: any) => r, () => ({ data: [] })),
+        db.from('exam_sheet_syncs').select('id, kind, spreadsheet_name, exam_year, exam_period, received_at, rows_total, rows_matched, unmatched, files_total, files_matched, errors').order('received_at', { ascending: false }).limit(300).then((r: any) => r, () => ({ data: [] })),
       ]);
       if (cy.error) throw new Error(cy.error.message.includes('exam_cycles') ? '시험 사이클 테이블이 없습니다. Lovable에서 2026-09-15 마이그레이션을 먼저 적용해 주세요.' : cy.error.message);
 
@@ -103,6 +111,8 @@ export function useExamHubData(): ExamHubData {
       setPosts((po.data || []) as WatchPost[]);
       setParticipants(((pa && pa.data) || []) as Participant[]);
       setRecentActiveIds(new Set(((la.data || []) as { student_id: string }[]).map(r => r.student_id)));
+      setPdfs(((pf && pf.data) || []) as ResultPdf[]);
+      setSyncs(((sy && sy.data) || []) as SheetSync[]);
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -128,5 +138,5 @@ export function useExamHubData(): ExamHubData {
     return null;
   }, []);
 
-  return { loading, error, cycles, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, posts, participants, recentActiveIds, setParticipant, reload };
+  return { loading, error, cycles, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, posts, participants, recentActiveIds, setParticipant, pdfs, syncs, reload };
 }

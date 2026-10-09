@@ -1,21 +1,25 @@
 // EXAM-HUB-A ② 학생 결과 — 사이클 대상 학생×과목 표 + 누락 표시(vault 19 §15) + 과목별·선생님별 요약.
-// 점수 원본은 구글시트. B단계에서 "시트 동기화" 버튼이 실제로 동작한다.
-import { useMemo, useState } from 'react';
+// EXAM-SHEET-SYNC-V1(B단계): 점수 원본은 구글시트, 시험지는 드라이브. Apps Script가 15분마다 밀어 넣고 여기선 상태·미매칭·PDF 보기만.
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowDown, ArrowUp, FileText, Minus, RefreshCw } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertTriangle, ArrowDown, ArrowUp, FileText, Loader2, Minus, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { STATUS_META, type StudentSubjectRow } from './examHubUtils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
+import { STATUS_META, type ResultPdf, type SheetSync, type StudentSubjectRow } from './examHubUtils';
 
 interface Props {
   rows: StudentSubjectRow[];
   examLabel: string;
   isTeacher: boolean;
   currentUserId: string | null;
+  /** 이 사이클(연도·학기 키)의 동기화 기록, 최신순 */
+  syncs?: SheetSync[];
 }
 
 function Delta({ cur, prev }: { cur: number | null; prev: number | null }) {
@@ -27,14 +31,62 @@ function Delta({ cur, prev }: { cur: number | null; prev: number | null }) {
     : <span className="inline-flex items-center gap-0.5 text-red-600"><ArrowDown className="w-3 h-3" />{Math.abs(d)}</span>;
 }
 
-export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }: Props) {
+const fmtTime = (iso: string) => { const d = new Date(iso); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+/** 드라이브에서 복사된 시험지 PDF를 페이지 안에서 연다 (원장 원칙: 링크가 아니라 웹 안에서 바로 보기) */
+function PdfViewer({ pdf, title, onClose }: { pdf: ResultPdf | null; title: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null); setFailed(false);
+    if (!pdf) return;
+    (async () => {
+      const u = await getCachedSignedUrl('exam-results', pdf.storage_path, 3600);
+      if (cancelled) return;
+      if (u) setUrl(u); else setFailed(true);
+    })();
+    return () => { cancelled = true; };
+  }, [pdf]);
+  return (
+    <Dialog open={!!pdf} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-4xl h-[88vh] p-0 flex flex-col">
+        <DialogHeader className="px-4 pt-3 pb-2 border-b">
+          <DialogTitle className="text-sm">{title}{pdf?.drive_file_name ? <span className="ml-2 text-xs font-normal text-muted-foreground">{pdf.drive_file_name}</span> : null}</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 bg-muted">
+          {failed ? <div className="p-6 text-sm text-destructive">파일을 열 수 없습니다. 저장소 경로: {pdf?.storage_path}</div>
+            : !url ? <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />불러오는 중</div>
+              : <iframe title={title} src={`${url}#toolbar=1&navpanes=0`} className="w-full h-full" />}
+        </div>
+        {url && <div className="px-4 py-2 border-t text-right"><a href={url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">새 창에서 열기 / 다운로드</a></div>}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, syncs = [] }: Props) {
   const [subject, setSubject] = useState('all');
   const [teacher, setTeacher] = useState('all');
   const [missingOnly, setMissingOnly] = useState(false);
   const [mineOnly, setMineOnly] = useState(isTeacher);
+  const [viewing, setViewing] = useState<{ pdf: ResultPdf; title: string } | null>(null);
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
 
   const subjects = useMemo(() => Array.from(new Set(rows.map(r => r.subject))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
   const teachers = useMemo(() => Array.from(new Set(rows.map(r => r.teacherName || '담당 미지정'))).sort((a, b) => a.localeCompare(b, 'ko')), [rows]);
+
+  // 동기화 상태: 최근 점수 동기화 1건 + 그 이후 파일 동기화 집계
+  const sync = useMemo(() => {
+    const lastRows = syncs.find(s => s.kind === 'rows') || null;
+    const fileSyncs = syncs.filter(s => s.kind === 'file');
+    const lastAny = syncs[0] || null;
+    const unmatched = (lastRows?.unmatched || []).filter(u => !u.warning);
+    const warnings = (lastRows?.unmatched || []).filter(u => u.warning);
+    const fileUnmatched = fileSyncs.filter(s => s.files_matched === 0).flatMap(s => s.unmatched || []);
+    const filesOk = fileSyncs.reduce((n, s) => n + s.files_matched, 0);
+    return { lastRows, lastAny, unmatched, warnings, fileUnmatched, filesOk, errors: (lastRows?.errors || []).length };
+  }, [syncs]);
 
   const filtered = useMemo(() => rows.filter(r => {
     if (subject !== 'all' && r.subject !== subject) return false;
@@ -55,9 +107,9 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
       a.total += 1;
       if (r.status === 'done') {
         a.done += 1; a.sum += r.result!.actual_score!;
-        if (r.previous?.actual_score != null) {
-          a.prevSum += r.previous.actual_score; a.prevN += 1;
-          const d = r.result!.actual_score! - r.previous.actual_score;
+        if (r.previousScore != null) {
+          a.prevSum += r.previousScore; a.prevN += 1;
+          const d = r.result!.actual_score! - r.previousScore;
           if (d > 0) a.up += 1; else if (d < 0) a.down += 1;
         }
       } else a.missing += 1;
@@ -72,6 +124,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
   }, [rows, mineOnly, currentUserId]);
 
   const missingTotal = rows.filter(r => r.status === 'missing' || r.status === 'score_empty').length;
+  const noPdf = rows.filter(r => r.status === 'done' && !r.pdf).length;
 
   const SummaryTable = ({ title, items }: { title: string; items: typeof summary.bySubject }) => (
     <div className="rounded-md border">
@@ -96,9 +149,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
               <TableCell className={cn('text-right text-sm', a.missing > 0 && 'text-amber-700 font-medium')}>{a.missing}</TableCell>
               <TableCell className="text-right text-sm">{a.done > 0 ? (a.sum / a.done).toFixed(1) : '-'}</TableCell>
               <TableCell className="text-right text-sm">{a.prevN > 0 ? (a.prevSum / a.prevN).toFixed(1) : '-'}</TableCell>
-              <TableCell className="text-right text-sm">
-                <span className="text-emerald-600">▲{a.up}</span> <span className="text-red-600">▼{a.down}</span>
-              </TableCell>
+              <TableCell className="text-right text-sm"><span className="text-emerald-600">▲{a.up}</span> <span className="text-red-600">▼{a.down}</span></TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -108,15 +159,27 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
 
   return (
     <div className="space-y-4">
+      {/* 동기화 상태줄 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-xs">
+        <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
+        {sync.lastAny ? (
+          <>
+            <span>성적취합표 동기화 <span className="font-medium">{fmtTime(sync.lastAny.received_at)}</span></span>
+            {sync.lastRows && <span className="text-muted-foreground">· 점수 {sync.lastRows.rows_matched}/{sync.lastRows.rows_total}행</span>}
+            {sync.filesOk > 0 && <span className="text-muted-foreground">· 시험지 {sync.filesOk}장</span>}
+            {(sync.unmatched.length > 0 || sync.fileUnmatched.length > 0 || sync.warnings.length > 0 || sync.errors > 0) && (
+              <Button size="sm" variant="outline" className="h-6 text-[11px] border-amber-300 text-amber-800" onClick={() => setUnmatchedOpen(true)}>
+                <AlertTriangle className="w-3 h-3 mr-1" />미매칭 {sync.unmatched.length + sync.fileUnmatched.length}{sync.warnings.length > 0 ? ` · 확인 ${sync.warnings.length}` : ''}{sync.errors > 0 ? ` · 오류 ${sync.errors}` : ''}
+              </Button>
+            )}
+            {sync.lastRows?.spreadsheet_name && <span className="ml-auto text-muted-foreground truncate max-w-[260px]">{sync.lastRows.spreadsheet_name}</span>}
+          </>
+        ) : (
+          <span className="text-muted-foreground">아직 동기화 기록이 없습니다. 성적취합표의 Apps Script(Sync.gs)가 15분마다 점수·시험지를 보냅니다. 지금 보내려면 시트에서 syncNow를 실행하세요.</span>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button size="sm" variant="outline" disabled><RefreshCw className="w-3.5 h-3.5 mr-1" />시트 동기화</Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>구글시트 성적취합표 연동은 B단계에서 켜집니다. 지금은 기존 저장된 점수만 표시합니다.</TooltipContent>
-        </Tooltip>
         <Select value={subject} onValueChange={setSubject}>
           <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -131,13 +194,12 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
             {teachers.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
-        {isTeacher && (
-          <label className="flex items-center gap-1.5 text-xs"><Switch checked={mineOnly} onCheckedChange={setMineOnly} />내 학생만</label>
-        )}
+        {isTeacher && <label className="flex items-center gap-1.5 text-xs"><Switch checked={mineOnly} onCheckedChange={setMineOnly} />내 학생만</label>}
         <label className="flex items-center gap-1.5 text-xs">
           <Switch checked={missingOnly} onCheckedChange={setMissingOnly} />누락만 보기
           {missingTotal > 0 && <Badge variant="outline" className="text-[11px] text-amber-700 border-amber-300">{missingTotal}</Badge>}
         </label>
+        {noPdf > 0 && <span className="text-[11px] text-muted-foreground">시험지 없음 {noPdf}</span>}
         <span className="ml-auto text-xs text-muted-foreground">{examLabel} · {filtered.length}행</span>
       </div>
 
@@ -170,20 +232,30 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
             )}
             {filtered.map(r => {
               const meta = STATUS_META[r.status];
+              const title = `${r.student.name} · ${r.subject} · ${examLabel}`;
               return (
                 <TableRow key={`${r.student.id}|${r.subject}`} className={r.status === 'missing' || r.status === 'score_empty' ? 'bg-amber-50/40 dark:bg-amber-950/10' : undefined}>
                   <TableCell className="font-medium">{r.student.name}</TableCell>
                   <TableCell>{r.subject}</TableCell>
-                  <TableCell className="text-sm">{r.teacherName || <span className="text-muted-foreground">미지정</span>}</TableCell>
+                  <TableCell className="text-sm">
+                    {r.teacherName || <span className="text-muted-foreground">미지정</span>}
+                    {!r.teacherId && r.result?.sheet_teacher_name && <span className="ml-1 text-[10px] text-muted-foreground" title="시트의 담당선생님 열. 앱의 담당 매핑은 아직 없음">시트</span>}
+                  </TableCell>
                   <TableCell className="text-right text-sm">{r.result?.expected_score ?? <span className="text-muted-foreground">-</span>}</TableCell>
                   <TableCell className="text-right text-sm font-medium">{r.result?.actual_score ?? <span className="text-muted-foreground">-</span>}</TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">{r.previous?.actual_score ?? '-'}</TableCell>
-                  <TableCell className="text-right text-sm"><Delta cur={r.result?.actual_score ?? null} prev={r.previous?.actual_score ?? null} /></TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">{r.previousScore ?? '-'}</TableCell>
+                  <TableCell className="text-right text-sm"><Delta cur={r.result?.actual_score ?? null} prev={r.previousScore} /></TableCell>
                   <TableCell className="text-center">
-                    <Tooltip>
-                      <TooltipTrigger asChild><span className="inline-flex"><FileText className="w-4 h-4 text-muted-foreground/40" /></span></TooltipTrigger>
-                      <TooltipContent>드라이브 시험지 연결은 B단계에서 켜집니다.</TooltipContent>
-                    </Tooltip>
+                    {r.pdf ? (
+                      <button type="button" onClick={() => setViewing({ pdf: r.pdf!, title })} className="inline-flex rounded p-1 hover:bg-accent" title={r.pdf.drive_file_name || '시험지 보기'}>
+                        <FileText className="w-4 h-4 text-primary" />
+                      </button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild><span className="inline-flex"><FileText className="w-4 h-4 text-muted-foreground/30" /></span></TooltipTrigger>
+                        <TooltipContent>{r.status === 'done' ? '시험지가 아직 드라이브에 없거나 동기화 전입니다' : '시험지 없음'}</TooltipContent>
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell><span className={cn('inline-block rounded px-1.5 py-0.5 text-[11px]', meta.cls)}>{meta.label}</span></TableCell>
                   <TableCell className="text-xs text-muted-foreground">{r.result?.review_status ? r.result.review_status : '-'}</TableCell>
@@ -194,8 +266,45 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId }:
         </Table>
       </div>
       <p className="text-xs text-muted-foreground">
-        대상 = 이 학교·학년 재원생 × 학원 수강 과목(담당 선생님 연결 기준). "미입력"은 시험을 봤는데 값이 없는 학생입니다. 미응시는 비고에 "미응시"를 적으면 제외됩니다.
+        대상 = 이 학교·학년 재원생 × 학원 수강 과목(담당 선생님 연결 기준) ∪ 성적취합표에 올라온 학생. 점수는 시트에서만 고칩니다. 미응시는 시트 비고에 "미응시"를 적으면 제외됩니다.
       </p>
+
+      <PdfViewer pdf={viewing?.pdf || null} title={viewing?.title || ''} onClose={() => setViewing(null)} />
+
+      <Dialog open={unmatchedOpen} onOpenChange={setUnmatchedOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle className="text-sm">동기화에서 매칭되지 않은 항목</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm max-h-[60vh] overflow-auto">
+            {sync.unmatched.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">점수 행 — 앱 재원생과 연결 실패 ({sync.unmatched.length})</div>
+                <ul className="divide-y rounded-md border">
+                  {sync.unmatched.map((u, i) => <li key={i} className="px-3 py-1.5 flex flex-wrap gap-x-3"><span className="text-muted-foreground w-10">#{u.row_no ?? '-'}</span><span className="font-medium">{u.name}</span><span>{u.school} {u.grade}</span><span>{u.subject}</span><span className="text-amber-800">{u.reason}</span></li>)}
+                </ul>
+                <p className="mt-1 text-[11px] text-muted-foreground">시트의 학교·이름·학년 표기를 학생 관리와 맞추거나, 학생 관리에 등록한 뒤 다음 동기화를 기다리면 됩니다.</p>
+              </div>
+            )}
+            {sync.warnings.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">연결은 됐지만 확인 필요 ({sync.warnings.length})</div>
+                <ul className="divide-y rounded-md border">
+                  {sync.warnings.map((u, i) => <li key={i} className="px-3 py-1.5 flex flex-wrap gap-x-3"><span className="text-muted-foreground w-10">#{u.row_no ?? '-'}</span><span className="font-medium">{u.name}</span><span>{u.subject}</span><span className="text-muted-foreground">{u.reason}</span></li>)}
+                </ul>
+              </div>
+            )}
+            {sync.fileUnmatched.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">시험지 파일 — 학생과 연결 실패 ({sync.fileUnmatched.length})</div>
+                <ul className="divide-y rounded-md border">
+                  {sync.fileUnmatched.map((u, i) => <li key={i} className="px-3 py-1.5 flex flex-wrap gap-x-3"><span className="font-medium">{u.file}</span><span className="text-amber-800">{u.reason}</span></li>)}
+                </ul>
+                <p className="mt-1 text-[11px] text-muted-foreground">파일명은 "2026-2-a 과목 학교 이름.pdf" 규칙이어야 합니다. 이름을 고치면 다음 동기화 때 다시 보냅니다.</p>
+              </div>
+            )}
+            {sync.unmatched.length === 0 && sync.warnings.length === 0 && sync.fileUnmatched.length === 0 && <p className="text-muted-foreground">미매칭 항목이 없습니다.</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

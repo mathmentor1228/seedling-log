@@ -22,6 +22,14 @@ export type ExamResult = {
   id: string; student_id: string; subject: string; exam_type: string; exam_year: number | null; exam_period: string | null;
   actual_score: number | null; expected_score: number | null; exam_date: string | null; submitted_at: string | null;
   note: string | null; review_status: string | null;
+  // EXAM-SHEET-SYNC-V1
+  source?: string | null; sheet_teacher_name?: string | null; previous_score?: number | null; synced_at?: string | null;
+};
+export type ResultPdf = { id: string; result_id: string; storage_path: string; display_title: string; source: string | null; drive_file_name: string | null; drive_modified_at: string | null };
+export type SheetSync = {
+  id: string; kind: 'rows' | 'file'; spreadsheet_name: string | null; exam_year: number | null; exam_period: string | null; received_at: string;
+  rows_total: number; rows_matched: number; unmatched: { row_no?: number; school?: string; grade?: string; name?: string; subject?: string; reason?: string; file?: string; warning?: boolean }[];
+  files_total: number; files_matched: number; errors: unknown[];
 };
 export type ReportRow = {
   id: string; school_name: string; grade: string; subject: string; exam_year: number; exam_period: string; exam_type: string;
@@ -145,6 +153,8 @@ export type StudentSubjectRow = {
   teacherId: string | null;
   result: ExamResult | null;
   previous: ExamResult | null;
+  previousScore: number | null;   // 시트 '최근성적' 우선, 없으면 앱 기록
+  pdf: ResultPdf | null;          // 드라이브에서 복사된 시험지
   status: ResultStatus;
 };
 
@@ -158,8 +168,11 @@ export function buildStudentSubjectRows(args: {
   results: ExamResult[]; cycleSubjects: string[];
   /** EXAM-PARTICIPANTS-V1: 미응시로 확정된 학생은 행을 만들지 않는다 */
   excludedStudentIds?: Set<string>;
+  /** EXAM-SHEET-SYNC-V1: 드라이브에서 복사된 시험지 */
+  pdfs?: ResultPdf[];
 }): StudentSubjectRow[] {
   const { cycle, key, students, classInfos, links, teachers, results, cycleSubjects, excludedStudentIds } = args;
+  const pdfByResult = new Map((args.pdfs || []).map(p => [p.result_id, p]));
   const nameById = new Map(teachers.map(t => [t.id, t.full_name]));
   const targets = students.filter(s => studentInCycle(s, cycle) && !(excludedStudentIds?.has(s.id)));
   const subjectsByStudent = new Map<string, Map<string, string | null>>(); // subject -> teacherId
@@ -175,12 +188,22 @@ export function buildStudentSubjectRows(args: {
   const resultsByStudent = new Map<string, ExamResult[]>();
   results.forEach(r => { (resultsByStudent.get(r.student_id) || resultsByStudent.set(r.student_id, []).get(r.student_id))!.push(r); });
 
+  // EXAM-SHEET-SYNC-V1: 시트/드라이브에서 들어온 결과는 수강 매핑이 없어도 행을 만든다 (담당은 시트 열로 표시)
+  for (const r of results) {
+    if (r.exam_year !== key.year || r.exam_period !== key.period || r.exam_type === 'performance') continue;
+    if (!targets.some(t => t.id === r.student_id)) continue;
+    if (!subjectsByStudent.has(r.student_id)) subjectsByStudent.set(r.student_id, new Map());
+    const m = subjectsByStudent.get(r.student_id)!;
+    if (!m.has(r.subject)) m.set(r.subject, null);
+  }
+
   const rows: StudentSubjectRow[] = [];
   for (const s of targets) {
     const subj = subjectsByStudent.get(s.id);
     if (!subj) continue;
     for (const [subject, teacherId] of subj) {
-      if (cycleSubjects.length > 0 && !cycleSubjects.includes(subject)) continue;
+      const hasResultHere = (resultsByStudent.get(s.id) || []).some(r => r.subject === subject && r.exam_year === key.year && r.exam_period === key.period);
+      if (cycleSubjects.length > 0 && !cycleSubjects.includes(subject) && !hasResultHere) continue;
       const mine = (resultsByStudent.get(s.id) || []).filter(r => r.subject === subject && r.exam_type !== 'performance');
       const result = mine.find(r => r.exam_year === key.year && r.exam_period === key.period) || null;
       const curKey = periodSortKey(key.year, key.period, null);
@@ -189,7 +212,9 @@ export function buildStudentSubjectRows(args: {
         .sort((a, b) => periodSortKey(b.exam_year, b.exam_period, b.exam_date) - periodSortKey(a.exam_year, a.exam_period, a.exam_date))[0] || null;
       const absent = !!result?.note && result.note.includes('미응시');
       const status: ResultStatus = absent ? 'absent' : !result ? 'missing' : result.actual_score == null ? 'score_empty' : 'done';
-      rows.push({ student: s, subject, teacherName: teacherId ? nameById.get(teacherId) || null : null, teacherId, result, previous, status });
+      const teacherName = (teacherId ? nameById.get(teacherId) : null) || result?.sheet_teacher_name || null;
+      const previousScore = result?.previous_score ?? previous?.actual_score ?? null;
+      rows.push({ student: s, subject, teacherName, teacherId, result, previous, previousScore, pdf: result ? pdfByResult.get(result.id) || null : null, status });
     }
   }
   rows.sort((a, b) => a.subject.localeCompare(b.subject, 'ko') || (a.teacherName || '').localeCompare(b.teacherName || '', 'ko') || a.student.name.localeCompare(b.student.name, 'ko'));

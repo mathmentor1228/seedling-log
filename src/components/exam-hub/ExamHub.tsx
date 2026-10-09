@@ -103,7 +103,7 @@ export function ExamHub() {
       const needConfirm = cells.filter(x => x.row === null && x.reasons.length > 0);
       const rows = buildStudentSubjectRows({
         cycle: c, key, students: data.students, classInfos: data.classInfos, links: data.links, teachers: data.teachers,
-        results: data.results, cycleSubjects, excludedStudentIds: excluded,
+        results: data.results, cycleSubjects, excludedStudentIds: excluded, pdfs: data.pdfs,
       });
       const reports = data.reports.filter(r => reportInCycle(r, c, key));
       const targets = allTargets.filter(s => !excluded.has(s.id));
@@ -355,6 +355,7 @@ export function ExamHub() {
             </TabsContent>
             <TabsContent value="results" className="mt-3">
               <StudentResultsTab rows={selected.rows} examLabel={`${selected.key.year} ${selected.cycle.semester} ${selected.cycle.exam_type}`}
+                syncs={data.syncs.filter(x => x.exam_year === selected.key.year && x.exam_period === selected.key.period)}
                 isTeacher={isTeacher} currentUserId={user?.id ?? null} />
             </TabsContent>
             <TabsContent value="papers" className="mt-3">
