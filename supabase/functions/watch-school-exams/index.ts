@@ -178,10 +178,18 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceKey);
   const body = await req.json().catch(() => ({}));
 
-  // 권한: cron(anon 키 + source=cron) 또는 관리자/강사
+  // 권한: cron(CRON_SECRET 또는 anon 키 + source=cron) 또는 관리자/강사
+  // 2026-10-09: 서버의 SUPABASE_ANON_KEY 형식과 스케줄에 넣은 구형 anon 키가 달라 cron이 401로 막혀 있었다.
+  // → 전용 비밀값 CRON_SECRET을 Authorization/apikey 헤더 또는 body.cron_secret 로 받는다.
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  let allowed = body?.source === 'cron' && anonKey && token === anonKey;
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const apikeyHeader = req.headers.get('apikey') ?? '';
+  const isCron = body?.source === 'cron';
+  let allowed = isCron && (
+    (cronSecret && (token === cronSecret || apikeyHeader === cronSecret || body?.cron_secret === cronSecret))
+    || (anonKey && (token === anonKey || apikeyHeader === anonKey))
+  );
   if (!allowed && token) {
     const { data: { user } } = await admin.auth.getUser(token);
     if (user) {

@@ -186,7 +186,12 @@ Deno.serve(async (req) => {
 
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  let allowed = (body?.source === 'cron' && anonKey && token === anonKey) || (body?.source === 'internal' && token === serviceKey);
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  const apikeyHeader = req.headers.get('apikey') ?? '';
+  let allowed = (body?.source === 'cron' && (
+      (cronSecret && (token === cronSecret || apikeyHeader === cronSecret || body?.cron_secret === cronSecret))
+      || (anonKey && (token === anonKey || apikeyHeader === anonKey))))
+    || (body?.source === 'internal' && token === serviceKey);
   if (!allowed && token) {
     const { data: { user } } = await admin.auth.getUser(token);
     if (user) {
