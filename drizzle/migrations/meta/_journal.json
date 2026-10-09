@@ -78,6 +78,13 @@
       "when": 1791564135342,
       "tag": "0010_fix_published_analysis_grade_match",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791569112064,
+      "tag": "0011_exam_cycle_participants",
+      "breakpoints": true
     }
   ]
 }

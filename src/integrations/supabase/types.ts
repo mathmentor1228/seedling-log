@@ -1452,6 +1452,57 @@ export type Database = {
           },
         ]
       }
+      exam_cycle_participants: {
+        Row: {
+          created_at: string
+          cycle_id: string
+          decided_at: string
+          decided_by: string | null
+          id: string
+          reason: string | null
+          status: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cycle_id: string
+          decided_at?: string
+          decided_by?: string | null
+          id?: string
+          reason?: string | null
+          status: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: string
+          decided_at?: string
+          decided_by?: string | null
+          id?: string
+          reason?: string | null
+          status?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_cycle_participants_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "exam_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_cycle_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_cycle_subjects: {
         Row: {
           cycle_id: string
