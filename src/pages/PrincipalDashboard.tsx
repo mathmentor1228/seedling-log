@@ -16,6 +16,7 @@ import { ConsultFollowUpsCard } from '@/components/consult/ConsultFollowUpsCard'
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { cn } from '@/lib/utils';
+import { HelpTip } from '@/components/ui/help-tip';
 
 // PRINCIPAL-HOME-V2 (2026-10-09): 스와이프 패널을 없애고 한 페이지로. 위에서 아래로
 //   오늘 한 줄 요약 → 지금 처리할 것 → 상담 후속 → 오늘 수업(시간순) → 주간 코멘트 현황 → 일정·메모(접힘)
@@ -51,7 +52,7 @@ function AttendanceCheckCard({ open, onToggle }: { open: boolean; onToggle: (o: 
   return (
     <details className="rounded-xl border border-primary/20 bg-card" open={open}
       onToggle={(e) => onToggle((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary className="text-sm font-bold cursor-pointer list-none flex items-center gap-1.5 p-3">
+      <summary className="text-base font-bold cursor-pointer list-none flex items-center gap-1.5 p-3">
         <ChevronRight className={cn('w-4 h-4 transition-transform', open && 'rotate-90')} />
         <CheckCircle className="w-4 h-4 text-primary" /> 출석 체크
         <span className="ml-2 text-[11px] font-normal text-muted-foreground">반을 고르고 등원 · 지각 · 결석을 누릅니다</span>
@@ -260,7 +261,14 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
     <Card>
       <CardContent className="p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold flex items-center gap-1.5"><Users className="w-4 h-4 text-primary" /> 오늘 수업</h2>
+          <h2 className="text-base font-bold flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-primary" /> 오늘 수업
+            {empty.length > 0 && (
+              <HelpTip label="숨긴 반">
+                배정 학생이 없는 반 {empty.length}개는 숨겼습니다 ({empty.map(s => `${s.startTime} ${s.className}`).slice(0, 4).join(', ')}{empty.length > 4 ? ' …' : ''}). 시간표에서 정리하면 사라집니다.
+              </HelpTip>
+            )}
+          </h2>
           <span className="text-[11px] text-muted-foreground">진행 {active.length} · 예정 {upcoming.length} · 종료 {past.length}</span>
         </div>
         {real.length === 0 && <p className="text-xs text-muted-foreground py-1">오늘 예정된 수업이 없습니다.</p>}
@@ -281,9 +289,6 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
             </summary>
             <div className="mt-2 space-y-1.5">{past.map(s => <SlotRow key={s.scheduleId} slot={s} state="past" isNext={false} defaultOpen={false} />)}</div>
           </details>
-        )}
-        {empty.length > 0 && (
-          <p className="text-[11px] text-muted-foreground">배정 학생이 없는 반 {empty.length}개는 숨김 ({empty.map(s => `${s.startTime} ${s.className}`).slice(0, 4).join(', ')}{empty.length > 4 ? ' …' : ''}). 시간표에서 정리하면 사라집니다.</p>
         )}
       </CardContent>
     </Card>
@@ -574,7 +579,7 @@ function PrincipalContent() {
             open={sideOpen}
             onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setSideOpen(o); try { localStorage.setItem('principal.sideOpen', o ? '1' : '0'); } catch { /* ignore */ } }}
           >
-            <summary className="text-sm font-bold cursor-pointer list-none flex items-center gap-1.5">
+            <summary className="text-base font-bold cursor-pointer list-none flex items-center gap-1.5">
               <ChevronRight className={cn('w-4 h-4 transition-transform', sideOpen && 'rotate-90')} />
               <CalendarDays className="w-4 h-4 text-primary" /> 원내 일정
               <span className="mx-1 text-muted-foreground">·</span>

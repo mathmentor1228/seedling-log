@@ -12,6 +12,7 @@ import { Loader2, MessageSquareText, CheckCircle2, ChevronDown, ChevronRight } f
 import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS, WEEKLY_COMMENT_REMINDER_FROM_WEEKDAY } from '@/lib/constants';
 import { WEEKLY_COMMENT_QUESTIONS } from '@/lib/weeklyCommentGuide';
+import { HelpTip } from '@/components/ui/help-tip';
 import { WeeklySummaryDialog } from './WeeklySummaryDialog';
 import { fetchWeeklyCommentRoster } from '@/lib/weeklyCommentRoster';
 
@@ -89,8 +90,12 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <MessageSquareText className={`w-4 h-4 ${allDone ? 'text-emerald-600' : 'text-amber-600'}`} />
-              <h3 className="text-sm font-bold">이번 주 주간 코멘트</h3>
+              <h3 className="text-base font-bold">이번 주 주간 코멘트</h3>
               <Badge variant="outline" className="text-[10px]">{weekStart.slice(5).replace('-', '/')} ~ {weekEnd.slice(5).replace('-', '/')}</Badge>
+              <HelpTip>
+                학생 이름을 누르면 바로 씁니다. {WEEKLY_COMMENT_QUESTIONS.map(q => q.label).join(' · ')} 중 하나만 써도 됩니다.
+                일요일 밤에 주간 편지가 만들어지니 그 전까지 부탁드립니다. 코멘트가 없는 학생은 기록만 정리된 약식으로 나갑니다.
+              </HelpTip>
             </div>
             <Badge className={allDone ? 'bg-emerald-500/20 text-emerald-700 border-emerald-500/30' : 'bg-amber-500/20 text-amber-800 border-amber-500/30'}>
               {loading ? '확인 중' : rows.length === 0 ? '이번 주 수업 없음' : allDone ? '전원 작성 완료' : `미작성 ${missing.length}명`}
@@ -138,10 +143,6 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
             </>
           )}
 
-          <p className="text-[10px] text-muted-foreground leading-snug">
-            학생 이름을 누르면 바로 씁니다. {WEEKLY_COMMENT_QUESTIONS.map(q => q.label).join(' · ')} 중 <b>하나만</b> 써도 됩니다.
-            일요일 밤에 주간 편지가 만들어지니 그 전까지 부탁드립니다. 코멘트가 없는 학생은 기록만 정리된 약식으로 나갑니다.
-          </p>
         </CardContent>
       </Card>
       {picked && (

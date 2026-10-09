@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useFloatingDrag } from './floating-attendance/useFloatingDrag';
 import { useAttendanceData } from './floating-attendance/useAttendanceData';
@@ -9,6 +10,7 @@ import { TeacherView } from './floating-attendance/TeacherView';
 import { AdminView } from './floating-attendance/AdminView';
 
 export function FloatingAttendanceWidget() {
+  const { pathname } = useLocation();
   const { user, role } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState('room10');
@@ -33,6 +35,8 @@ export function FloatingAttendanceWidget() {
   console.log('[FloatingAttendanceWidget] role:', role);
   if (!user) return null;
   if (!effectiveRole) return null;
+  // 원장 대시보드는 상단 요약 칩 + 출석 체크 카드가 같은 정보를 보여주고, 배지가 결석 버튼을 가렸음 (2026-10-10)
+  if (pathname.startsWith('/principal')) return null;
 
   const colors = ROLE_COLORS[effectiveRole];
   const totalIn = (roomCounts['room10'] ?? 0) + (roomCounts['glass'] ?? 0);

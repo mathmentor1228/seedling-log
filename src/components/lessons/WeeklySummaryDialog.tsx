@@ -213,13 +213,13 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
               value={text}
               onChange={e => setText(e.target.value)}
               rows={6}
-              placeholder={`예) ${WEEKLY_COMMENT_QUESTIONS[0].example}\n    ${WEEKLY_COMMENT_QUESTIONS[1].example}`}
+              placeholder={`예) ${WEEKLY_COMMENT_QUESTIONS[0].example}\n예) ${WEEKLY_COMMENT_QUESTIONS[1].example}`}
               disabled={loading}
               className="text-sm"
             />
-            <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center justify-between gap-3 text-[11px]">
               <span className="text-muted-foreground">AI가 학부모 말로 다듬어 주간 편지의 중심 문장이 됩니다. 원문 그대로 나가지 않습니다.</span>
-              <span className={lenTone}>{len}자{len > 0 && len < WEEKLY_COMMENT_MIN_CHARS ? ` (${WEEKLY_COMMENT_MIN_CHARS}자 이상)` : ''}</span>
+              <span className={`${lenTone} whitespace-nowrap tabular-nums`}>{len}자{len > 0 && len < WEEKLY_COMMENT_MIN_CHARS ? ` (${WEEKLY_COMMENT_MIN_CHARS}자 이상)` : ''}</span>
             </div>
           </div>
 

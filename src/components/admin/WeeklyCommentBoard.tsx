@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin } from '@/lib/auth';
 import { Loader2, MessageSquareText, RefreshCw, ChevronRight } from 'lucide-react';
+import { HelpTip } from '@/components/ui/help-tip';
 import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS } from '@/lib/constants';
 import { WEEKLY_COMMENT_PRESENCE_CHANNEL, flattenPresence, presenceKey, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
@@ -31,7 +32,24 @@ interface Cell {
 }
 interface TeacherGroup { teacherId: string; teacherName: string; cells: Cell[] }
 
+/** 미작성의 긴급도 — 월·화 차분(회색) · 수·목 주의(주황) · 금·토·일 마감 임박(빨강). 일요일 밤에 편지가 만들어진다. */
+function urgencyToday(): 'calm' | 'warn' | 'due' {
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // 0=일
+  if (d === 1 || d === 2) return 'calm';
+  if (d === 3 || d === 4) return 'warn';
+  return 'due';
+}
+const MISSING_CHIP = {
+  calm: 'bg-background text-foreground border-border',
+  warn: 'bg-amber-500/10 text-amber-900 border-amber-500/40',
+  due: 'bg-red-500/10 text-red-800 border-red-500/40',
+};
+const MISSING_TEXT = { calm: 'text-muted-foreground', warn: 'text-amber-700', due: 'text-red-700' };
+const MISSING_DOT = { calm: 'bg-muted-foreground/60', warn: 'bg-amber-500', due: 'bg-red-500' };
+const MISSING_LABEL = { calm: '미작성', warn: '미작성 · 이번 주 내', due: '미작성 · 일요일 밤까지' };
+
 export function WeeklyCommentBoard() {
+  const urgency = urgencyToday();
   const { user, role } = useAuth();
   const [groups, setGroups] = useState<TeacherGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,12 +131,17 @@ export function WeeklyCommentBoard() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <MessageSquareText className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-bold">이번 주 주간 코멘트 현황</h3>
+              <h3 className="text-base font-bold">이번 주 주간 코멘트</h3>
               <Badge variant="outline" className="text-[10px]">{weekStart.slice(5).replace('-', '/')} ~ {weekEnd.slice(5).replace('-', '/')}</Badge>
+              <HelpTip>
+                과목(선생님)별로 따로 관리합니다. 같은 학생이라도 선생님마다 각자 씁니다. 강사 줄을 누르면 학생 이름이 펼쳐지고(본인은 항상 펼침),
+                학생 이름을 누르면 본인 학생은 바로 쓰고 다른 선생님 학생은 내용·작성 중 여부가 팝업으로 보입니다.
+                명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 미작성 색은 요일에 따라 회색(월·화) → 주황(수·목) → 빨강(금~일)으로 올라갑니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
+              </HelpTip>
             </div>
             <div className="flex items-center gap-1.5 text-[11px]">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-700 px-2 py-0.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />작성 {totals.done}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-700 px-2 py-0.5"><span className="w-2 h-2 rounded-full bg-red-500" />미작성 {totals.missing}</span>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${urgency === 'due' ? 'bg-red-500/10' : urgency === 'warn' ? 'bg-amber-500/10' : 'bg-muted'} ${MISSING_TEXT[urgency]}`}><span className={`w-2 h-2 rounded-full ${MISSING_DOT[urgency]}`} />{MISSING_LABEL[urgency]} {totals.missing}</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 text-blue-700 px-2 py-0.5"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />작성 중 {totals.busy}</span>
               <button type="button" onClick={() => fetchData()} className="ml-1 text-muted-foreground hover:text-foreground" title={updatedAt ? `갱신 ${updatedAt.toLocaleTimeString('ko-KR')}` : '새로고침'}>
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -147,12 +170,12 @@ export function WeeklyCommentBoard() {
                       <p className="text-xs font-semibold w-[72px] shrink-0 truncate">
                         {g.teacherName}{mine && <span className="ml-1 text-[10px] font-normal text-muted-foreground">(본인)</span>}
                       </p>
-                      <div className="flex-1 h-2 rounded-full bg-red-500/15 overflow-hidden" title={`작성 ${done} · 미작성 ${missing}`}>
+                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden" title={`작성 ${done} · 미작성 ${missing}`}>
                         <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                       </div>
                       <span className={`text-[11px] tabular-nums shrink-0 ${missing === 0 ? 'text-emerald-700' : 'text-muted-foreground'}`}>
                         {done}/{g.cells.length}
-                        {missing > 0 && <span className="ml-1 text-red-700">미작성 {missing}</span>}
+                        {missing > 0 && <span className={`ml-1 ${MISSING_TEXT[urgency]}`}>미작성 {missing}</span>}
                         {busy > 0 && <span className="ml-1 text-blue-700">작성 중 {busy}</span>}
                       </span>
                     </button>
@@ -164,7 +187,7 @@ export function WeeklyCommentBoard() {
                           ? 'bg-blue-500/15 text-blue-800 border-blue-500/50 animate-pulse'
                           : c.ownText
                             ? 'bg-emerald-500/15 text-emerald-800 border-emerald-500/40'
-                            : 'bg-red-500/10 text-red-800 border-red-500/40';
+                            : MISSING_CHIP[urgency];
                         const title = isBusy
                           ? `${busyBy.map(e => e.teacher_name).join(', ')} 작성 중 — 누르면 상태 보기`
                           : c.ownText
@@ -185,9 +208,6 @@ export function WeeklyCommentBoard() {
               })}
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            과목(선생님)별로 따로 관리합니다 — 같은 학생이라도 선생님마다 각자 써야 합니다. 강사 줄을 누르면 학생 이름이 펼쳐집니다(본인은 항상 펼침). 학생 이름을 누르면 본인 학생은 바로 쓰고, 다른 선생님 학생은 작성 내용·작성 중 여부가 팝업으로 보입니다. 명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
-          </p>
         </CardContent>
       </Card>
       {/* 다른 선생님 학생: 작성 내용·상태 열람 (읽기 전용) */}

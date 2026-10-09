@@ -123,11 +123,11 @@ export function PrincipalActionCenter({
   const problems = items.filter((i) => i.count > 0);
 
   return (
-    <Card className="border-primary/30">
+    <Card className="border-primary/30 border-l-4 border-l-primary">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-sm font-bold flex items-center gap-1.5">
+            <h2 className="text-base font-bold flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4 text-primary shrink-0" />
               지금 처리할 것
             </h2>
