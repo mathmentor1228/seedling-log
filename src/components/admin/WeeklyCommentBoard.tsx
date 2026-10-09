@@ -2,6 +2,7 @@
 // 초록 = 작성 완료 · 빨강 = 아직 미작성 · 파랑 = 지금 누군가 입력창을 열고 쓰는 중 (Realtime presence)
 // lesson_records 가 바뀌면(코멘트 저장 포함) 1.5초 뒤 자동 새로고침. 월~일 내내 보인다.
 // 원장 본인 수업 학생은 눌러서 바로 쓸 수 있고, 다른 선생님 학생은 마우스를 올리면 코멘트 본문이 보인다.
+// 명단은 weeklyCommentRoster(일지 ∪ 시간표 ∪ 담당 매핑) — 일지만 보면 아직 수업 안 한 학생이 빠진다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS } from '@/lib/constants';
 import { WEEKLY_COMMENT_PRESENCE_CHANNEL, flattenPresence, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
 import { WeeklySummaryDialog } from '@/components/lessons/WeeklySummaryDialog';
+import { fetchWeeklyCommentRoster, sourceLabel } from '@/lib/weeklyCommentRoster';
 
 interface Cell {
   studentId: string;
@@ -23,10 +25,11 @@ interface Cell {
   /** 다른 선생님이 쓴 이번 주 코멘트 (이 강사는 안 씀) */
   otherText: string | null;
   otherBy: string | null;
+  /** 이번 주 일지가 아직 없고 시간표·매핑으로만 잡힌 학생 */
+  noLessonYet: boolean;
+  sourceNote: string;
 }
 interface TeacherGroup { teacherId: string; teacherName: string; cells: Cell[] }
-
-const ACTIVE = new Set(['재학', '재등원']);
 
 export function WeeklyCommentBoard() {
   const { user, role } = useAuth();
@@ -41,43 +44,22 @@ export function WeeklyCommentBoard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { data } = await supabase
-        .from('lesson_records')
-        .select('student_id, teacher_id, teacher_display_name, subject, weekly_summary, weekly_summary_week, students:student_id(id, name, school, enrollment_status)')
-        .gte('lesson_date', weekStart)
-        .lte('lesson_date', weekEnd);
-      const rows = (data || []) as any[];
-
-      // 학생별 이번 주 코멘트 (누가 썼든)
-      const commentBy = new Map<string, { teacherId: string; teacherName: string; text: string }[]>();
-      for (const r of rows) {
-        const t = (r.weekly_summary || '').trim();
-        if (!t) continue;
-        if (r.weekly_summary_week && r.weekly_summary_week !== weekStart) continue;
-        const arr = commentBy.get(r.student_id) ?? [];
-        if (!arr.some(x => x.teacherId === r.teacher_id && x.text === t)) {
-          arr.push({ teacherId: r.teacher_id, teacherName: r.teacher_display_name || '선생님', text: t });
-        }
-        commentBy.set(r.student_id, arr);
-      }
-
-      const byTeacher = new Map<string, TeacherGroup>();
-      for (const r of rows) {
-        const s = r.students;
-        if (!s || !r.teacher_id || excluded.includes(r.teacher_id)) continue;
-        if (s.enrollment_status && !ACTIVE.has(s.enrollment_status)) continue;
-        const g = byTeacher.get(r.teacher_id) ?? { teacherId: r.teacher_id, teacherName: r.teacher_display_name || '(강사?)', cells: [] };
-        byTeacher.set(r.teacher_id, g);
-        if (g.cells.some(c => c.studentId === s.id)) continue;
-        const cs = commentBy.get(s.id) ?? [];
-        const own = cs.find(x => x.teacherId === r.teacher_id);
-        const other = cs.find(x => x.teacherId !== r.teacher_id);
-        g.cells.push({
-          studentId: s.id, name: s.name, school: s.school, subject: r.subject,
-          ownText: own?.text ?? null, otherText: other?.text ?? null, otherBy: other?.teacherName ?? null,
-        });
-      }
-      const list = [...byTeacher.values()];
+      // 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑 — 일지만 보면 아직 수업 안 한 학생이 빠진다 (2026-10-09 원장 지적)
+      const roster = await fetchWeeklyCommentRoster(weekStart, weekEnd, { excludedTeacherIds: excluded });
+      const list: TeacherGroup[] = roster.groups.map(g => ({
+        teacherId: g.teacherId,
+        teacherName: g.teacherName,
+        cells: g.students.map(st => {
+          const cs = roster.commentsByStudent.get(st.id) ?? [];
+          const own = cs.find(x => x.teacherId === g.teacherId);
+          const other = cs.find(x => x.teacherId !== g.teacherId);
+          return {
+            studentId: st.id, name: st.name, school: st.school, subject: st.subject || '수학',
+            ownText: own?.text ?? null, otherText: other?.text ?? null, otherBy: other?.teacherName ?? null,
+            noLessonYet: !st.sources.includes('lesson'), sourceNote: sourceLabel(st.sources),
+          };
+        }),
+      }));
       for (const g of list) g.cells.sort((a, b) => Number(!!a.ownText) - Number(!!b.ownText) || a.name.localeCompare(b.name, 'ko'));
       // 본인 그룹 먼저, 그다음 미작성 많은 순
       list.sort((a, b) => Number(b.teacherId === user?.id) - Number(a.teacherId === user?.id)
@@ -145,7 +127,7 @@ export function WeeklyCommentBoard() {
           {loading ? (
             <div className="flex items-center justify-center py-3 text-muted-foreground text-xs"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> 로딩...</div>
           ) : groups.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-1">이번 주 수업 기록이 아직 없습니다.</p>
+            <p className="text-xs text-muted-foreground py-1">이번 주 담당 학생이 없습니다 (일지·시간표·담당 매핑 기준).</p>
           ) : (
             <div className="space-y-2">
               {groups.map(g => {
@@ -176,8 +158,8 @@ export function WeeklyCommentBoard() {
                             ? c.ownText
                             : c.otherText
                               ? `${c.otherBy} 선생님이 작성: ${c.otherText}`
-                              : `${g.teacherName} 미작성 (${c.subject})`;
-                        const common = `inline-flex items-center h-6 px-2 rounded-md border text-[11px] ${cls}`;
+                              : `${g.teacherName} 미작성 (${c.subject})${c.sourceNote ? ` · ${c.sourceNote}` : ''}`;
+                        const common = `inline-flex items-center h-6 px-2 rounded-md border text-[11px] ${cls}${c.noLessonYet && !c.ownText && !isBusy ? ' opacity-80' : ''}`;
                         return mine ? (
                           <button key={c.studentId} type="button" className={`${common} hover:brightness-95`} title={title} onClick={() => setPicked(c)}>
                             {c.name}
@@ -193,7 +175,7 @@ export function WeeklyCommentBoard() {
             </div>
           )}
           <p className="text-[10px] text-muted-foreground leading-tight">
-            점선 초록 = 다른 과목 선생님이 쓴 코멘트만 있음. 이름에 마우스를 올리면 코멘트 본문이 보입니다. 본인 수업 학생은 눌러서 바로 씁니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
+            명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 점선 초록 = 다른 과목 선생님이 쓴 코멘트만 있음. 이름에 마우스를 올리면 코멘트 본문(미작성이면 출처)이 보입니다. 본인 수업 학생은 눌러서 바로 씁니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
           </p>
         </CardContent>
       </Card>

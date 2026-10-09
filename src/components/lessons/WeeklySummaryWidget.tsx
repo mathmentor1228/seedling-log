@@ -1,7 +1,7 @@
 // WEEKLY-COMMENT-V2: 이번 주 주간 코멘트가 없는 학생을 대시보드에 띄우고 그 자리에서 쓰게 한다.
 // - 모든 선생님·원장에게 보인다 (WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS 제외)
 // - 수요일부터 일요일까지만 보인다 (WEEKLY_COMMENT_REMINDER_FROM_WEEKDAY)
-// - 대상 학생 = 이번 주 내가 수업한 학생. 코멘트는 누가 썼든 이번 주 것이 있으면 완료로 본다.
+// - 대상 학생 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑 (weeklyCommentRoster). 코멘트는 누가 썼든 이번 주 것이 있으면 완료로 본다.
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +13,9 @@ import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS, WEEKLY_COMMENT_REMINDER_FROM_WEEKDAY } from '@/lib/constants';
 import { WEEKLY_COMMENT_QUESTIONS } from '@/lib/weeklyCommentGuide';
 import { WeeklySummaryDialog } from './WeeklySummaryDialog';
+import { fetchWeeklyCommentRoster } from '@/lib/weeklyCommentRoster';
 
-interface StudentRow { id: string; name: string; school: string | null; grade_year: number | null; subject: string; hasSummary: boolean; }
+interface StudentRow { id: string; name: string; school: string | null; grade_year: number | null; subject: string; hasSummary: boolean; noLessonYet: boolean; }
 
 function kstWeekday(): number {
   // 0=일 … 6=토 (KST)
@@ -43,44 +44,18 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
     if (!user || !visible) return;
     setLoading(true);
     try {
-      // 이번 주 내가 수업한 학생 (마감 여부 무관)
-      const { data: lessons } = await supabase
-        .from('lesson_records')
-        .select('student_id, subject, weekly_summary, weekly_summary_week, students:student_id(id, name, school, grade_year, enrollment_status)')
-        .eq('teacher_id', user.id)
-        .gte('lesson_date', weekStart)
-        .lte('lesson_date', weekEnd);
-
-      const byStudent = new Map<string, StudentRow>();
-      for (const l of (lessons || []) as any[]) {
-        const s = l.students;
-        if (!s) continue;
-        if (s.enrollment_status && !['재학', '재등원'].includes(s.enrollment_status)) continue;
-        const prev = byStudent.get(s.id);
-        const mine = !!l.weekly_summary && (!l.weekly_summary_week || l.weekly_summary_week === weekStart);
-        byStudent.set(s.id, {
-          id: s.id, name: s.name, school: s.school, grade_year: s.grade_year,
-          subject: prev?.subject || l.subject,
-          hasSummary: mine || (prev?.hasSummary ?? false),
-        });
-      }
-
-      // 다른 선생님 레코드에 저장됐거나 weekly_summary_week=이번주로만 기록된 코멘트도 '작성 완료'로 잡는다.
-      const ids = Array.from(byStudent.keys());
-      if (ids.length > 0) {
-        const { data: anySummary } = await supabase
-          .from('lesson_records')
-          .select('student_id, weekly_summary, weekly_summary_week, lesson_date')
-          .in('student_id', ids)
-          .not('weekly_summary', 'is', null)
-          .or(`weekly_summary_week.eq.${weekStart},and(lesson_date.gte.${weekStart},lesson_date.lte.${weekEnd})`);
-        for (const r of (anySummary || []) as any[]) {
-          const row = byStudent.get(r.student_id);
-          if (row && r.weekly_summary) row.hasSummary = true;
-        }
-      }
-
-      setRows(Array.from(byStudent.values()).sort((a, b) => Number(a.hasSummary) - Number(b.hasSummary) || a.name.localeCompare(b.name, 'ko')));
+      // 이번 주 일지 + 활성 시간표 + 담당 매핑의 합집합 (일지만 보면 아직 수업 안 한 학생이 빠진다)
+      const roster = await fetchWeeklyCommentRoster(weekStart, weekEnd, {
+        excludedTeacherIds: WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS, onlyTeacherId: user.id,
+      });
+      const mine = roster.groups.find(g => g.teacherId === user.id);
+      const rows: StudentRow[] = (mine?.students ?? []).map(st => ({
+        id: st.id, name: st.name, school: st.school, grade_year: null, subject: st.subject || '수학',
+        // 코멘트는 누가 썼든 이번 주 것이 있으면 완료
+        hasSummary: (roster.commentsByStudent.get(st.id) ?? []).length > 0,
+        noLessonYet: !st.sources.includes('lesson'),
+      }));
+      setRows(rows.sort((a, b) => Number(a.hasSummary) - Number(b.hasSummary) || a.name.localeCompare(b.name, 'ko')));
     } finally {
       setLoading(false);
     }
@@ -127,13 +102,14 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
               <Loader2 className="w-3 h-3 mr-1 animate-spin" /> 로딩...
             </div>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-1">이번 주 내가 수업한 학생이 아직 없습니다.</p>
+            <p className="text-xs text-muted-foreground py-1">이번 주 담당 학생이 없습니다 (일지·시간표·담당 매핑 기준).</p>
           ) : (
             <>
               {missing.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {missing.map(s => (
                     <Button key={s.id} variant="outline" size="sm" className="h-7 text-xs border-amber-500/50 bg-background hover:bg-amber-500/10"
+                      title={s.noLessonYet ? '이번 주 일지 아직 없음 (시간표·담당 기준)' : undefined}
                       onClick={() => setPicked(s)}>
                       {s.name}
                       {s.school && <span className="ml-1 text-muted-foreground">·{s.school.slice(0, 4)}</span>}
