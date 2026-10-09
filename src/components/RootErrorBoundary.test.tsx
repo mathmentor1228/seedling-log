@@ -19,7 +19,8 @@ describe('RootErrorBoundary', () => {
     sessionStorage.clear();
     vi.restoreAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(window.location, 'reload').mockImplementation(() => {});
+    // jsdom의 Location.reload는 인스턴스에서 직접 덮어쓸 수 없어 원형(prototype)을 가로챈다.
+    vi.spyOn(Object.getPrototypeOf(window.location) as object, 'reload').mockImplementation(() => {});
   });
 
   it('문제가 없으면 자식을 그대로 보여준다', () => {
