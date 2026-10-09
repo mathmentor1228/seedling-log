@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, Component, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getAttendanceLabel, getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
@@ -26,6 +26,48 @@ const TeamNotesBoard = lazy(() =>
 const AcademyCalendar = lazy(() =>
   import('@/components/AcademyCalendar').then((m) => ({ default: m.AcademyCalendar }))
 );
+const TeacherAttendanceView = lazy(() =>
+  import('@/components/TeacherAttendanceView').then((m) => ({ default: m.TeacherAttendanceView }))
+);
+
+/* 출석 체크 (반별 등원/지각/결석) — 옛 2번째 패널에서 가져옴. 원장이 매일 쓰는 기능이라 대시보드에 둔다. */
+class AttendanceErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) { console.error('AttendanceCard crash:', err); }
+  render() {
+    if (this.state.hasError) return (
+      <Card className="border-destructive/20">
+        <CardContent className="p-4 text-center">
+          <p className="text-sm text-muted-foreground">출결 데이터 로딩 오류</p>
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => this.setState({ hasError: false })}>다시 시도</Button>
+        </CardContent>
+      </Card>
+    );
+    return this.props.children;
+  }
+}
+function AttendanceCheckCard({ open, onToggle }: { open: boolean; onToggle: (o: boolean) => void }) {
+  return (
+    <details className="rounded-xl border border-primary/20 bg-card" open={open}
+      onToggle={(e) => onToggle((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="text-sm font-bold cursor-pointer list-none flex items-center gap-1.5 p-3">
+        <ChevronRight className={cn('w-4 h-4 transition-transform', open && 'rotate-90')} />
+        <CheckCircle className="w-4 h-4 text-primary" /> 출석 체크
+        <span className="ml-2 text-[11px] font-normal text-muted-foreground">반을 고르고 등원 · 지각 · 결석을 누릅니다</span>
+      </summary>
+      {open && (
+        <div className="px-3 pb-3">
+          <AttendanceErrorBoundary>
+            <Suspense fallback={<DashboardSkeleton variant="list" count={3} />}>
+              <TeacherAttendanceView />
+            </Suspense>
+          </AttendanceErrorBoundary>
+        </div>
+      )}
+    </details>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -354,6 +396,7 @@ function PrincipalContent() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [sideOpen, setSideOpen] = useState<boolean>(() => { try { return localStorage.getItem('principal.sideOpen') === '1'; } catch { return false; } });
+  const [attOpen, setAttOpen] = useState<boolean>(() => { try { return localStorage.getItem('principal.attOpen') !== '0'; } catch { return true; } });
   const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailOpen, setDetailOpen] = useState<null | 'rate' | 'late' | 'absent'>(null);
@@ -492,7 +535,7 @@ function PrincipalContent() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-bold">원장 대시보드</h1>
-          <p className="text-[11px] text-muted-foreground">위에서 아래로: 처리할 것 → 오늘 수업 → 주간 코멘트 → 일정·메모</p>
+          <p className="text-[11px] text-muted-foreground">위에서 아래로: 처리할 것 → 출석 체크 → 오늘 수업 → 주간 코멘트 → 일정·메모</p>
         </div>
         <div className="flex items-center gap-3">
           <LiveClock />
@@ -515,6 +558,9 @@ function PrincipalContent() {
 
           {/* CONSULT-LOG-V1 — 상담 후속조치 (없으면 안 보임) */}
           <ConsultFollowUpsCard />
+
+          {/* 출석 체크 — 반별 등원/지각/결석 (기본 펼침, 접힘 상태 기억) */}
+          <AttendanceCheckCard open={attOpen} onToggle={(o) => { setAttOpen(o); try { localStorage.setItem('principal.attOpen', o ? '1' : '0'); } catch { /* ignore */ } }} />
 
           {/* 오늘 수업 — 시간순, 진행 중 강조, 끝난 수업·빈 반은 접힘 */}
           <TodayClasses slots={classroomSlots} />
