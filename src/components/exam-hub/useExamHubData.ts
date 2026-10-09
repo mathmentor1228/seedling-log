@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import type {
   ArchiveRow, ClassInfo, Cycle, CycleSubject, DeepReportRow, ExamResult, ReportItemCount, ReportRow,
-  StudentRow, SubjectTeacherLink, Teacher, TextbookRow,
+  StudentRow, SubjectTeacherLink, Teacher, TextbookRow, WatchPost,
 } from './examHubUtils';
 
 const db = supabase as any;
@@ -24,6 +24,7 @@ export type ExamHubData = {
   itemCountByReport: Map<string, number>;
   textbooks: TextbookRow[];
   archives: ArchiveRow[];
+  posts: WatchPost[];
   reload: () => Promise<void>;
 };
 
@@ -42,12 +43,13 @@ export function useExamHubData(): ExamHubData {
   const [itemCountByReport, setItemCountByReport] = useState<Map<string, number>>(new Map());
   const [textbooks, setTextbooks] = useState<TextbookRow[]>([]);
   const [archives, setArchives] = useState<ArchiveRow[]>([]);
+  const [posts, setPosts] = useState<WatchPost[]>([]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [cy, su, st, ci, ln, tc, rs, rp, dp, it, tb, ar] = await Promise.all([
+      const [cy, su, st, ci, ln, tc, rs, rp, dp, it, tb, ar, po] = await Promise.all([
         db.from('exam_cycles').select('*').neq('status', 'cancelled').order('start_date', { ascending: true, nullsFirst: false }),
         db.from('exam_cycle_subjects').select('*').order('subject'),
         db.from('students').select('id, name, grade, school, school_level, grade_year, enrollment_status')
@@ -64,6 +66,7 @@ export function useExamHubData(): ExamHubData {
         db.from('school_textbooks').select('school_name, grade, subject, publisher, textbook_name, year'),
         db.from('school_exam_archives')
           .select('school_name, grade_year, academic_year, semester, exam_type, subject, performance_assessment_info, textbook_publisher, exam_scope, status'),
+        db.from('school_watch_log').select('*').order('created_at', { ascending: false }).limit(80),
       ]);
       if (cy.error) throw new Error(cy.error.message.includes('exam_cycles') ? '시험 사이클 테이블이 없습니다. Lovable에서 2026-09-15 마이그레이션을 먼저 적용해 주세요.' : cy.error.message);
 
@@ -85,6 +88,7 @@ export function useExamHubData(): ExamHubData {
       setItemCountByReport(counts);
       setTextbooks(((tb.data || []) as any[]).map(t => ({ ...t, school_name: normalizeSchool(t.school_name) })) as TextbookRow[]);
       setArchives(((ar.data || []) as any[]).map(a => ({ ...a, school_name: normalizeSchool(a.school_name) })) as ArchiveRow[]);
+      setPosts((po.data || []) as WatchPost[]);
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -94,5 +98,5 @@ export function useExamHubData(): ExamHubData {
 
   useEffect(() => { reload(); }, [reload]);
 
-  return { loading, error, cycles, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, reload };
+  return { loading, error, cycles, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, posts, reload };
 }

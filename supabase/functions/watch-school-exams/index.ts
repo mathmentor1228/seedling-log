@@ -210,5 +210,20 @@ Deno.serve(async (req) => {
     await admin.from('academy_schools').update({ last_checked_at: new Date().toISOString() }).eq('id', s.id);
     report.push(r);
   }
-  return json({ ok: true, neis: !!neisKey, schools: report });
+
+  // A-2(2026-10-09): 새 글에 PDF·이미지 첨부가 있으면 바로 AI로 읽어 사이클 초안을 채운다 (extract-school-notice).
+  // 실패해도 수집 결과는 그대로 반환한다.
+  const totalNew = report.reduce((n, r) => n + (r.boards?.newPosts || 0), 0);
+  let extraction: unknown = { skipped: 'no_new_posts' };
+  if (totalNew > 0 && body?.skip_extract !== true) {
+    try {
+      const ex = await fetch(`${supabaseUrl}/functions/v1/extract-school-notice`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'internal', limit: 5 }),
+      });
+      extraction = await ex.json().catch(() => ({ error: `http_${ex.status}` }));
+    } catch (e) { extraction = { error: String(e) }; }
+  }
+  return json({ ok: true, neis: !!neisKey, schools: report, extraction });
 });

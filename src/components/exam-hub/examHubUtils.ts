@@ -32,6 +32,11 @@ export type ReportRow = {
 export type DeepReportRow = { id: string; analysis_report_id: string; status: string; teacher_notes: string | null; published_at: string | null };
 export type ReportItemCount = { report_id: string; count: number };
 export type TextbookRow = { school_name: string; grade: number | null; subject: string; publisher: string | null; textbook_name: string | null; year: number | null };
+export type WatchPost = {
+  id: string; school_id: string | null; school_name: string; board_name: string | null; title: string; posted_on: string | null;
+  post_url: string | null; attachments: { name: string; url: string }[]; matched_keywords: string[];
+  status: 'new' | 'extracted' | 'applied' | 'ignored' | string; extracted: any | null; cycle_id: string | null; created_at: string;
+};
 export type ArchiveRow = {
   school_name: string; grade_year: number; academic_year: number; semester: string; exam_type: string; subject: string;
   performance_assessment_info: string | null; textbook_publisher: string | null; exam_scope: string | null; status: string;
