@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RootErrorBoundary } from './RootErrorBoundary';
 
 // 브라우저에 낡은 파일 조합이 남아 React 내부가 비었을 때 실제 나는 오류.
 const STALE_CACHE_MESSAGE = "Cannot read properties of null (reading 'useRef')";
+const RELOAD_KEY = '__chunk_reload_at';
 
 function Boom(): JSX.Element {
   throw new TypeError(STALE_CACHE_MESSAGE);
@@ -19,8 +19,6 @@ describe('RootErrorBoundary', () => {
     sessionStorage.clear();
     vi.restoreAllMocks();
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    // jsdom의 Location.reload는 인스턴스에서 직접 덮어쓸 수 없어 원형(prototype)을 가로챈다.
-    vi.spyOn(Object.getPrototypeOf(window.location) as object, 'reload').mockImplementation(() => {});
   });
 
   it('문제가 없으면 자식을 그대로 보여준다', () => {
@@ -49,19 +47,19 @@ describe('RootErrorBoundary', () => {
         <BoomChild />
       </RootErrorBoundary>,
     );
-    expect(window.location.reload).toHaveBeenCalledTimes(1);
-    expect(Number(sessionStorage.getItem('__chunk_reload_at'))).toBeGreaterThan(0);
+    // 새로고침 요청의 관찰 가능한 증거: main.tsx와共用하는 재시도 잠금장치가 기록된다.
+    expect(Number(sessionStorage.getItem(RELOAD_KEY))).toBeGreaterThan(0);
   });
 
-  it('안내의 새로고침 단추를 누르면 다시 시도한다', async () => {
+  it('방금 재시도한 직후면 다시 새로고침하지 않는다 (루프 방지)', () => {
+    const justNow = String(Date.now() - 1_000);
+    sessionStorage.setItem(RELOAD_KEY, justNow);
     render(
       <RootErrorBoundary>
         <BoomChild />
       </RootErrorBoundary>,
     );
-    const reload = window.location.reload as unknown as ReturnType<typeof vi.fn>;
-    reload.mockClear();
-    await userEvent.click(screen.getByRole('button', { name: '새로고침' }));
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('화면을 불러오지 못했습니다')).toBeInTheDocument();
+    expect(sessionStorage.getItem(RELOAD_KEY)).toBe(justNow);
   });
 });
