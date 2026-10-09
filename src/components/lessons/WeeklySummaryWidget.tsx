@@ -1,7 +1,7 @@
 // WEEKLY-COMMENT-V2: 이번 주 주간 코멘트가 없는 학생을 대시보드에 띄우고 그 자리에서 쓰게 한다.
 // - 모든 선생님·원장에게 보인다 (WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS 제외)
 // - 수요일부터 일요일까지만 보인다 (WEEKLY_COMMENT_REMINDER_FROM_WEEKDAY)
-// - 대상 학생 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑 (weeklyCommentRoster). 코멘트는 누가 썼든 이번 주 것이 있으면 완료로 본다.
+// - 대상 학생 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑 (weeklyCommentRoster). 완료 = 내가(이 과목 선생님이) 쓴 이번 주 코멘트가 있을 때.
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -51,8 +51,8 @@ export function WeeklySummaryWidget({ alwaysShow = false }: { alwaysShow?: boole
       const mine = roster.groups.find(g => g.teacherId === user.id);
       const rows: StudentRow[] = (mine?.students ?? []).map(st => ({
         id: st.id, name: st.name, school: st.school, grade_year: null, subject: st.subject || '수학',
-        // 코멘트는 누가 썼든 이번 주 것이 있으면 완료
-        hasSummary: (roster.commentsByStudent.get(st.id) ?? []).length > 0,
+        // 과목(선생님)별로 따로: 내가 쓴 이번 주 코멘트가 있어야 완료
+        hasSummary: (roster.commentsByStudent.get(st.id) ?? []).some(c => c.teacherId === user.id),
         noLessonYet: !st.sources.includes('lesson'),
       }));
       setRows(rows.sort((a, b) => Number(a.hasSummary) - Number(b.hasSummary) || a.name.localeCompare(b.name, 'ko')));

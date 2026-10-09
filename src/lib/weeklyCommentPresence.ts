@@ -11,7 +11,12 @@ export interface WeeklyCommentEditing {
   since: string; // ISO
 }
 
-/** presenceState() 결과를 학생ID → 편집자 목록으로 평탄화 */
+/** 현황판 키: 과목(선생님)별로 따로 관리한다 — 원장이 김한솔을 쓰는 동안 다른 선생님 줄의 김한솔은 파랗게 되면 안 된다 */
+export function presenceKey(teacherId: string, studentId: string): string {
+  return `${teacherId}:${studentId}`;
+}
+
+/** presenceState() 결과를 "선생님:학생" → 편집자 목록으로 평탄화 */
 export function flattenPresence(state: Record<string, unknown[]>): Map<string, WeeklyCommentEditing[]> {
   const out = new Map<string, WeeklyCommentEditing[]>();
   for (const metas of Object.values(state)) {
@@ -24,9 +29,10 @@ export function flattenPresence(state: Record<string, unknown[]>): Map<string, W
         week_start: String(m.week_start || ''),
         since: String(m.since || ''),
       };
-      const arr = out.get(e.student_id) ?? [];
+      const k = presenceKey(e.teacher_id, e.student_id);
+      const arr = out.get(k) ?? [];
       arr.push(e);
-      out.set(e.student_id, arr);
+      out.set(k, arr);
     }
   }
   return out;

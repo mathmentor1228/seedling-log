@@ -1,7 +1,7 @@
 // WEEKLY-COMMENT-V2: 원장 대시보드 — 이번 주 주간 코멘트 현황판 (전 강사, 실시간)
 // 초록 = 작성 완료 · 빨강 = 아직 미작성 · 파랑 = 지금 누군가 입력창을 열고 쓰는 중 (Realtime presence)
 // lesson_records 가 바뀌면(코멘트 저장 포함) 1.5초 뒤 자동 새로고침. 월~일 내내 보인다.
-// 원장 본인 수업 학생은 눌러서 바로 쓸 수 있고, 다른 선생님 학생은 마우스를 올리면 코멘트 본문이 보인다.
+// 과목(선생님)별로 따로 관리: 완료·작성 중은 (선생님, 학생) 단위. 본인 학생은 눌러서 바로 쓰고, 다른 선생님 학생은 누르면 내용·상태 팝업.
 // 명단은 weeklyCommentRoster(일지 ∪ 시간표 ∪ 담당 매핑) — 일지만 보면 아직 수업 안 한 학생이 빠진다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +11,8 @@ import { useAuth, isAdmin } from '@/lib/auth';
 import { Loader2, MessageSquareText, RefreshCw, ChevronRight } from 'lucide-react';
 import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS } from '@/lib/constants';
-import { WEEKLY_COMMENT_PRESENCE_CHANNEL, flattenPresence, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
+import { WEEKLY_COMMENT_PRESENCE_CHANNEL, flattenPresence, presenceKey, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WeeklySummaryDialog } from '@/components/lessons/WeeklySummaryDialog';
 import { fetchWeeklyCommentRoster, sourceLabel } from '@/lib/weeklyCommentRoster';
 
@@ -20,11 +21,10 @@ interface Cell {
   name: string;
   school: string | null;
   subject: string;
-  /** 이 강사가 쓴 이번 주 코멘트 */
+  /** 이 강사(과목)가 쓴 이번 주 코멘트 — 과목별로 따로 관리한다 */
   ownText: string | null;
-  /** 다른 선생님이 쓴 이번 주 코멘트 (이 강사는 안 씀) */
-  otherText: string | null;
-  otherBy: string | null;
+  /** 참고용: 다른 과목 선생님들이 쓴 이번 주 코멘트 */
+  others: { teacherName: string; text: string }[];
   /** 이번 주 일지가 아직 없고 시간표·매핑으로만 잡힌 학생 */
   noLessonYet: boolean;
   sourceNote: string;
@@ -37,6 +37,7 @@ export function WeeklyCommentBoard() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Map<string, WeeklyCommentEditing[]>>(new Map());
   const [picked, setPicked] = useState<Cell | null>(null);
+  const [peek, setPeek] = useState<{ cell: Cell; teacherId: string; teacherName: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const weekStart = getMondayOfWeek(new Date());
@@ -53,10 +54,10 @@ export function WeeklyCommentBoard() {
         cells: g.students.map(st => {
           const cs = roster.commentsByStudent.get(st.id) ?? [];
           const own = cs.find(x => x.teacherId === g.teacherId);
-          const other = cs.find(x => x.teacherId !== g.teacherId);
           return {
             studentId: st.id, name: st.name, school: st.school, subject: st.subject || '수학',
-            ownText: own?.text ?? null, otherText: other?.text ?? null, otherBy: other?.teacherName ?? null,
+            ownText: own?.text ?? null,
+            others: cs.filter(x => x.teacherId !== g.teacherId).map(x => ({ teacherName: x.teacherName, text: x.text })),
             noLessonYet: !st.sources.includes('lesson'), sourceNote: sourceLabel(st.sources),
           };
         }),
@@ -97,7 +98,7 @@ export function WeeklyCommentBoard() {
   const totals = useMemo(() => {
     let done = 0, missing = 0, busy = 0;
     for (const g of groups) for (const c of g.cells) {
-      const isBusy = (editing.get(c.studentId) || []).some(e => e.week_start === weekStart);
+      const isBusy = (editing.get(presenceKey(g.teacherId, c.studentId)) || []).some(e => e.week_start === weekStart);
       if (isBusy) busy += 1; else if (c.ownText) done += 1; else missing += 1;
     }
     return { done, missing, busy, all: done + missing + busy };
@@ -134,7 +135,7 @@ export function WeeklyCommentBoard() {
               {groups.map(g => {
                 const mine = g.teacherId === user.id;
                 const done = g.cells.filter(c => !!c.ownText).length;
-                const busy = g.cells.filter(c => (editing.get(c.studentId) || []).some(e => e.week_start === weekStart)).length;
+                const busy = g.cells.filter(c => (editing.get(presenceKey(g.teacherId, c.studentId)) || []).some(e => e.week_start === weekStart)).length;
                 const missing = g.cells.length - done;
                 const isOpen = mine || expanded.has(g.teacherId);
                 const pct = g.cells.length ? Math.round((done / g.cells.length) * 100) : 0;
@@ -157,29 +158,25 @@ export function WeeklyCommentBoard() {
                     </button>
                     {isOpen && <div className="flex flex-wrap gap-1 mt-2 pl-5">
                       {g.cells.map(c => {
-                        const busyBy = (editing.get(c.studentId) || []).filter(e => e.week_start === weekStart);
+                        const busyBy = (editing.get(presenceKey(g.teacherId, c.studentId)) || []).filter(e => e.week_start === weekStart);
                         const isBusy = busyBy.length > 0;
                         const cls = isBusy
                           ? 'bg-blue-500/15 text-blue-800 border-blue-500/50 animate-pulse'
                           : c.ownText
                             ? 'bg-emerald-500/15 text-emerald-800 border-emerald-500/40'
-                            : c.otherText
-                              ? 'bg-emerald-500/5 text-emerald-700 border-emerald-500/40 border-dashed'
-                              : 'bg-red-500/10 text-red-800 border-red-500/40';
+                            : 'bg-red-500/10 text-red-800 border-red-500/40';
                         const title = isBusy
-                          ? `${busyBy.map(e => e.teacher_name).join(', ')} 작성 중`
+                          ? `${busyBy.map(e => e.teacher_name).join(', ')} 작성 중 — 누르면 상태 보기`
                           : c.ownText
-                            ? c.ownText
-                            : c.otherText
-                              ? `${c.otherBy} 선생님이 작성: ${c.otherText}`
-                              : `${g.teacherName} 미작성 (${c.subject})${c.sourceNote ? ` · ${c.sourceNote}` : ''}`;
-                        const common = `inline-flex items-center h-6 px-2 rounded-md border text-[11px] ${cls}${c.noLessonYet && !c.ownText && !isBusy ? ' opacity-80' : ''}`;
-                        return mine ? (
-                          <button key={c.studentId} type="button" className={`${common} hover:brightness-95`} title={title} onClick={() => setPicked(c)}>
+                            ? '작성 완료 — 누르면 내용 보기'
+                            : `${g.teacherName} 미작성 (${c.subject})${c.sourceNote ? ` · ${c.sourceNote}` : ''}`;
+                        const common = `inline-flex items-center h-6 px-2 rounded-md border text-[11px] hover:brightness-95 ${cls}${c.noLessonYet && !c.ownText && !isBusy ? ' opacity-80' : ''}`;
+                        // 본인 학생은 바로 쓰기, 다른 선생님 학생은 내용·상태 팝업
+                        return (
+                          <button key={c.studentId} type="button" className={common} title={title}
+                            onClick={() => mine ? setPicked(c) : setPeek({ cell: c, teacherId: g.teacherId, teacherName: g.teacherName })}>
                             {c.name}
                           </button>
-                        ) : (
-                          <span key={c.studentId} className={common} title={title}>{c.name}</span>
                         );
                       })}
                     </div>}
@@ -189,10 +186,54 @@ export function WeeklyCommentBoard() {
             </div>
           )}
           <p className="text-[10px] text-muted-foreground leading-tight">
-            강사 줄을 누르면 학생 이름이 펼쳐집니다(본인은 항상 펼침). 명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 점선 초록 = 다른 과목 선생님이 쓴 코멘트만 있음. 이름에 마우스를 올리면 코멘트 본문(미작성이면 출처)이 보입니다. 본인 수업 학생은 눌러서 바로 씁니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
+            과목(선생님)별로 따로 관리합니다 — 같은 학생이라도 선생님마다 각자 써야 합니다. 강사 줄을 누르면 학생 이름이 펼쳐집니다(본인은 항상 펼침). 학생 이름을 누르면 본인 학생은 바로 쓰고, 다른 선생님 학생은 작성 내용·작성 중 여부가 팝업으로 보입니다. 명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
           </p>
         </CardContent>
       </Card>
+      {/* 다른 선생님 학생: 작성 내용·상태 열람 (읽기 전용) */}
+      <Dialog open={!!peek} onOpenChange={(o) => { if (!o) setPeek(null); }}>
+        <DialogContent className="max-w-md">
+          {peek && (() => {
+            const busyBy = (editing.get(presenceKey(peek.teacherId, peek.cell.studentId)) || []).filter(e => e.week_start === weekStart);
+            const status = busyBy.length ? 'busy' : peek.cell.ownText ? 'done' : 'missing';
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-base flex-wrap">
+                    {peek.cell.name}
+                    <Badge variant="outline" className="font-normal">{peek.teacherName} · {peek.cell.subject}</Badge>
+                    <Badge className={status === 'busy' ? 'bg-blue-500/15 text-blue-800 border-blue-500/40' : status === 'done' ? 'bg-emerald-500/15 text-emerald-800 border-emerald-500/40' : 'bg-red-500/10 text-red-800 border-red-500/40'}>
+                      {status === 'busy' ? `작성 중 · ${busyBy.map(e => e.teacher_name).join(', ')}` : status === 'done' ? '작성 완료' : '미작성'}
+                    </Badge>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm">
+                  {status === 'busy' && (
+                    <p className="text-xs text-muted-foreground">
+                      {busyBy[0]?.since ? `${new Date(busyBy[0].since).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}부터 ` : ''}입력창을 열어 두고 있습니다. 저장되면 이 창이 자동으로 바뀝니다.
+                    </p>
+                  )}
+                  {peek.cell.ownText ? (
+                    <p className="rounded-lg border bg-muted/30 p-3 whitespace-pre-wrap leading-relaxed">{peek.cell.ownText}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {peek.teacherName} 선생님이 아직 {peek.cell.subject} 코멘트를 쓰지 않았습니다.{peek.cell.sourceNote ? ` (${peek.cell.sourceNote})` : ''}
+                    </p>
+                  )}
+                  {peek.cell.others.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">참고 — 다른 과목 선생님의 이번 주 코멘트</p>
+                      {peek.cell.others.map((o, i) => (
+                        <p key={i} className="text-xs rounded-md border border-dashed p-2"><span className="font-medium">{o.teacherName}:</span> {o.text}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
       {picked && (
         <WeeklySummaryDialog
           open={!!picked}

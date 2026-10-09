@@ -74,12 +74,13 @@ export function WeeklySummaryDialog({ open, onOpenChange, studentId, studentName
     (async () => {
       setLoading(true);
       try {
-        // 이번 주 코멘트 (누가 썼든) + 이번 주 내가 적은 수업 기록
+        // 이번 주 내 코멘트(과목별 관리 — 다른 선생님 것은 불러오지 않음) + 이번 주 내가 적은 수업 기록
         const [{ data: existing }, { data: mine }] = await Promise.all([
           supabase
             .from('lesson_records')
             .select('id, weekly_summary')
             .eq('student_id', studentId)
+            .eq('teacher_id', user.id)
             .or(`weekly_summary_week.eq.${week},and(lesson_date.gte.${week},lesson_date.lte.${weekEnd})`)
             .not('weekly_summary', 'is', null)
             .order('lesson_date', { ascending: false })
