@@ -63,5 +63,8 @@ verify_jwt = false
 [functions.extract-school-notice]
 verify_jwt = false
 
+[functions.ingest-exam-sheet]
+verify_jwt = false
+
 [functions.generate-weekly-letter]
 verify_jwt = false
