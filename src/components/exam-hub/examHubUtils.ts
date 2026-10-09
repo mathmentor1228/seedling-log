@@ -63,10 +63,22 @@ export function studentInCycle(s: StudentRow, c: Cycle): boolean {
   return normalizeSchool(s.school) === normalizeSchool(c.school_name) && s.grade_year === c.grade_year;
 }
 
-/** 분석보고서가 이 사이클 것인가 — grade는 텍스트("고1") */
-export function reportInCycle(r: ReportRow, c: Cycle, key: { year: number; period: string }): boolean {
+/**
+ * 분석보고서가 이 사이클 것인가.
+ * 실측(2026-10-10): grade는 '1'/'2'/'3' 텍스트, exam_period는 '1학기'/'2학기', exam_type은 '중간고사'/'기말고사'.
+ * 옛 설계('1-a' 키, 'midterm')도 함께 받는다.
+ */
+export function reportInCycle(r: ReportRow, c: Cycle, key: { year: number; period: string; examType: 'midterm' | 'final' }): boolean {
   if (normalizeSchool(r.school_name) !== normalizeSchool(c.school_name)) return false;
-  if (r.exam_year !== key.year || r.exam_period !== key.period) return false;
+  if (Number(r.exam_year) !== key.year) return false;
+  const sem = key.period.startsWith('2') ? '2' : '1';
+  const p = String(r.exam_period || '').replace(/\s+/g, '');
+  const periodOk = p === key.period || p.startsWith(sem) || p.includes(`${sem}학기`);
+  if (!periodOk) return false;
+  const t = String(r.exam_type || '');
+  const typeOk = !t || (key.examType === 'midterm' ? /중간|midterm|1차/.test(t) : /기말|final|2차/.test(t))
+    || (p === key.period); // 옛 키('1-a')가 맞으면 유형 검사 생략
+  if (!typeOk) return false;
   const g = String(r.grade || '').replace(/\s+/g, '');
   return g === gradeLabel(c) || g === `${c.grade_year}` || g === `${c.grade_year}학년` || g.endsWith(`${c.grade_year}`);
 }
