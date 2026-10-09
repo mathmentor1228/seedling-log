@@ -9291,11 +9291,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_or_teacher: { Args: never; Returns: boolean }
       is_admin_staff: { Args: never; Returns: boolean }
       is_private_channel_member: {
         Args: { _user_id: string }
         Returns: boolean
       }
+      is_staff: { Args: never; Returns: boolean }
       office_task_target_status: {
         Args: { _category: string }
         Returns: string
