@@ -1,6 +1,6 @@
 // EXAM-ANALYSIS-PUBLIC-V1: shared card used in student & parent webs
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,11 +32,15 @@ interface Props {
   report: PublishedReportLite;
   audience: 'student' | 'parent';
   studentId?: string | null;
-  /** Whether to log a view when the card mounts (default true) */
+  /** Whether to log a view (default true). 접힘 카드는 펼칠 때 1회 기록한다. */
   logView?: boolean;
+  /** 접힌 상태로 시작해 학부모가 눌러야 펼친다 (기본: 학부모 화면은 접힘, 학생 화면은 펼침). 관심 있어 누른 경우만 조회로 센다. */
+  collapsible?: boolean;
 }
 
-export function PublishedReportCard({ report, audience, studentId, logView = true }: Props) {
+export function PublishedReportCard({ report, audience, studentId, logView = true, collapsible }: Props) {
+  const startCollapsed = collapsible ?? audience === 'parent';
+  const [open, setOpen] = useState(!startCollapsed);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const paths = useMemo(
@@ -56,8 +60,8 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
   }, [paths]);
 
   useEffect(() => {
-    if (!logView) return;
-    // Best-effort view log; ignore errors silently
+    if (!logView || !open) return;
+    // Best-effort view log (펼쳐 본 경우만); ignore errors silently
     void (async () => {
       try {
         await (supabase as any).from('exam_analysis_report_views').insert({
@@ -67,7 +71,7 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
         });
       } catch (e) { /* noop */ }
     })();
-  }, [report.id, audience, studentId, logView]);
+  }, [report.id, audience, studentId, logView, open]);
 
   const message = audience === 'student' ? report.student_message : report.parent_message;
   const total = imageUrls.length;
@@ -76,9 +80,16 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
 
   const headerColor = audience === 'student' ? 'from-pink-500/10 to-orange-500/10' : 'from-primary/10 to-blue-500/10';
 
+  const teaser = [paths.length > 0 ? `카드뉴스 ${paths.length}장` : null, message ? '분석 요지' : null, report.avg_score != null ? `평균 ${report.avg_score}점` : null].filter(Boolean).join(' · ');
+
   return (
     <Card className={cn('overflow-hidden border-primary/20 shadow-card')}>
-      <div className={cn('bg-gradient-to-r px-4 py-3 border-b', headerColor)}>
+      <button
+        type="button"
+        onClick={() => startCollapsed && setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn('w-full bg-gradient-to-r px-4 py-3 text-left', open && 'border-b', headerColor, startCollapsed && 'cursor-pointer hover:brightness-95')}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[11px] text-muted-foreground">
@@ -87,13 +98,23 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
             <p className="truncate text-sm font-bold text-foreground">
               {report.school_name} {report.grade}학년 {report.subject}
             </p>
+            {!open && teaser && <p className="mt-0.5 text-[11px] text-muted-foreground">{teaser}</p>}
           </div>
-          <Badge variant="outline" className="shrink-0 gap-1 text-[10px]">
-            <Sparkles className="h-3 w-3" /> 분석
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Sparkles className="h-3 w-3" /> 분석
+            </Badge>
+            {startCollapsed && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                {open ? '접기' : '자세히 보기'}
+                <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </button>
 
+      {open && (
       <CardContent className="space-y-3 p-3">
         {total > 0 ? (
           <div className="relative overflow-hidden rounded-xl bg-muted">
@@ -190,6 +211,7 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
           </p>
         ) : null}
       </CardContent>
+      )}
     </Card>
   );
 }
