@@ -144,6 +144,12 @@ export function ExamPrepScheduleManager() {
 
   async function fetchAll() {
     setLoading(true);
+    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    // EXAM-PARTICIPANTS-V1: 아직 안 끝난 사이클에 미응시로 확정된 학생은 특강 후보에서 뺀다 (테이블 없으면 무시)
+    const optOutRes = await (supabase as any).from('exam_cycle_participants')
+      .select('student_id, exam_cycles!inner(end_date)').eq('status', 'not_taking').gte('exam_cycles.end_date', today)
+      .then((r: any) => r, () => ({ data: [] }));
+    const optOut = new Set<string>(((optOutRes?.data || []) as any[]).map(r => r.student_id));
     const [studRes, teachRes, classStudRes, schedRes, examRes] = await Promise.all([
       supabase.from('students').select('id, name, grade, school, school_level, grade_year').neq('enrollment_status', '퇴원').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
@@ -151,7 +157,7 @@ export function ExamPrepScheduleManager() {
       supabase.from('class_schedules').select('class_id, day_of_week, start_time, end_time, is_active, classes(name), class_students(student_id)').eq('is_active', true),
       supabase.from('school_exam_archives').select('school_name, exam_type, semester, exam_date_start, exam_date_end').not('exam_date_start', 'is', null),
     ]);
-    setStudents(studRes.data || []);
+    setStudents((studRes.data || []).filter((s: any) => !optOut.has(s.id)));
     setTeachers(teachRes.data || []);
     setSchoolExams((examRes.data || []) as SchoolExamInfo[]);
     const infos: ClassInfo[] = (classStudRes.data || []).map((cs: any) => ({

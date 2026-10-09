@@ -95,6 +95,8 @@ export const studentApi = {
 
   getDashboard: () => studentApiCall<{
     total_points: number;
+    /** EXAM-PARTICIPANTS-V1: 미응시로 확정된 시험이 남아 있으면 true → 시험 D-day 배너 숨김 */
+    hide_exam_schedule?: boolean;
     pending_homework: any[];
     upcoming_classes: any[];
     vocab_schedules?: any[];

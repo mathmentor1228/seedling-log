@@ -374,8 +374,24 @@ Deno.serve(async (req) => {
           });
         }
 
+        // EXAM-PARTICIPANTS-V1: 아직 안 끝난 시험에 미응시로 확정된 학생은 시험 D-day 배너를 숨긴다 (테이블 없으면 false)
+        let hideExamSchedule = false;
+        try {
+          const todayKstStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
+          const { data: optOuts } = await supabase
+            .from('exam_cycle_participants')
+            .select('status, exam_cycles(start_date, end_date)')
+            .eq('student_id', student_id)
+            .eq('status', 'not_taking');
+          hideExamSchedule = (optOuts || []).some((r: any) => {
+            const c = r.exam_cycles; const end = c?.end_date || c?.start_date;
+            return !!end && end >= todayKstStr;
+          });
+        } catch { hideExamSchedule = false; }
+
         result = {
           total_points: studentData?.total_points || 0,
+          hide_exam_schedule: hideExamSchedule,
           pending_homework: (homeworkData || []).filter((hw: any) => hw.content?.trim() !== '없음'),
           upcoming_classes: upcomingClasses,
           vocab_schedules: vocabScheduleRes.data || [],

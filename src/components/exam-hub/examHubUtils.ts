@@ -37,6 +37,10 @@ export type WatchPost = {
   post_url: string | null; attachments: { name: string; url: string }[]; matched_keywords: string[];
   status: 'new' | 'extracted' | 'applied' | 'ignored' | string; extracted: any | null; cycle_id: string | null; created_at: string;
 };
+/** EXAM-PARTICIPANTS-V1: 사이클별 응시 여부. 행 없음 = 응시 */
+export type Participant = { cycle_id: string; student_id: string; status: 'taking' | 'not_taking'; reason: string | null; decided_at: string };
+export type ParticipantView = 'taking' | 'not_taking' | 'confirm';
+
 export type ArchiveRow = {
   school_name: string; grade_year: number; academic_year: number; semester: string; exam_type: string; subject: string;
   performance_assessment_info: string | null; textbook_publisher: string | null; exam_scope: string | null; status: string;
@@ -61,6 +65,39 @@ export function gradeLabel(c: Pick<Cycle, 'school_level' | 'grade_year'>): strin
 /** 학생이 이 사이클 대상인가: 학교 정규화 + 학년 일치 */
 export function studentInCycle(s: StudentRow, c: Cycle): boolean {
   return normalizeSchool(s.school) === normalizeSchool(c.school_name) && s.grade_year === c.grade_year;
+}
+
+/**
+ * 응시가 애매한 이유 (하나라도 있으면 원장/선생님이 위에서 확정). 비어 있으면 그냥 '응시'.
+ *  - 최근 21일 마감 일지 없음 (장기 결석·휴원 전조)
+ *  - 학원 수강 과목이 연결돼 있지 않음 (반 배정도 담당 매핑도 없음)
+ *  - 직전 시험에서 미응시로 처리됨
+ */
+export function ambiguityReasons(args: {
+  student: StudentRow; cycle: Cycle; recentActiveIds: Set<string>; hasSubjects: boolean;
+  priorNotTaking: boolean;
+}): string[] {
+  const r: string[] = [];
+  if (!args.recentActiveIds.has(args.student.id)) r.push('최근 21일 수업 기록 없음');
+  if (!args.hasSubjects) r.push('수강 과목 연결 없음');
+  if (args.priorNotTaking) r.push('직전 시험 미응시');
+  return r;
+}
+
+/** 시험 회차 라벨 — 결과 테이블의 표기가 섞여 있어(1-a / 1학기 / None) 정규화해서 보여준다 */
+export function periodLabel(year: number | null, period: string | null, examType: string | null): string {
+  const y = year ? `${String(year).slice(2)}년` : '연도 미상';
+  const sem = period ? (period.includes('2') ? '2학기' : '1학기') : '';
+  const half = period && /-[ab]$/.test(period) ? (period.endsWith('a') ? '중간' : '기말')
+    : examType === 'midterm' || examType === '중간고사' ? '중간' : examType === 'final' || examType === '기말고사' ? '기말' : '';
+  return [y, sem, half].filter(Boolean).join(' ') || '회차 미상';
+}
+export function periodKey(year: number | null, period: string | null, examType: string | null): number {
+  const y = year || 0;
+  const sem = period ? (period.includes('2') ? 2 : 1) : 0;
+  const half = period && /-[ab]$/.test(period) ? (period.endsWith('a') ? 1 : 2)
+    : examType === 'midterm' || examType === '중간고사' ? 1 : examType === 'final' || examType === '기말고사' ? 2 : 0;
+  return y * 100 + sem * 10 + half;
 }
 
 /**
@@ -119,10 +156,12 @@ export function buildStudentSubjectRows(args: {
   cycle: Cycle; key: { year: number; period: string; examType: string };
   students: StudentRow[]; classInfos: ClassInfo[]; links: SubjectTeacherLink[]; teachers: Teacher[];
   results: ExamResult[]; cycleSubjects: string[];
+  /** EXAM-PARTICIPANTS-V1: 미응시로 확정된 학생은 행을 만들지 않는다 */
+  excludedStudentIds?: Set<string>;
 }): StudentSubjectRow[] {
-  const { cycle, key, students, classInfos, links, teachers, results, cycleSubjects } = args;
+  const { cycle, key, students, classInfos, links, teachers, results, cycleSubjects, excludedStudentIds } = args;
   const nameById = new Map(teachers.map(t => [t.id, t.full_name]));
-  const targets = students.filter(s => studentInCycle(s, cycle));
+  const targets = students.filter(s => studentInCycle(s, cycle) && !(excludedStudentIds?.has(s.id)));
   const subjectsByStudent = new Map<string, Map<string, string | null>>(); // subject -> teacherId
   const put = (sid: string, subject: string, tid: string | null, override: boolean) => {
     if (!subject) return;

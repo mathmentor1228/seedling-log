@@ -128,6 +128,7 @@ export default function StudentDashboard() {
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
+  const [hideExamSchedule, setHideExamSchedule] = useState(false);
 
   useEffect(() => {
     if (student?.id) {
@@ -162,6 +163,7 @@ export default function StudentDashboard() {
 
       if (data) {
         setTotalPoints(data.total_points);
+        setHideExamSchedule(!!data.hide_exam_schedule);
         // Filter out expired, closed, deadline-passed, and '없음' homework
         const filteredHomework = (data.pending_homework || []).filter((hw: any) =>
           hw.check_status === 'unchecked' &&
@@ -367,7 +369,8 @@ export default function StudentDashboard() {
       </div>
 
       {/* EXAM-DDAY-V1: Exam D-day countdown (filtered by student's school) */}
-      <ExamDdayBanner schoolFilter={student?.school || null} />
+      {/* EXAM-PARTICIPANTS-V1: 이번 시험을 안 보는 학생에게는 시험 일정을 보여주지 않는다 */}
+      {!hideExamSchedule && <ExamDdayBanner schoolFilter={student?.school || null} />}
 
       {/* Exam Prep Schedule Confirmation */}
       <StudentExamPrepSchedule />

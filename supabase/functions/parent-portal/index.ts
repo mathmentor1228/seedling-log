@@ -327,6 +327,21 @@ Deno.serve(async (req) => {
     const attendance = attendanceRes.data || [];
     const reports = reportRes.data || [];
 
+    // EXAM-PARTICIPANTS-V1: 미응시로 확정된 사이클(종료일이 오늘 이후) 기간 — 시험 일정 노출 제외용. 테이블 없으면 빈 배열.
+    let optOutRanges: { start: string; end: string }[] = [];
+    try {
+      const { data: optOuts } = await supabase
+        .from("exam_cycle_participants")
+        .select("status, exam_cycles(start_date, end_date)")
+        .eq("student_id", studentId)
+        .eq("status", "not_taking");
+      optOutRanges = (optOuts || [])
+        .map((r: any) => r.exam_cycles)
+        .filter((c: any) => c && (c.end_date || c.start_date))
+        .map((c: any) => ({ start: c.start_date || c.end_date, end: c.end_date || c.start_date }))
+        .filter((r: { start: string; end: string }) => r.end >= todayStr);
+    } catch { optOutRanges = []; }
+
     // Map lessons
     const lessons = rawLessons.map((l: any) => ({
       id: l.id,
@@ -392,6 +407,9 @@ Deno.serve(async (req) => {
               const endDate = (e.end_at || e.start_at).split('T')[0];
               if (endDate < todayStr) return false;
               if (schoolName && !e.title.includes(schoolName)) return false;
+              // EXAM-PARTICIPANTS-V1: 이 학생이 미응시로 확정된 사이클 기간과 겹치는 일정은 보내지 않는다
+              const startDate = e.start_at.split('T')[0];
+              if (optOutRanges.some(r => startDate <= r.end && endDate >= r.start)) return false;
               return true;
             })
             .map((e: any) => ({ id: e.id, title: e.title, start_at: e.start_at, end_at: e.end_at }));

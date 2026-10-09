@@ -1,6 +1,8 @@
 // EXAM-HUB-A: 내신대비 통합 화면 `/exam` — 메뉴 3개(보드·자료실·추이)를 사이클 기준 한 장으로.
 // 설계·단계: vault 19 — 내신대비 통합 개편안 (2026-10-09).
 // A-2(직관성): 맨 위 "오늘" 줄(가장 가까운 시험 D-day + 확인 필요 할 일) · 빈 배지 숨김 · 탭에 건수·설명.
+// A-3(2026-10-10 원장): ① 응시 여부(EXAM-PARTICIPANTS-V1) — 애매한 학생은 맨 위에서 응시/미응시 확정, 미응시는 대상·일정·특강에서 제외
+//                     ② 기록 보기(EXAM-HISTORY-V1) — 과거 시험까지 학생×과목 행에 회차를 가로로 펼친 점수 표
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -12,14 +14,16 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Bell, CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, Loader2, RefreshCw, Search, Users } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarClock, ClipboardCheck, FileBarChart2, GraduationCap, History, Loader2, RefreshCw, Search, Users, UserCog } from 'lucide-react';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { useExamHubData } from './useExamHubData';
 import {
-  buildStudentSubjectRows, cycleKey, cycleTitle, ddayLabel, ddayState, gradeLabel, reportInCycle, studentInCycle,
-  type Cycle,
+  ambiguityReasons, buildStudentSubjectRows, cycleKey, cycleTitle, ddayLabel, ddayState, gradeLabel, periodKey, reportInCycle, studentInCycle,
+  type Cycle, type Participant,
 } from './examHubUtils';
 import { ExamInfoTab } from './ExamInfoTab';
+import { ExamHistoryView } from './ExamHistoryView';
+import { ParticipantsConfirmPanel, ParticipantsManageList, type ParticipantCell } from './ExamParticipantsPanel';
 import { StudentResultsTab } from './StudentResultsTab';
 import { PaperAnalysisTab } from './PaperAnalysisTab';
 
@@ -48,6 +52,8 @@ export function ExamHub() {
   const [query, setQuery] = useState('');
   const [showPast, setShowPast] = useState(false);
   const [allCycles, setAllCycles] = useState(!isTeacher);
+  const [historyMode, setHistoryMode] = useState(params.get('view') === 'history');
+  const [manageOpen, setManageOpen] = useState(false);
   const today = getTodayKST();
 
   const tab: Tab = (TABS as readonly string[]).includes(params.get('tab') || '') ? (params.get('tab') as Tab) : 'info';
@@ -61,17 +67,46 @@ export function ExamHub() {
     return s;
   }, [data.classInfos, data.links, user?.id]);
 
+  // EXAM-PARTICIPANTS-V1: 사이클×학생 응시 결정 + 애매 판정
+  const participantByKey = useMemo(() => {
+    const m = new Map<string, Participant>();
+    data.participants.forEach(p => m.set(`${p.cycle_id}|${p.student_id}`, p));
+    return m;
+  }, [data.participants]);
+  const subjectsOf = useMemo(() => {
+    const m = new Map<string, number>();
+    data.classInfos.forEach(ci => { if (ci.subject) m.set(ci.student_id, (m.get(ci.student_id) || 0) + 1); });
+    data.links.forEach(l => { if (l.subject) m.set(l.student_id, (m.get(l.student_id) || 0) + 1); });
+    return m;
+  }, [data.classInfos, data.links]);
+
   const cycleCards = useMemo(() => {
+    // 직전 사이클(같은 학교·학년, 더 이른 시작일) 미응시 여부
+    const sorted = [...data.cycles].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
+    const prevCycleOf = (c: Cycle) => {
+      const same = sorted.filter(x => x.id !== c.id && normalizeSchool(x.school_name) === normalizeSchool(c.school_name) && x.grade_year === c.grade_year && (x.start_date || '') < (c.start_date || '9999'));
+      return same[same.length - 1] || null;
+    };
     return data.cycles.map(c => {
       const key = cycleKey(c);
       const subs = data.subjectsByCycle.get(c.id) || [];
       const cycleSubjects = subs.map(s => s.subject);
+      const prev = prevCycleOf(c);
+      const allTargets = data.students.filter(s => studentInCycle(s, c));
+      const cells: ParticipantCell[] = allTargets.map(s => {
+        const row = participantByKey.get(`${c.id}|${s.id}`) || null;
+        const priorNotTaking = !!prev && participantByKey.get(`${prev.id}|${s.id}`)?.status === 'not_taking';
+        const reasons = ambiguityReasons({ student: s, cycle: c, recentActiveIds: data.recentActiveIds, hasSubjects: (subjectsOf.get(s.id) || 0) > 0, priorNotTaking });
+        return { student: s, cycle: c, row, reasons };
+      });
+      const excluded = new Set(cells.filter(x => x.row?.status === 'not_taking').map(x => x.student.id));
+      const needConfirm = cells.filter(x => x.row === null && x.reasons.length > 0);
       const rows = buildStudentSubjectRows({
         cycle: c, key, students: data.students, classInfos: data.classInfos, links: data.links, teachers: data.teachers,
-        results: data.results, cycleSubjects,
+        results: data.results, cycleSubjects, excludedStudentIds: excluded,
       });
       const reports = data.reports.filter(r => reportInCycle(r, c, key));
-      const targets = data.students.filter(s => studentInCycle(s, c));
+      const targets = allTargets.filter(s => !excluded.has(s.id));
       const mine = targets.some(s => myStudentIds.has(s.id));
       const st = ddayState(c, today);
       const expected = rows.filter(r => r.status !== 'absent').length;
@@ -79,9 +114,9 @@ export function ExamHub() {
       const missing = rows.filter(r => r.status === 'missing' || r.status === 'score_empty').length;
       const scoped = subs.filter(s => !!s.scope).length;
       const newPosts = data.posts.filter(p => p.status === 'new' && normalizeSchool(p.school_name) === normalizeSchool(c.school_name)).length;
-      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, mine, st, expected, done, missing, scoped, newPosts };
+      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts };
     });
-  }, [data, myStudentIds, today]);
+  }, [data, myStudentIds, today, participantByKey, subjectsOf]);
 
   const visibleCards = useMemo(() => {
     const q = query.trim();
@@ -122,12 +157,18 @@ export function ExamHub() {
       if (soon && cc.subs.length === 0) todos.push({ label: `${c.school_name} ${gradeLabel(c)} 과목 정보 없음`, cycleId: c.id, tab: 'info', tone: 'warn' });
       if (cc.st.kind === 'after' && cc.missing > 0) todos.push({ label: `${c.school_name} ${gradeLabel(c)} 점수 미입력 ${cc.missing}명`, cycleId: c.id, tab: 'results', tone: 'warn' });
       if (cc.newPosts > 0) todos.push({ label: `${c.school_name} 학교 공지 새 글 ${cc.newPosts}`, cycleId: c.id, tab: 'info', tone: 'info' });
+      if ((cc.st.kind === 'before' || cc.st.kind === 'during' || cc.st.kind === 'unknown') && cc.needConfirm.length > 0) todos.push({ label: `${c.school_name} ${gradeLabel(c)} 응시 확인 ${cc.needConfirm.length}명`, cycleId: c.id, tab: 'info', tone: 'warn' });
     }
     // 같은 학교 공지는 한 번만
     const seen = new Set<string>();
     const dedup = todos.filter(t => { const k = t.label; if (seen.has(k)) return false; seen.add(k); return true; });
     return { live, next, todos: dedup.slice(0, 6) };
   }, [visibleCards]);
+
+  // 응시 확인 패널: 아직 안 끝난 사이클의 애매한 학생 (강사는 내 학생만)
+  const confirmCells = useMemo(() => visibleCards
+    .filter(cc => cc.st.kind !== 'after')
+    .flatMap(cc => cc.needConfirm.filter(x => !isTeacher || allCycles || myStudentIds.has(x.student.id))), [visibleCards, isTeacher, allCycles, myStudentIds]);
 
   useEffect(() => {
     if (data.loading) return;
@@ -141,6 +182,14 @@ export function ExamHub() {
 
   function select(c: Cycle, t?: Tab) { const p = new URLSearchParams(params); p.set('cycle', c.id); if (t) p.set('tab', t); setParams(p); }
   function setTab(t: string) { const p = new URLSearchParams(params); p.set('tab', t); setParams(p); }
+  function toggleHistory() {
+    const next = !historyMode; setHistoryMode(next);
+    const p = new URLSearchParams(params); if (next) p.set('view', 'history'); else p.delete('view'); setParams(p);
+  }
+  const lastResultLabel = useMemo(() => {
+    const ks = data.results.filter(r => r.exam_type !== 'performance').map(r => periodKey(r.exam_year, r.exam_period, r.exam_type));
+    return ks.length ? `${data.results.length}건` : '';
+  }, [data.results]);
 
   if (data.error) {
     return (
@@ -171,12 +220,28 @@ export function ExamHub() {
           <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="학교·학생·과목·연도" className="h-8 pl-7 w-[200px] text-xs" />
         </div>
         {isTeacher && <label className="flex items-center gap-1.5 text-xs"><Switch checked={allCycles} onCheckedChange={setAllCycles} />전체 학교</label>}
-        <label className="flex items-center gap-1.5 text-xs"><Switch checked={showPast} onCheckedChange={setShowPast} />지난 시험</label>
+        {!historyMode && <label className="flex items-center gap-1.5 text-xs"><Switch checked={showPast} onCheckedChange={setShowPast} />지난 시험</label>}
+        <Button size="sm" variant={historyMode ? 'default' : 'outline'} className="h-8 text-xs gap-1" onClick={toggleHistory} title="과거 시험까지 학생×과목 점수 표로">
+          <History className="w-3.5 h-3.5" />{historyMode ? '사이클로 돌아가기' : `기록 보기${lastResultLabel ? ` · ${lastResultLabel}` : ''}`}
+        </Button>
         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={data.reload} title="새로고침"><RefreshCw className="w-3.5 h-3.5" /></Button>
       </div>
 
+      {/* 기록 보기: 과거 시험까지 한 표 */}
+      {historyMode && !data.loading && (
+        <div className="rounded-lg border p-3 md:p-4 space-y-2">
+          <div className="flex items-center gap-2"><History className="w-4 h-4 text-muted-foreground" /><span className="font-semibold">시험 기록</span><span className="text-xs text-muted-foreground">재원생 기준 · 실점수 · 회차는 오래된 순</span></div>
+          <ExamHistoryView students={data.students} results={data.results} />
+        </div>
+      )}
+
+      {/* 응시 확인 필요 — 위에서 한 번 더 묻고 확정 */}
+      {!historyMode && !data.loading && (isAdmin || isTeacher) && (
+        <ParticipantsConfirmPanel cells={confirmCells} onSet={data.setParticipant} onSelectCycle={c => select(c)} />
+      )}
+
       {/* 오늘 줄 */}
-      {!data.loading && visibleCards.length > 0 && (
+      {!historyMode && !data.loading && visibleCards.length > 0 && (
         <div className="rounded-lg border bg-card p-3 md:p-4 flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0">
             {todayLine.live.map(cc => (
@@ -210,7 +275,7 @@ export function ExamHub() {
       )}
 
       {/* 사이클 타임라인 */}
-      {data.loading ? (
+      {historyMode ? null : data.loading ? (
         <div className="flex gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-[92px] w-[230px] rounded-lg" />)}</div>
       ) : visibleCards.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">
@@ -252,14 +317,22 @@ export function ExamHub() {
       )}
 
       {/* 선택 사이클 상세 */}
-      {selected && (
+      {!historyMode && selected && (
         <div className="rounded-lg border">
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             <GraduationCap className="w-4 h-4 text-muted-foreground" />
             <span className="font-semibold">{cycleTitle(selected.cycle)}</span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1"><Users className="w-3.5 h-3.5" />대상 {selected.targets.length}명</span>
+            <span className="text-xs text-muted-foreground flex items-center gap-1"><Users className="w-3.5 h-3.5" />대상 {selected.targets.length}명{selected.excluded.size > 0 ? ` · 미응시 ${selected.excluded.size}` : ''}{selected.needConfirm.length > 0 ? <span className="text-amber-700"> · 확인 필요 {selected.needConfirm.length}</span> : null}</span>
             <span className="text-xs text-muted-foreground flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{ddayLabel(selected.st)}</span>
+            {(isAdmin || isTeacher) && selected.allTargets.length > 0 && (
+              <Button size="sm" variant={manageOpen ? 'secondary' : 'ghost'} className="h-7 text-xs gap-1 ml-auto" onClick={() => setManageOpen(v => !v)}>
+                <UserCog className="w-3.5 h-3.5" />응시 대상 관리
+              </Button>
+            )}
           </div>
+          {manageOpen && (isAdmin || isTeacher) && (
+            <div className="px-4 pt-2"><ParticipantsManageList cells={selected.cells} onSet={data.setParticipant} /></div>
+          )}
           <Tabs value={tab} onValueChange={setTab} className="px-4 pb-4">
             <TabsList className="mt-3 h-9">
               <TabsTrigger value="info" className="text-xs">시험 정보<span className="ml-1 text-muted-foreground">{selected.subs.length > 0 ? `${selected.scoped}/${selected.subs.length}` : ''}</span>{selected.newPosts > 0 && <span className="ml-1 rounded-full bg-primary text-primary-foreground text-[10px] px-1.5">{selected.newPosts}</span>}</TabsTrigger>
@@ -299,7 +372,7 @@ export function ExamHub() {
         </div>
       )}
 
-      {!data.loading && selected && selected.targets.length > 0 && selected.rows.length === 0 && (
+      {!historyMode && !data.loading && selected && selected.targets.length > 0 && selected.rows.length === 0 && (
         <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
           {normalizeSchool(selected.cycle.school_name)} {gradeLabel(selected.cycle)} 재원생 {selected.targets.length}명 중 수강 과목·담당 선생님이 연결된 학생이 없습니다. 학생 관리에서 담당 선생님을 지정하면 결과 표와 누락 표시가 켜집니다.
         </div>

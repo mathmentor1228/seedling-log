@@ -48,8 +48,28 @@ Deno.serve(async (req) => {
         .neq("enrollment_status", "퇴원");
       if (sch.grade != null) studentsQ = studentsQ.eq("grade_year", sch.grade);
 
-      const { data: students } = await studentsQ;
-      if (!students || students.length === 0) continue;
+      const { data: studentsRaw } = await studentsQ;
+      if (!studentsRaw || studentsRaw.length === 0) continue;
+
+      // EXAM-PARTICIPANTS-V1: 이 시험(학교·학년·기간)에 미응시로 확정된 학생은 특강 제안에서 뺀다
+      let optOut = new Set<string>();
+      try {
+        const { data: po } = await supa
+          .from("exam_cycle_participants")
+          .select("student_id, exam_cycles!inner(school_name, grade_year, start_date, end_date)")
+          .eq("status", "not_taking")
+          .in("student_id", studentsRaw.map((s) => s.id));
+        for (const r of (po ?? []) as any[]) {
+          const c = r.exam_cycles;
+          if (!c) continue;
+          const sameSchool = String(c.school_name || "").replace(/(등학교|학교)$/, "") === String(sch.school_name || "").replace(/(등학교|학교)$/, "");
+          const sameGrade = sch.grade == null || c.grade_year === sch.grade;
+          const overlaps = !c.start_date || !c.end_date || (sch.start_date >= c.start_date && sch.start_date <= c.end_date);
+          if (sameSchool && sameGrade && overlaps) optOut.add(r.student_id);
+        }
+      } catch { optOut = new Set(); }
+      const students = studentsRaw.filter((s) => !optOut.has(s.id));
+      if (students.length === 0) continue;
 
       const studentIds = students.map((s) => s.id);
 
