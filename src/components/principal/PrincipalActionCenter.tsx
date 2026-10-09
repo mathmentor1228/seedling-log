@@ -58,6 +58,7 @@ export function PrincipalActionCenter({
   const navigate = useNavigate();
   const alerts = usePrincipalAlerts();
   const [detail, setDetail] = useState<ActionItem | null>(null);
+  const [showBasis, setShowBasis] = useState(false);
 
   const items = useMemo<ActionItem[]>(() => {
     const list: ActionItem[] = [
@@ -131,7 +132,10 @@ export function PrincipalActionCenter({
               지금 처리할 것
             </h2>
             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-              기준 기간 {alerts.from} ~ {alerts.to} (KST · 최근 {ALERT_WINDOW_DAYS}일)
+              최근 {ALERT_WINDOW_DAYS}일 · 숫자를 누르면 해당 화면으로
+              <button type="button" className="ml-2 underline underline-offset-2 hover:text-foreground" onClick={() => setShowBasis(v => !v)}>
+                {showBasis ? '기준 설명 숨기기' : '기준 설명 보기'}
+              </button>
             </p>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={alerts.reload} aria-label="새로고침">
@@ -178,7 +182,7 @@ export function PrincipalActionCenter({
                     <span className="text-xs font-medium ml-0.5">{it.unit}</span>
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{it.basis}</p>
+                {showBasis && <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{it.basis}</p>}
                 <span className="text-[11px] text-primary inline-flex items-center mt-1">
                   자세히 보기 <ChevronRight className="w-3 h-3" />
                 </span>
@@ -223,9 +227,9 @@ export function PrincipalActionCenter({
           </div>
         )}
 
-        {!alerts.loading && !alerts.error && problems.length > 0 && (
+        {!alerts.loading && !alerts.error && problems.length > 0 && showBasis && (
           <p className="text-[11px] text-muted-foreground">
-            미작성·작성 중 숫자를 누르면 강사별 미마감 화면으로, 그 외 숫자는 해당 반·날짜 목록으로 이동합니다. 완료된 정상 건은 목록에 표시하지 않습니다.
+            기준 기간 {alerts.from} ~ {alerts.to} (KST). 미작성·작성 중 숫자를 누르면 강사별 미마감 화면으로, 그 외 숫자는 해당 반·날짜 목록으로 이동합니다. 완료된 정상 건은 목록에 표시하지 않습니다.
           </p>
         )}
       </CardContent>

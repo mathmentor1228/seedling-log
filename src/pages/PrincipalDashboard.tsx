@@ -1,35 +1,30 @@
-import { useState, useEffect, useCallback, useMemo, Component, lazy, Suspense, type ReactNode } from 'react';
-import { useAuth } from '@/lib/auth';
-import { safePercent } from '@/components/principal/unclosedScope';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { getAttendanceLabel, getPrimaryAttendanceStatus, isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, LogIn, LogOut, Users,
+  CheckCircle, Clock, XCircle, ChevronRight, LogIn, LogOut, Users, ClipboardList, CalendarDays, MessageSquare, Sunrise,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
 import { WeeklyCommentBoard } from '@/components/admin/WeeklyCommentBoard';
 import { ConsultFollowUpsCard } from '@/components/consult/ConsultFollowUpsCard';
-import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
-import useEmblaCarousel from 'embla-carousel-react';
 import { cn } from '@/lib/utils';
 
-const Dashboard = lazy(() => import('./Dashboard'));
+// PRINCIPAL-HOME-V2 (2026-10-09): 스와이프 패널을 없애고 한 페이지로. 위에서 아래로
+//   오늘 한 줄 요약 → 지금 처리할 것 → 상담 후속 → 오늘 수업(시간순) → 주간 코멘트 현황 → 일정·메모(접힘)
+// 옛 2번째 패널(수업 기록·마감·출석 체크)은 /teacher 로 버튼 연결.
 const TeamNotesBoard = lazy(() =>
   import('@/components/TeamNotesBoard').then((m) => ({ default: m.TeamNotesBoard }))
 );
 const AcademyCalendar = lazy(() =>
   import('@/components/AcademyCalendar').then((m) => ({ default: m.AcademyCalendar }))
-);
-const TeacherAttendanceView = lazy(() =>
-  import('@/components/TeacherAttendanceView').then((m) => ({ default: m.TeacherAttendanceView }))
 );
 
 /* ------------------------------------------------------------------ */
@@ -56,58 +51,6 @@ function LiveClock() {
       <p className="text-xs text-muted-foreground">{fmt}</p>
       <p className="text-lg font-mono font-bold text-foreground tabular-nums">{time}</p>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Stat Card with count-up                                            */
-/* ------------------------------------------------------------------ */
-function StatCard({ label, value, unit, sub, color, icon: Icon, onClick }: {
-  label: string; value: number; unit?: string; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
-  icon: React.ElementType;
-  onClick?: () => void;
-}) {
-  const colorMap = {
-    green: 'border-success/30 shadow-glow-success',
-    orange: 'border-warning/30 shadow-glow-warning',
-    red: 'border-destructive/30 shadow-glow-danger',
-    blue: 'border-primary/30 shadow-glow-primary',
-  };
-  const iconBg = {
-    green: 'bg-success/15 text-success',
-    orange: 'bg-warning/15 text-warning',
-    red: 'bg-destructive/15 text-destructive',
-    blue: 'bg-primary/15 text-primary',
-  };
-  const textColor = {
-    green: 'text-success',
-    orange: 'text-warning',
-    red: 'text-destructive',
-    blue: 'text-primary',
-  };
-
-  return (
-    <Card
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40' : ''}`}
-    >
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg[color]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-2xl font-bold ${textColor[color]}`}>
-            <AnimatedCounter value={value} />
-            {unit ?? ''}
-          </p>
-          {sub && <p className="text-2xs text-muted-foreground">{sub}</p>}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -140,139 +83,168 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Classroom View                                                     */
+/*  Today strip — 한 줄 요약                                            */
 /* ------------------------------------------------------------------ */
-function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upcoming' | 'past' }) {
-  const present = slot.students.filter(s => isPresent(s.status)).length;
-  const total = slot.students.length;
+function nowHHMM(): string {
+  const k = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return `${String(k.getUTCHours()).padStart(2, '0')}:${String(k.getUTCMinutes()).padStart(2, '0')}`;
+}
+function slotState(s: ClassroomSlot, now: string): 'active' | 'upcoming' | 'past' {
+  if (s.startTime && s.endTime && now >= s.startTime && now < s.endTime) return 'active';
+  if (s.endTime && now >= s.endTime) return 'past';
+  return 'upcoming';
+}
+
+function Chip({ icon: Icon, label, value, tone = 'neutral', onClick, title }: {
+  icon: React.ElementType; label: string; value: string; tone?: 'neutral' | 'green' | 'amber' | 'red' | 'blue';
+  onClick?: () => void; title?: string;
+}) {
+  const t = {
+    neutral: 'bg-muted/50 text-foreground border-border',
+    green: 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30',
+    amber: 'bg-amber-500/10 text-amber-800 border-amber-500/30',
+    red: 'bg-red-500/10 text-red-800 border-red-500/30',
+    blue: 'bg-primary/10 text-primary border-primary/30',
+  }[tone];
+  const cls = `inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${t} ${onClick ? 'cursor-pointer hover:brightness-95' : ''}`;
+  const body = (<><Icon className="w-3.5 h-3.5 shrink-0" /><span className="text-muted-foreground">{label}</span><span className="font-bold tabular-nums">{value}</span></>);
+  return onClick ? <button type="button" className={cls} onClick={onClick} title={title}>{body}</button> : <span className={cls} title={title}>{body}</span>;
+}
+
+function TodayStrip({ slots, logs, onOpen }: {
+  slots: ClassroomSlot[]; logs: AttendanceLog[]; onOpen: (k: 'rate' | 'late' | 'absent') => void;
+}) {
+  const [now, setNow] = useState(nowHHMM());
+  useEffect(() => { const t = setInterval(() => setNow(nowHHMM()), 30000); return () => clearInterval(t); }, []);
+  const real = slots.filter(s => s.students.length > 0);
+  const planned = new Set(real.flatMap(s => s.students.map(st => st.id))).size;
+  const first = real.map(s => s.startTime).filter(Boolean).sort()[0] || '';
+  const last = real.map(s => s.endTime).filter(Boolean).sort().pop() || '';
+  const active = real.filter(s => slotState(s, now) === 'active');
+  const next = real.filter(s => slotState(s, now) === 'upcoming').sort((a, b) => a.startTime.localeCompare(b.startTime))[0];
+  const checkedIn = logs.filter(l => l.checked_in_at).length;
+  const late = logs.filter(l => l.checked_in_at && new Date(l.checked_in_at).getMinutes() > 10).length;
+  const noCheckIn = logs.filter(l => !l.checked_in_at).length;
+  const beforeFirst = !!first && now < first;
+  const afterLast = !!last && now >= last;
 
   return (
-    <Card className={cn(
-      'border transition-all duration-200',
-      state === 'active' && 'border-emerald-400 shadow-md ring-1 ring-emerald-300/50',
-      state === 'upcoming' && 'border-border',
-      state === 'past' && 'border-border/40 opacity-45',
-    )}>
-      <CardContent className="p-3 space-y-2">
-        {/* 헤더 */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {state === 'active' && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white leading-tight">진행중</span>
-              )}
-              {state === 'past' && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-tight">종료</span>
-              )}
-              <span className={cn('text-xs font-semibold truncate', state === 'past' && 'text-muted-foreground')}>
-                {slot.className}
-              </span>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 leading-tight">{slot.subject}</Badge>
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {slot.teacherName}T · {slot.startTime}~{slot.endTime}
-            </p>
-          </div>
-          <span className={cn(
-            'text-xs font-mono shrink-0',
-            state === 'active' ? 'text-emerald-600 font-bold' : 'text-muted-foreground'
-          )}>
-            {present}/{total}명
-          </span>
-        </div>
-
-        {/* 학생 목록 */}
-        {total === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-1">배정된 학생 없음</p>
-        ) : (
-          <div className="flex flex-wrap gap-x-2 gap-y-1 max-h-28 overflow-y-auto">
-            {slot.students.map(s => {
-              const isLateStudent = isLate(s.status);
-              const isPresentStudent = isPresent(s.status) && !isLateStudent;
-              const isAbsentStudent = isAbsent(s.status);
-              const info = s.status
-                ? { label: getAttendanceLabel(s.status) || s.status, color: STATUS_COLOR[s.status] || 'text-muted-foreground' }
-                : null;
-              return (
-                <span
-                  key={s.id}
-                  title={info?.label || '수업 전'}
-                  className={cn(
-                    'inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap',
-                    isPresentStudent && 'text-emerald-600',
-                    isLateStudent && 'text-amber-600',
-                    isAbsentStudent && 'text-muted-foreground',
-                    !s.status && state === 'active' && 'text-foreground',
-                    !s.status && state !== 'active' && 'text-muted-foreground',
-                  )}
-                >
-                  <span className={cn(isAbsentStudent && 'line-through')}>{s.name}</span>
-                  {isLateStudent && (
-                    <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-amber-500/15 text-amber-600">지각</span>
-                  )}
-                  {isAbsentStudent && (
-                    <span className="text-[9px] leading-none px-1 py-0.5 rounded bg-muted text-muted-foreground">결석</span>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Chip icon={CalendarDays} label="오늘 수업" value={`${real.length}개 · ${planned}명`} />
+      {real.length === 0 ? (
+        <Chip icon={Sunrise} label="" value="오늘 예정 수업 없음" />
+      ) : beforeFirst ? (
+        <Chip icon={Sunrise} label="첫 수업" value={first} tone="blue" title="아직 수업 전이라 입실·지각은 집계하지 않습니다" />
+      ) : afterLast ? (
+        <Chip icon={CheckCircle} label="오늘 수업" value="종료" />
+      ) : (
+        <>
+          <Chip icon={Users} label="진행 중" value={`${active.length}개`} tone={active.length ? 'green' : 'neutral'} />
+          {next && <Chip icon={Clock} label="다음" value={`${next.startTime} ${next.className}`} />}
+        </>
+      )}
+      {!beforeFirst && real.length > 0 && (
+        <>
+          <Chip icon={LogIn} label="입실" value={`${checkedIn}/${planned || logs.length}`} tone="green" onClick={() => onOpen('rate')} title="출입 태그 기준" />
+          <Chip icon={Clock} label="지각" value={`${late}`} tone={late ? 'amber' : 'neutral'} onClick={() => onOpen('late')} />
+          <Chip icon={XCircle} label="미입실" value={`${noCheckIn}`} tone={noCheckIn ? 'red' : 'neutral'} onClick={() => onOpen('absent')} />
+        </>
+      )}
+    </div>
   );
 }
 
-function ClassroomView({ slots }: { slots: ClassroomSlot[] }) {
-  const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
-
-  const active   = slots.filter(s => nowStr >= s.startTime && nowStr <= s.endTime);
-  const upcoming = slots.filter(s => nowStr < s.startTime);
-  const past     = slots.filter(s => nowStr > s.endTime);
-
+/* ------------------------------------------------------------------ */
+/*  Today classes — 시간순 목록                                          */
+/* ------------------------------------------------------------------ */
+function SlotRow({ slot, state, isNext, defaultOpen }: { slot: ClassroomSlot; state: 'active' | 'upcoming' | 'past'; isNext: boolean; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const present = slot.students.filter(s => isPresent(s.status)).length;
+  const absent = slot.students.filter(s => isAbsent(s.status)).length;
+  const late = slot.students.filter(s => isLate(s.status)).length;
+  const total = slot.students.length;
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold flex items-center gap-1.5">
-        <Users className="w-4 h-4 text-primary" />
-        오늘 강의실 현황
-      </h2>
-
-      {slots.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">오늘 등록된 수업이 없습니다.</p>
-      ) : (
-        <div className="space-y-3">
-          {/* 진행중 */}
-          {active.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide">⬤ 진행중</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {active.map(s => <SlotCard key={s.scheduleId} slot={s} state="active" />)}
-              </div>
-            </div>
-          )}
-
-          {/* 예정 */}
-          {upcoming.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">예정</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {upcoming.map(s => <SlotCard key={s.scheduleId} slot={s} state="upcoming" />)}
-              </div>
-            </div>
-          )}
-
-          {/* 종료 */}
-          {past.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wide">종료</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {past.map(s => <SlotCard key={s.scheduleId} slot={s} state="past" />)}
-              </div>
-            </div>
-          )}
+    <div className={cn(
+      'rounded-lg border px-3 py-2',
+      state === 'active' && 'border-emerald-400 bg-emerald-500/5 border-l-4',
+      isNext && 'border-primary/50 border-l-4',
+      state === 'past' && 'opacity-60',
+    )}>
+      <button type="button" className="w-full flex items-center gap-3 text-left" onClick={() => setOpen(v => !v)}>
+        <span className="w-[88px] shrink-0 text-xs tabular-nums text-muted-foreground">{slot.startTime}~{slot.endTime}</span>
+        <span className="min-w-0 flex-1">
+          <span className="text-sm font-medium truncate">{slot.className}</span>
+          <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{slot.subject}</span>
+          <span className="ml-1.5 text-xs text-muted-foreground">{slot.teacherName}</span>
+          {state === 'active' && <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">진행 중</span>}
+          {isNext && <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">다음</span>}
+        </span>
+        <span className="shrink-0 text-xs tabular-nums">
+          {state === 'upcoming'
+            ? <span className="text-muted-foreground">{total}명</span>
+            : <span className={cn(present === total ? 'text-emerald-700' : absent ? 'text-red-700' : 'text-foreground')}>
+                출석 {present}/{total}{late ? ` · 지각 ${late}` : ''}{absent ? ` · 결석 ${absent}` : ''}
+              </span>}
+        </span>
+        <ChevronRight className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', open && 'rotate-90')} />
+      </button>
+      {open && (
+        <div className="mt-1.5 pl-[100px] flex flex-wrap gap-x-3 gap-y-1">
+          {slot.students.map(s => {
+            const info = s.status ? { label: getAttendanceLabel(s.status) || s.status, color: STATUS_COLOR[s.status] || 'text-muted-foreground' } : null;
+            return (
+              <span key={s.id} className={cn('text-xs', info ? info.color : 'text-foreground')} title={info?.label || (state === 'upcoming' ? '수업 전' : '출결 미기록')}>
+                {s.name}{info && state !== 'upcoming' ? <span className="ml-0.5 text-[10px] opacity-80">·{info.label}</span> : null}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
+  );
+}
+
+function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
+  const [now, setNow] = useState(nowHHMM());
+  useEffect(() => { const t = setInterval(() => setNow(nowHHMM()), 30000); return () => clearInterval(t); }, []);
+  const real = slots.filter(s => s.students.length > 0).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const empty = slots.filter(s => s.students.length === 0);
+  const active = real.filter(s => slotState(s, now) === 'active');
+  const upcoming = real.filter(s => slotState(s, now) === 'upcoming');
+  const past = real.filter(s => slotState(s, now) === 'past');
+  const nextId = upcoming[0]?.scheduleId;
+
+  return (
+    <Card>
+      <CardContent className="p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold flex items-center gap-1.5"><Users className="w-4 h-4 text-primary" /> 오늘 수업</h2>
+          <span className="text-[11px] text-muted-foreground">진행 {active.length} · 예정 {upcoming.length} · 종료 {past.length}</span>
+        </div>
+        {real.length === 0 && <p className="text-xs text-muted-foreground py-1">오늘 예정된 수업이 없습니다.</p>}
+        {active.map(s => <SlotRow key={s.scheduleId} slot={s} state="active" isNext={false} defaultOpen />)}
+        {upcoming.slice(0, 3).map(s => <SlotRow key={s.scheduleId} slot={s} state="upcoming" isNext={s.scheduleId === nextId} defaultOpen={false} />)}
+        {upcoming.length > 3 && (
+          <details className="rounded-lg border border-border/60 bg-muted/20 p-2">
+            <summary className="text-xs cursor-pointer list-none flex items-center gap-1.5 text-muted-foreground">
+              <ChevronRight className="w-3 h-3" /> 이후 수업 {upcoming.length - 3}개 더 보기
+            </summary>
+            <div className="mt-2 space-y-1.5">{upcoming.slice(3).map(s => <SlotRow key={s.scheduleId} slot={s} state="upcoming" isNext={false} defaultOpen={false} />)}</div>
+          </details>
+        )}
+        {past.length > 0 && (
+          <details className="rounded-lg border border-border/60 bg-muted/20 p-2">
+            <summary className="text-xs cursor-pointer list-none flex items-center gap-1.5 text-muted-foreground">
+              <ChevronRight className="w-3 h-3" /> 끝난 수업 {past.length}개
+            </summary>
+            <div className="mt-2 space-y-1.5">{past.map(s => <SlotRow key={s.scheduleId} slot={s} state="past" isNext={false} defaultOpen={false} />)}</div>
+          </details>
+        )}
+        {empty.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">배정 학생이 없는 반 {empty.length}개는 숨김 ({empty.map(s => `${s.startTime} ${s.className}`).slice(0, 4).join(', ')}{empty.length > 4 ? ' …' : ''}). 시간표에서 정리하면 사라집니다.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -379,7 +351,9 @@ function AttendanceDetailDialog({
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [sideOpen, setSideOpen] = useState<boolean>(() => { try { return localStorage.getItem('principal.sideOpen') === '1'; } catch { return false; } });
   const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailOpen, setDetailOpen] = useState<null | 'rate' | 'late' | 'absent'>(null);
@@ -502,11 +476,6 @@ function PrincipalContent() {
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
 
-  const checkedIn = logs.filter(l => l.checked_in_at && !l.checked_out_at);
-  const checkedOut = logs.filter(l => l.checked_out_at);
-  const totalStudents = logs.length;
-  const attendanceRate = safePercent(checkedIn.length + checkedOut.length, totalStudents);
-  const lateCount = logs.filter(l => l.checked_in_at && new Date(l.checked_in_at).getMinutes() > 10).length;
   const absentCount = logs.filter(l => !l.checked_in_at).length;
 
   if (loading) {
@@ -517,217 +486,74 @@ function PrincipalContent() {
       </div>
     );
   }
-
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">원장 대시보드</h1>
-        <LiveClock />
+    <div className="space-y-4">
+      {/* 헤더: 제목 · 시계 · 수업 관리로 가는 버튼 */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-lg font-bold">원장 대시보드</h1>
+          <p className="text-[11px] text-muted-foreground">위에서 아래로: 처리할 것 → 오늘 수업 → 주간 코멘트 → 일정·메모</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <LiveClock />
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate('/teacher')}>
+            <ClipboardList className="w-4 h-4" /> 수업 기록·마감
+          </Button>
+        </div>
       </div>
 
       <PageTransition>
-        <div className="space-y-5">
-          {/* PRINCIPAL-ACTION-V1 — 행동이 필요한 항목만 최상단 */}
+        <div className="space-y-4">
+          {/* 오늘 한 줄 요약 — 수업 전에는 입실·지각을 보여주지 않는다 */}
+          <TodayStrip slots={classroomSlots} logs={logs} onOpen={setDetailOpen} />
+
+          {/* PRINCIPAL-ACTION-V1 — 행동이 필요한 항목만 */}
           <PrincipalActionCenter
             todayNoCheckInCount={absentCount}
             onOpenNoCheckIn={() => setDetailOpen('absent')}
           />
 
-          {/* CONSULT-LOG-V1 — 상담 후속조치 예정/기한 지남 */}
+          {/* CONSULT-LOG-V1 — 상담 후속조치 (없으면 안 보임) */}
           <ConsultFollowUpsCard />
 
+          {/* 오늘 수업 — 시간순, 진행 중 강조, 끝난 수업·빈 반은 접힘 */}
+          <TodayClasses slots={classroomSlots} />
 
-          {/* 오늘 출입 태그 요약 (문제 없음 항목은 여기서 요약만) */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard
-              icon={CheckCircle}
-              label="오늘 입실률"
-              value={attendanceRate}
-              unit="%"
-              sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 · 출입 태그 기준`}
-              color="green"
-              onClick={() => setDetailOpen('rate')}
-            />
-            <StatCard
-              icon={Clock}
-              label="지각"
-              value={lateCount}
-              unit="명"
-              sub="오늘 · 출입 태그 기준"
-              color="orange"
-              onClick={() => setDetailOpen('late')}
-            />
-          </div>
+          {/* WEEKLY-COMMENT-V2 — 전 강사 주간 코멘트 현황 (실시간) */}
+          <WeeklyCommentBoard />
 
+          {/* 일정·메모 — 기본 접힘, 열림 상태 기억 */}
+          <details
+            className="rounded-xl border bg-card p-3"
+            open={sideOpen}
+            onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setSideOpen(o); try { localStorage.setItem('principal.sideOpen', o ? '1' : '0'); } catch { /* ignore */ } }}
+          >
+            <summary className="text-sm font-bold cursor-pointer list-none flex items-center gap-1.5">
+              <ChevronRight className={cn('w-4 h-4 transition-transform', sideOpen && 'rotate-90')} />
+              <CalendarDays className="w-4 h-4 text-primary" /> 원내 일정
+              <span className="mx-1 text-muted-foreground">·</span>
+              <MessageSquare className="w-4 h-4 text-primary" /> 코멘트/요청
+              <span className="ml-2 text-[11px] font-normal text-muted-foreground">일정 추가·메모는 여기서</span>
+            </summary>
+            {sideOpen && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
+                <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
+                  <AcademyCalendar />
+                </Suspense>
+                <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
+                  <TeamNotesBoard />
+                </Suspense>
+              </div>
+            )}
+          </details>
 
           <AttendanceDetailDialog
             kind={detailOpen}
             onClose={() => setDetailOpen(null)}
             logs={logs}
           />
-
-          {/* WEEKLY-COMMENT-V2: 전 강사 주간 코멘트 현황판 (실시간 · 초록=작성 · 빨강=미작성 · 파랑=작성 중) */}
-          <WeeklyCommentBoard />
-
-          {/* 강의실 수업 현황 */}
-          <ClassroomView slots={classroomSlots} />
-
-          {/* 일정 + 코멘트/요청 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
-              <AcademyCalendar />
-            </Suspense>
-            <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
-              <TeamNotesBoard />
-            </Suspense>
-          </div>
         </div>
       </PageTransition>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Swipeable Wrapper                                                   */
-/* ------------------------------------------------------------------ */
-const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
-
-class AttendanceErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(err: Error) { console.error('AttendanceCard crash:', err); }
-  render() {
-    if (this.state.hasError) return (
-      <Card className="border-destructive/20">
-        <CardContent className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">출결 데이터 로딩 오류</p>
-          <Button size="sm" variant="outline" className="mt-2" onClick={() => this.setState({ hasError: false })}>다시 시도</Button>
-        </CardContent>
-      </Card>
-    );
-    return this.props.children;
-  }
-}
-
-function AttendanceCardSafe() {
-  return (
-    <AttendanceErrorBoundary>
-      <Card className="border-primary/20">
-        <div className="flex items-center justify-between p-4 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-base">✅</span>
-            <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
-          </div>
-          <LiveClock />
-        </div>
-        <CardContent className="pt-0 px-3 pb-4">
-          <Suspense fallback={<DashboardSkeleton variant="list" count={3} />}>
-            <TeacherAttendanceView />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </AttendanceErrorBoundary>
-  );
-}
-
-function SwipeablePrincipal() {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [secondPanelMounted, setSecondPanelMounted] = useState(false);
-
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    const idx = emblaApi.selectedScrollSnap();
-    setActiveIndex(idx);
-    if (idx === 1) setSecondPanelMounted(true);
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    emblaApi.on('select', onSelect);
-    onSelect();
-    return () => { emblaApi.off('select', onSelect); };
-  }, [emblaApi, onSelect]);
-
-  const scrollTo = (idx: number) => {
-    if (idx === 1) setSecondPanelMounted(true);
-    emblaApi?.scrollTo(idx);
-  };
-
-  return (
-    <div className="space-y-3">
-      {/* Tab bar + arrows */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-          disabled={activeIndex === 0}
-          onClick={() => scrollTo(activeIndex - 1)}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-
-        <div className="flex-1 flex justify-center gap-2">
-          {PANEL_LABELS.map((label, i) => (
-            <button
-              key={i}
-              onClick={() => scrollTo(i)}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
-                activeIndex === i
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <Button
-          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-          disabled={activeIndex === PANEL_LABELS.length - 1}
-          onClick={() => scrollTo(activeIndex + 1)}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Dot indicators */}
-      <div className="flex justify-center gap-1.5">
-        {PANEL_LABELS.map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              "h-1.5 rounded-full transition-all duration-300",
-              activeIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
-            )}
-          />
-        ))}
-      </div>
-
-      {/* Swipeable panels */}
-      <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex">
-          <div className="flex-[0_0_100%] min-w-0">
-            <PrincipalContent />
-          </div>
-          <div className="flex-[0_0_100%] min-w-0 space-y-4">
-            {secondPanelMounted ? (
-              <Suspense fallback={<DashboardSkeleton variant="stats" />}>
-                <Dashboard hideAdminTools />
-                <div className="p-2">
-                  <AttendanceCardSafe />
-                </div>
-              </Suspense>
-            ) : (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                스와이프하여 수업 관리 패널 열기
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -735,7 +561,7 @@ function SwipeablePrincipal() {
 export default function PrincipalDashboard() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <SwipeablePrincipal />
+      <PrincipalContent />
     </ProtectedRoute>
   );
 }

@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin } from '@/lib/auth';
-import { Loader2, MessageSquareText, RefreshCw } from 'lucide-react';
+import { Loader2, MessageSquareText, RefreshCw, ChevronRight } from 'lucide-react';
 import { getMondayOfWeek, getSundayOfWeek } from '@/lib/weekUtils';
 import { WEEKLY_COMMENT_EXCLUDED_TEACHER_IDS } from '@/lib/constants';
 import { WEEKLY_COMMENT_PRESENCE_CHANNEL, flattenPresence, type WeeklyCommentEditing } from '@/lib/weeklyCommentPresence';
@@ -37,6 +37,7 @@ export function WeeklyCommentBoard() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Map<string, WeeklyCommentEditing[]>>(new Map());
   const [picked, setPicked] = useState<Cell | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const weekStart = getMondayOfWeek(new Date());
   const weekEnd = getSundayOfWeek(new Date());
@@ -133,15 +134,28 @@ export function WeeklyCommentBoard() {
               {groups.map(g => {
                 const mine = g.teacherId === user.id;
                 const done = g.cells.filter(c => !!c.ownText).length;
+                const busy = g.cells.filter(c => (editing.get(c.studentId) || []).some(e => e.week_start === weekStart)).length;
+                const missing = g.cells.length - done;
+                const isOpen = mine || expanded.has(g.teacherId);
+                const pct = g.cells.length ? Math.round((done / g.cells.length) * 100) : 0;
                 return (
                   <div key={g.teacherId} className="rounded-lg border p-2">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-xs font-semibold">
+                    <button type="button" className="w-full flex items-center gap-2 text-left"
+                      onClick={() => setExpanded(prev => { const n = new Set(prev); if (n.has(g.teacherId)) n.delete(g.teacherId); else n.add(g.teacherId); return n; })}>
+                      <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground transition-transform shrink-0 ${isOpen ? 'rotate-90' : ''}`} />
+                      <p className="text-xs font-semibold w-[72px] shrink-0 truncate">
                         {g.teacherName}{mine && <span className="ml-1 text-[10px] font-normal text-muted-foreground">(본인)</span>}
                       </p>
-                      <span className={`text-[11px] ${done === g.cells.length ? 'text-emerald-700' : 'text-muted-foreground'}`}>{done} / {g.cells.length}명</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
+                      <div className="flex-1 h-2 rounded-full bg-red-500/15 overflow-hidden" title={`작성 ${done} · 미작성 ${missing}`}>
+                        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className={`text-[11px] tabular-nums shrink-0 ${missing === 0 ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                        {done}/{g.cells.length}
+                        {missing > 0 && <span className="ml-1 text-red-700">미작성 {missing}</span>}
+                        {busy > 0 && <span className="ml-1 text-blue-700">작성 중 {busy}</span>}
+                      </span>
+                    </button>
+                    {isOpen && <div className="flex flex-wrap gap-1 mt-2 pl-5">
                       {g.cells.map(c => {
                         const busyBy = (editing.get(c.studentId) || []).filter(e => e.week_start === weekStart);
                         const isBusy = busyBy.length > 0;
@@ -168,14 +182,14 @@ export function WeeklyCommentBoard() {
                           <span key={c.studentId} className={common} title={title}>{c.name}</span>
                         );
                       })}
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
             </div>
           )}
           <p className="text-[10px] text-muted-foreground leading-tight">
-            명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 점선 초록 = 다른 과목 선생님이 쓴 코멘트만 있음. 이름에 마우스를 올리면 코멘트 본문(미작성이면 출처)이 보입니다. 본인 수업 학생은 눌러서 바로 씁니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
+            강사 줄을 누르면 학생 이름이 펼쳐집니다(본인은 항상 펼침). 명단 = 이번 주 일지 ∪ 활성 시간표 ∪ 담당 매핑. 점선 초록 = 다른 과목 선생님이 쓴 코멘트만 있음. 이름에 마우스를 올리면 코멘트 본문(미작성이면 출처)이 보입니다. 본인 수업 학생은 눌러서 바로 씁니다. 재진쌤(영어)은 포털 수업 코멘트로 갈음해 제외.
           </p>
         </CardContent>
       </Card>
