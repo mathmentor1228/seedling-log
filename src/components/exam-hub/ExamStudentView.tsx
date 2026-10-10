@@ -80,7 +80,8 @@ function useStudentTimeline(studentId: string | null, userId: string | null): Ti
       const st = e.status && !['confirmed', 'auto_confirmed', 'attended', 'completed'].includes(e.status) ? ` (${stLabel[e.status] || e.status})` : '';
       events.push({ kind: 'prep', scope: 'external', date: (e.confirmed_at || e.created_at).slice(0, 10), subject: co.subject, text: `${co.title || '내신 특강'}${co.deadline_date ? ` · 시험 ${co.deadline_date.slice(5).replace('-', '/')}` : ''}${st}`, by: null }); }
     const seen = new Set<string>();
-    const push = (kind: Kind, scope: Scope, w: any, text: string, date?: string) => { const t = clean(text); if (t.length < 2) return; const k = `${kind}|${w.subject}|${date || w.lesson_date}|${t}`; if (seen.has(k)) return; seen.add(k); events.push({ kind, scope, date: date || w.lesson_date, subject: w.subject, text: t, by: w.teacher_display_name }); };
+    const AUTO = /수업계획 자동 기록|자동 기록 · 확인:|\[자동\]/; // 수업계획 기능이 내부 메모에 남기는 자동 줄 — 사람이 쓴 코멘트가 아니므로 타임라인에서 뺀다
+    const push = (kind: Kind, scope: Scope, w: any, text: string, date?: string) => { const t = clean(text); if (t.length < 2 || AUTO.test(t)) return; const k = `${kind}|${w.subject}|${date || w.lesson_date}|${t}`; if (seen.has(k)) return; seen.add(k); events.push({ kind, scope, date: date || w.lesson_date, subject: w.subject, text: t, by: w.teacher_display_name }); };
     for (const w of (ws.data || []) as any[]) {
       push('comment', 'external', w, w.weekly_summary, w.weekly_summary_week || w.lesson_date);
       push('parent_line', 'external', w, w.notes);
