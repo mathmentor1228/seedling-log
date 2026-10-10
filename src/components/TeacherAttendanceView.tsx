@@ -804,7 +804,10 @@ export function TeacherAttendanceView() {
       await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
 
       // SIGNUP-ATT-V1: 선착순 수강신청 슬롯은 class_id 없이 lesson_types로 찾는다
-      const existingLessonQuery = activeSlot.isSignup
+      const absStudent = activeStudents.find(s => s.id === studentId);
+      const existingLessonQuery = (absStudent?.isSupplementary || activeSlot.isSupplementary)
+        ? supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('lesson_date', today).contains('lesson_types', ['보충수업']).limit(1).maybeSingle()
+        : activeSlot.isSignup
         ? supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('lesson_date', today).contains('lesson_types', ['선착순수강신청']).limit(1).maybeSingle()
         : supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('class_id', activeSlot.classId).eq('lesson_date', today).eq('subject', activeSlot.subject as any).maybeSingle();
       const { data: existingLesson } = await existingLessonQuery;
