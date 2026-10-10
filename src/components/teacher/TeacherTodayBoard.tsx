@@ -217,6 +217,12 @@ export function TeacherTodayBoard() {
             ))}
           </div>
         )}
+
+        <BatchSupplementaryModal
+          open={extraOpen}
+          onOpenChange={setExtraOpen}
+          onSaved={reload}
+        />
       </CardContent>
     </Card>
   );
