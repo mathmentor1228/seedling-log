@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Bell, CalendarClock, CalendarDays, ClipboardCheck, FileBarChart2, GraduationCap, History, ListChecks, Loader2, RefreshCw, Search, UserRound, Users, UserCog } from 'lucide-react';
+import { AlertTriangle, Bell, BookOpen, CalendarClock, CalendarDays, ClipboardCheck, FileBarChart2, GraduationCap, History, ListChecks, Loader2, RefreshCw, Search, UserRound, Users, UserCog } from 'lucide-react';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { useExamHubData } from './useExamHubData';
 import {
@@ -27,6 +27,7 @@ import { ExamHistoryView } from './ExamHistoryView';
 import { ParticipantsConfirmPanel, ParticipantsManageList, type ParticipantCell } from './ExamParticipantsPanel';
 import { ExamCloseoutReview } from './ExamCloseoutReview';
 import { ExamStudentView } from './ExamStudentView';
+import { ExamSubjectView } from './ExamSubjectView';
 import { HelpTip } from '@/components/ui/help-tip';
 import { StudentResultsTab } from './StudentResultsTab';
 import { PaperAnalysisTab } from './PaperAnalysisTab';
@@ -39,11 +40,14 @@ type Tab = (typeof TABS)[number];
 const PAST_WINDOW_DAYS = 45;
 const SCOPE_ALERT_DAYS = 21;
 const REVIEW_WINDOW_DAYS = 60;
-const MODES = ['schedule', 'review', 'student', 'history'] as const;
+const MODES = ['schedule', 'review', 'subject', 'student', 'history'] as const;
+/** 탭에 보이는 모드 (history는 ?view=history 호환용, 표는 기록·과목 안에 들어 있음) */
+const TAB_MODES = ['schedule', 'review', 'subject', 'student'] as const;
 type Mode = (typeof MODES)[number];
 const MODE_META: Record<Mode, { label: string; icon: React.ElementType; help: string }> = {
   schedule: { label: '일정', icon: CalendarDays, help: '다가오는 시험과 진행 중인 시험. 시험일·범위·수행평가·특강 준비.' },
   review: { label: '마감 점검', icon: ListChecks, help: `최근 끝난 시험의 점수·시험지·분석지가 다 들어왔는지 과목×선생님 격자로. 기록 기준점은 ${RESULT_TRACKING_SINCE.label}이며 그 이전 시험은 점검하지 않습니다.` },
+  subject: { label: '기록·과목', icon: BookOpen, help: '학교·학년·과목을 고르면 회차별 우리 학생 평균·분포, 시험지 특성(난도·논술형·영역·총평·티칭 메모), 범위 이력, 현재 학생 추이 표. 수업 준비와 신규 상담 요약용. 선생님은 담당 과목만.' },
   student: { label: '기록·학생', icon: UserRound, help: '학생 한 명의 과목별 점수 흐름과 학원의 조치(특강·클리닉·주간 코멘트·조치 메모). 원장은 전 과목 통합 상담 자료로, 과목 선생님은 자기 과목만 봅니다. "상담 요약 복사"로 바로 꺼내 씁니다.' },
   history: { label: '기록·표', icon: History, help: `과거 시험까지 학생×과목 점수 표. ${RESULT_TRACKING_SINCE.label}부터 전부 기록하고, 그 이전은 찾는 대로 채웁니다(빈 칸은 미입력이 아님). 과목별 학교 경향과 학생별 상담 화면은 다음 단계에서 여기로 들어옵니다.` },
 };
@@ -233,7 +237,7 @@ export function ExamHub() {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold flex items-center gap-2"><ClipboardCheck className="w-5 h-5" />내신대비</h1>
         <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 ml-1">
-          {MODES.map(m => { const M = MODE_META[m]; const Icon = M.icon; const cnt = m === 'review' ? reviewCards.filter(cc => cc.missing > 0 || cc.reports.length < Math.max(cc.subs.length, 1)).length : 0; return (
+          {TAB_MODES.map(m => { const M = MODE_META[m]; const Icon = M.icon; const cnt = m === 'review' ? reviewCards.filter(cc => cc.missing > 0 || cc.reports.length < Math.max(cc.subs.length, 1)).length : 0; return (
             <button key={m} type="button" onClick={() => setMode(m)} title={M.help}
               className={cn('inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', mode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
               <Icon className="w-3.5 h-3.5" />{M.label}{cnt > 0 && <span className="ml-0.5 rounded-full bg-red-500 text-white text-[10px] px-1.5">{cnt}</span>}
@@ -256,6 +260,15 @@ export function ExamHub() {
           <div className="flex items-center gap-2"><History className="w-4 h-4 text-muted-foreground" /><span className="font-semibold">시험 기록</span><span className="text-xs text-muted-foreground">재원생 기준 · 실점수 · 회차는 오래된 순{lastResultLabel ? ` · ${lastResultLabel}` : ''}</span></div>
           <ExamHistoryView students={data.students} results={data.results} />
         </div>
+      )}
+
+      {/* ③ 기록·과목 */}
+      {mode === 'subject' && !data.loading && (
+        <ExamSubjectView students={data.students} results={data.results} reports={data.reports} deepByReport={data.deepByReport}
+          cycles={data.cycles} subjectsByCycle={data.subjectsByCycle} archives={data.archives} links={data.links} classInfos={data.classInfos}
+          currentUserId={user?.id ?? null} isAdmin={isAdmin} isTeacher={isTeacher}
+          sel={params.get('school') && params.get('grade') && params.get('subject') ? { school: params.get('school')!, grade: Number(params.get('grade')), subject: params.get('subject')! } : null}
+          onSel={v => { const p = new URLSearchParams(params); p.set('mode', 'subject'); p.set('school', v.school); p.set('grade', String(v.grade)); p.set('subject', v.subject); setParams(p, { replace: true }); }} />
       )}
 
       {/* ④ 기록·학생 */}

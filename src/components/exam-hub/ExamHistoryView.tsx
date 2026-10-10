@@ -1,7 +1,7 @@
 // EXAM-HISTORY-V1: 과거 시험 기록을 한 표로. (원장 요청 2026-10-10: "최신 시험 기준으로만 보이고 과거 기록은 보기 불편")
 // 행 = 학생 × 과목, 열 = 시험 회차(오래된 → 최신), 칸 = 실점수(가채점만 있으면 괄호). 사이클이 없는 옛 시험(2023~)도 결과만 있으면 보인다.
 // 필터: 학교·학년 / 과목 / 학생 검색. 회차 표기는 periodLabel 로 정규화(1-a · 1학기 · None 혼재).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,7 +10,13 @@ import { cn } from '@/lib/utils';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
 import { periodKey, periodLabel, type ExamResult, type StudentRow } from './examHubUtils';
 
-interface Props { students: StudentRow[]; results: ExamResult[] }
+interface Props {
+  students: StudentRow[]; results: ExamResult[];
+  /** 기록·과목 모드에서 학교·학년·과목을 고정해 끼워 넣을 때 */
+  preset?: { schoolGrade?: string; subject?: string };
+  hideFilters?: boolean;
+}
+export function schoolGradeKey(s: Pick<StudentRow, 'school' | 'grade_year'>): string { return `${normalizeSchool(s.school) || '학교 미상'} ${s.grade_year ?? '?'}`; }
 
 const ALL = '__all__';
 
@@ -22,9 +28,10 @@ function baseSubject(s: string): string {
   return s;
 }
 
-export function ExamHistoryView({ students, results }: Props) {
-  const [schoolGrade, setSchoolGrade] = useState(ALL);
-  const [subject, setSubject] = useState(ALL);
+export function ExamHistoryView({ students, results, preset, hideFilters }: Props) {
+  const [schoolGrade, setSchoolGrade] = useState(preset?.schoolGrade || ALL);
+  const [subject, setSubject] = useState(preset?.subject || ALL);
+  useEffect(() => { if (preset) { setSchoolGrade(preset.schoolGrade || ALL); setSubject(preset.subject || ALL); } }, [preset?.schoolGrade, preset?.subject]); // eslint-disable-line react-hooks/exhaustive-deps
   const [q, setQ] = useState('');
   const [allPeriods, setAllPeriods] = useState(false);
   const RECENT = 8;
@@ -32,7 +39,7 @@ export function ExamHistoryView({ students, results }: Props) {
   const studentById = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
   const schoolGrades = useMemo(() => {
     const set = new Map<string, number>();
-    for (const s of students) { const k = `${normalizeSchool(s.school) || '학교 미상'} ${s.grade_year ?? '?'}`; set.set(k, (set.get(k) || 0) + 1); }
+    for (const s of students) { const k = schoolGradeKey(s); set.set(k, (set.get(k) || 0) + 1); }
     return [...set.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ko'));
   }, [students]);
 
@@ -55,7 +62,7 @@ export function ExamHistoryView({ students, results }: Props) {
       if (!st) continue; // 퇴원생 등 현재 명단 밖
       const subj = baseSubject(r.subject);
       if (subject !== ALL && subj !== subject) continue;
-      if (schoolGrade !== ALL && `${normalizeSchool(st.school) || '학교 미상'} ${st.grade_year ?? '?'}` !== schoolGrade) continue;
+      if (schoolGrade !== ALL && schoolGradeKey(st) !== schoolGrade) continue;
       if (q && !st.name.includes(q)) continue;
       const key = `${st.id}|${subj}`;
       const row = byKey.get(key) || { student: st, subject: subj, cells: new Map() };
@@ -80,6 +87,7 @@ export function ExamHistoryView({ students, results }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
+        {!hideFilters && <>
         <Select value={schoolGrade} onValueChange={setSchoolGrade}>
           <SelectTrigger className="h-8 w-[170px] text-xs"><SelectValue placeholder="학교·학년" /></SelectTrigger>
           <SelectContent>
@@ -94,6 +102,7 @@ export function ExamHistoryView({ students, results }: Props) {
             {['수학', '영어', '국어', '과학'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        </>}
         <Input value={q} onChange={e => setQ(e.target.value)} placeholder="학생 이름" className="h-8 w-[140px] text-xs" />
         {periodsWithData.length > RECENT && (
           <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAllPeriods(v => !v)}>
