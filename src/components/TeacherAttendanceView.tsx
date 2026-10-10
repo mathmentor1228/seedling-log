@@ -39,6 +39,8 @@ interface StudentAttendance {
   statusSource?: 'lesson' | 'log' | 'none';
   checkedInAt?: string | null;
   isEarly?: boolean;
+  /** 같은 시간대 정규 반에 합류한 보충수업 학생 */
+  isSupplementary?: boolean;
 }
 
 interface ScheduleSlot {
@@ -56,6 +58,8 @@ interface ScheduleSlot {
   /** SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 */
   isSignup?: boolean;
   signupStudentIds?: string[];
+  /** SUPP-MERGE-V1: 같은 시간대 정규 반에 합류한 보충 학생 */
+  mergedSuppStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -102,6 +106,11 @@ function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, 
           {student.statusSource === 'log' && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground" title="출입 태그 입실 로그 기준">
               입실 상태
+            </span>
+          )}
+          {student.isSupplementary && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
+              보충수업
             </span>
           )}
           {student.isEarly && (
@@ -289,7 +298,18 @@ export function TeacherAttendanceView() {
         if (!suppGroups.has(key)) suppGroups.set(key, { time, subject, studentIds: [] });
         suppGroups.get(key)!.studentIds.push(s.student_id);
       });
-      const suppSlots: ScheduleSlot[] = Array.from(suppGroups.entries()).map(([k, g]) => ({
+      // SUPP-MERGE-V1: 같은 시간대 정규 반이 있으면 그 명단에 합류 (같은 과목 우선)
+      const unmergedSupp: [string, { time: string; subject: string; studentIds: string[] }][] = [];
+      Array.from(suppGroups.entries()).forEach(([k, g]) => {
+        const sameTime = parsed.filter(p => p.classId && p.startTime === g.time);
+        const target = sameTime.find(p => p.subject === g.subject) || sameTime[0];
+        if (target) {
+          target.mergedSuppStudentIds = [...new Set([...(target.mergedSuppStudentIds || []), ...g.studentIds])];
+        } else {
+          unmergedSupp.push([k, g]);
+        }
+      });
+      const suppSlots: ScheduleSlot[] = unmergedSupp.map(([k, g]) => ({
         id: `supp-${k}`,
         classId: '',
         className: '보충수업',
@@ -351,7 +371,10 @@ export function TeacherAttendanceView() {
 
       const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && !s.isSignup && s.classId).map(s => s.classId))];
       const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
-      const suppIds = [...new Set(slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []))];
+      const suppIds = [...new Set([
+        ...slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []),
+        ...slots.flatMap(s => s.mergedSuppStudentIds || []),
+      ])];
       const signupIds = [...new Set(slots.filter(s => s.isSignup).flatMap(s => s.signupStudentIds || []))];
 
       let cs: { student_id: string; class_id: string }[] = [];
@@ -438,15 +461,17 @@ export function TeacherAttendanceView() {
             : slot.isSignup
               ? (slot.signupStudentIds || [])
               : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
-        map[slot.id] = slotStudentIds
+        const mergedSupp = new Set((slot.mergedSuppStudentIds || []).filter(id => !slotStudentIds.includes(id)));
+        map[slot.id] = [...slotStudentIds, ...mergedSupp]
           .map(sid => {
             const student = studentData.get(sid);
             if (!student) return null;
 
             const log = logMap.get(sid);
+            const isSuppStudent = !!slot.isSupplementary || mergedSupp.has(sid);
             const lesson = slot.isExamPrep
               ? null
-              : slot.isSupplementary
+              : isSuppStudent
                 ? (suppLessonMap.get(sid) || null)
                 : slot.isSignup
                   ? (signupLessonMap.get(sid) || null)
@@ -476,6 +501,7 @@ export function TeacherAttendanceView() {
               statusSource,
               checkedInAt: log?.checked_in_at ?? null,
               isEarly,
+              isSupplementary: isSuppStudent,
             } as StudentAttendance;
           })
           .filter((s): s is StudentAttendance => s !== null)
@@ -538,7 +564,7 @@ export function TeacherAttendanceView() {
   const activeSlot = useMemo(() => slots.find(s => s.id === activeSlotId) || null, [slots, activeSlotId]);
   const activeStudents = activeSlotId ? (studentMap[activeSlotId] || []) : [];
   // QUICK-LESSON-V1: 정규 반(class_id 있음)만 줄 아래 일지 입력 가능. 내신특강·보충·선착순은 기존 화면에서.
-  const quickLessonOk = !!activeSlot && !!activeSlot.classId && !activeSlot.isExamPrep && !activeSlot.isSupplementary && !activeSlot.isSignup;
+  const quickLessonOk = !!activeSlot && !activeSlot.isExamPrep && !activeSlot.isSignup && (!!activeSlot.classId || !!activeSlot.isSupplementary);
   const [openLesson, setOpenLesson] = useState<Set<string>>(new Set());
   useEffect(() => { setOpenLesson(new Set()); }, [activeSlotId]);
   const toggleLesson = (id: string) => setOpenLesson(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -641,6 +667,25 @@ export function TeacherAttendanceView() {
         if (clearLogsError) throw clearLogsError;
       }
 
+      // SUPP-MERGE-V1: 보충 학생은 보충 기록(반 없음)에 출결을 저장
+      const isSuppStudent = !!student.isSupplementary || !!activeSlot.isSupplementary;
+      if (isSuppStudent) {
+        const { data: suppLesson } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('lesson_date', today)
+          .contains('lesson_types', ['보충수업'])
+          .limit(1);
+        if (suppLesson?.length) {
+          const { error: suppUpdateError } = await supabase
+            .from('lesson_records')
+            .update({ attendance_status: lessonAttendanceStatus })
+            .eq('id', suppLesson[0].id);
+          if (suppUpdateError) console.warn('Supplementary journal sync skipped:', suppUpdateError);
+        }
+      }
+
       // SIGNUP-ATT-V1: 선착순 수강신청 슬롯은 class_id 없이 학생별 일지에 출결을 기록
       if (activeSlot.isSignup) {
         const { data: signupLesson } = await supabase
@@ -660,7 +705,7 @@ export function TeacherAttendanceView() {
       }
 
       // Skip lesson_records writes for exam-prep slots (no class_id)
-      if (!activeSlot.isExamPrep && !activeSlot.isSignup && activeSlot.classId) {
+      if (!isSuppStudent && !activeSlot.isExamPrep && !activeSlot.isSignup && activeSlot.classId) {
         const { data: existingLesson, error: existingLessonError } = await supabase
           .from('lesson_records')
           .select('id, lesson_range')
@@ -922,7 +967,8 @@ export function TeacherAttendanceView() {
                 <QuickLessonForm
                   studentId={student.id}
                   studentName={student.name}
-                  classId={activeSlot.classId}
+                  classId={student.isSupplementary ? null : activeSlot.classId}
+                  supplementary={!!student.isSupplementary}
                   subject={activeSlot.subject}
                   date={today}
                   teacherId={teacherId}
