@@ -82,6 +82,8 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
   // Entries
   const [entries, setEntries] = useState<SupplementEntry[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -92,13 +94,15 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
       setSharedTime('');
       setSharedSubject('');
       setSelectedStudentId('');
+      setPickerOpen(false);
+      setStudentSearch('');
     }
   }, [open]);
 
   async function fetchData() {
     setLoading(true);
     const [studentsRes, profilesRes] = await Promise.all([
-      supabase.from('students').select('id, name').neq('enrollment_status', '퇴원').order('name'),
+      supabase.from('students').select('id, name, school, school_level, grade_year').neq('enrollment_status', '퇴원').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
     ]);
     setStudents(studentsRes.data || []);
