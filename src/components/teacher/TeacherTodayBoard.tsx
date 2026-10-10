@@ -138,6 +138,16 @@ export function TeacherTodayBoard() {
               <Calendar className="h-3 w-3" />
               {selectedDayLabel}
             </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={() => setExtraOpen(true)}
+              title="예정에 없던 수업(보충 등)을 이 날짜에 추가합니다"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              수업 추가
+            </Button>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={reload} aria-label="새로고침">
               <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             </Button>
