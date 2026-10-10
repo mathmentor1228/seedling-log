@@ -1,7 +1,7 @@
 // INGEST-EXAM-SHEET-V1: 구글 시트(성적취합표)·드라이브(시험지 PDF)를 Apps Script가 밀어 넣는 수신 함수. (vault 19 §9, A안 2026-10-10)
 //  - 인증: 헤더 x-sheet-secret == EXAM_SHEET_SECRET (Apps Script Sync.gs와 같은 값)
 //  - action 'rows': 성적입력 탭 전체 → student_exam_results upsert (학교·학년·이름으로 학생 매칭, 동명이인은 미매칭으로 멈춤)
-//  - action 'file': PDF 1개(base64) → Storage exam-results 복사 + student_exam_result_pdfs upsert
+//  - action 'file': PDF 1개(base64, 또는 upload_url_only → 서명 URL로 직접 PUT 후 storage_path) → Storage exam-results + student_exam_result_pdfs upsert
 //  원칙: 시트가 원본. 시트 값이 비면 기존 값을 NULL로 덮지 않는다. 수동 입력(source NULL) 점수는 실점수가 있을 때만 시트 값으로 갱신.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -130,8 +130,12 @@ Deno.serve(async (req) => {
 
   // ── file: 시험지 PDF 1개 ─────────────────────────────────────
   if (body.action === 'file') {
-    const f = body.file as { name?: string; drive_file_id?: string; modified?: string; size?: number; data_base64?: string; subject_folder?: string } | undefined;
-    if (!f?.name || (!f.data_base64 && !body.dry_run)) return json({ error: 'file {name, data_base64} required' }, 400);
+    const f = body.file as { name?: string; drive_file_id?: string; modified?: string; size?: number; data_base64?: string; subject_folder?: string; storage_path?: string } | undefined;
+    // 큰 PDF(약 12MB 이상)는 base64 JSON이 함수 메모리 한도를 넘긴다(WORKER_RESOURCE_LIMIT). 그래서 2단계 경로를 둔다:
+    //   1) body.upload_url_only=true → 결과 행을 찾고/만들고 Storage 서명 업로드 URL을 돌려준다 (파일은 보내지 않음)
+    //   2) 호출자가 그 URL로 PDF를 직접 PUT한 뒤, file.storage_path 를 넣어 다시 호출 → DB 행만 기록
+    const twoStep = !!body.upload_url_only || !!f?.storage_path;
+    if (!f?.name || (!f.data_base64 && !body.dry_run && !twoStep)) return json({ error: 'file {name, data_base64} required' }, 400);
     const parsed = parseDriveName(f.name);
     const log = async (ok: boolean, reason?: string, detail?: any) => {
       await admin.from('exam_sheet_syncs').insert({
@@ -169,19 +173,34 @@ Deno.serve(async (req) => {
       if (error) { await log(false, error.message); return json({ ok: false, reason: error.message }, 500); }
       result = ins;
     }
-    // Storage 복사
-    const bytes = Uint8Array.from(atob(f.data_base64 || ""), c => c.charCodeAt(0));
     // Storage 키는 ASCII만 (한글 학교·과목명은 거부될 수 있음) — 학교·과목은 DB 행에 있으므로 경로엔 결과 id만
     const path = f.drive_file_id ? `sheet/${parsed.key.year}-${period}/${result.id}-${(f.drive_file_id as string).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60)}.pdf` : `sheet/${parsed.key.year}-${period}/${result.id}.pdf`;
-    const { error: upErr } = await admin.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
-    if (upErr) { await log(false, 'storage: ' + upErr.message); return json({ ok: false, reason: 'storage: ' + upErr.message }, 500); }
+    if (body.upload_url_only) {
+      const { data: signed, error: sErr } = await admin.storage.from('exam-results').createSignedUploadUrl(path, { upsert: true });
+      if (sErr || !signed) return json({ ok: false, reason: 'signed url: ' + (sErr?.message || 'none') }, 500);
+      return json({ ok: true, step: 'upload_url', result_id: result.id, path, signed_url: signed.signedUrl, token: signed.token, warning: m.reason });
+    }
+    let bytesLen = 0;
+    if (f.storage_path) {
+      // 2단계: 이미 PUT된 파일. 경로는 이 결과 행의 것만 허용
+      if (f.storage_path !== path) return json({ ok: false, reason: 'storage_path mismatch' }, 400);
+      const { data: head, error: hErr } = await admin.storage.from('exam-results').list(path.slice(0, path.lastIndexOf('/')), { search: path.slice(path.lastIndexOf('/') + 1) });
+      if (hErr || !head?.length) { await log(false, 'storage: uploaded file not found'); return json({ ok: false, reason: 'storage: uploaded file not found' }, 404); }
+      bytesLen = Number((head[0] as any).metadata?.size ?? 0);
+    } else {
+      // Storage 복사 (작은 파일은 base64 그대로)
+      const bytes = Uint8Array.from(atob(f.data_base64 || ""), c => c.charCodeAt(0));
+      bytesLen = bytes.length;
+      const { error: upErr } = await admin.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+      if (upErr) { await log(false, 'storage: ' + upErr.message); return json({ ok: false, reason: 'storage: ' + upErr.message }, 500); }
+    }
     // 같은 결과 행에 PDF가 여러 장일 수 있다(고3 확통+미적분, 언어와매체+화법과작문). 파일 단위(drive_file_id)로 찾고 없으면 새 행.
     const fileKey = f.drive_file_id ?? null;
     let pdfRow: any = null;
     if (fileKey) { const { data } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('drive_file_id', fileKey).maybeSingle(); pdfRow = data; }
     if (!pdfRow && !fileKey) { const { data } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('source', 'drive').maybeSingle(); pdfRow = data; }
     const safeId = (fileKey || 'file').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60);
-    const pdfPatch = { storage_path: path, display_title: (f as any).title || f.name.replace(/\.pdf$/i, ''), file_size: f.size ?? bytes.length, source: (body.source_label as string) || 'drive', drive_file_id: fileKey, drive_file_name: f.name, drive_modified_at: f.modified ?? null, generated_by_name: (body.source_label as string) === 'notion' ? '노션 과거자료 가져오기' : '드라이브 시험지 동기화' };
+    const pdfPatch = { storage_path: path, display_title: (f as any).title || f.name.replace(/\.pdf$/i, ''), file_size: f.size ?? bytesLen, source: (body.source_label as string) || 'drive', drive_file_id: fileKey, drive_file_name: f.name, drive_modified_at: f.modified ?? null, generated_by_name: (body.source_label as string) === 'notion' ? '노션 과거자료 가져오기' : '드라이브 시험지 동기화' };
     void safeId;
     if (pdfRow) await admin.from('student_exam_result_pdfs').update(pdfPatch).eq('id', pdfRow.id);
     else await admin.from('student_exam_result_pdfs').insert({ result_id: result.id, ...pdfPatch });
