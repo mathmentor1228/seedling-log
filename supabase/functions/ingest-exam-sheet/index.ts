@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
       result = ins;
     }
     // Storage 복사
-    const bytes = Uint8Array.from(atob(f.data_base64), c => c.charCodeAt(0));
+    const bytes = Uint8Array.from(atob(f.data_base64 || ""), c => c.charCodeAt(0));
     // Storage 키는 ASCII만 (한글 학교·과목명은 거부될 수 있음) — 학교·과목은 DB 행에 있으므로 경로엔 결과 id만
     const path = `sheet/${parsed.key.year}-${period}/${result.id}.pdf`;
     const { error: upErr } = await admin.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
