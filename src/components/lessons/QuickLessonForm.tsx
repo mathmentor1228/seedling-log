@@ -24,14 +24,19 @@ const CHECK_LABEL: Record<string, string> = { checked: '확인됨', unchecked: '
 interface Props {
   studentId: string;
   studentName: string;
-  classId: string;
+  /** 보충수업 학생이면 null (보충 기록은 반 없이 저장됨) */
+  classId: string | null;
   subject: string;
   date: string;       // YYYY-MM-DD
   teacherId: string;
   /** 출석 체크에서 등원/지각/결석 중 하나가 선택됐는가 (마감 조건) */
   attendanceMarked: boolean;
   onSaved?: () => void;
+  /** 보충수업 기록: '[보충 시간: HH:MM]' 표시를 숨기고 저장 시 그대로 유지 */
+  supplementary?: boolean;
 }
+
+const SUPP_TAG_RE = /\[보충\s*시간\s*[:：][^\]]*\]\s*/;
 
 interface Loaded {
   recordId: string | null;
@@ -53,13 +58,14 @@ const EMPTY: Loaded = {
   nextHomework: '', existingHw: [], prevHomework: [], notes: '', learningIssuesNote: '', internalNotes: '',
 };
 
-export function QuickLessonForm({ studentId, studentName, classId, subject, date, teacherId, attendanceMarked, onSaved }: Props) {
+export function QuickLessonForm({ studentId, studentName, classId, subject, date, teacherId, attendanceMarked, onSaved, supplementary }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [base, setBase] = useState<Loaded>(EMPTY);
   const [f, setF] = useState<Loaded>(EMPTY);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [suppTag, setSuppTag] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,16 +95,17 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
         nextHomework: hw.map(h => h.content).join('\n'),
         existingHw: hw.map(h => ({ id: h.id, content: h.content })),
         prevHomework: (prevRes.data || []) as any[],
-        notes: rec?.notes || '',
+        notes: supplementary ? (rec?.notes || '').replace(SUPP_TAG_RE, '').trim() : (rec?.notes || ''),
         learningIssuesNote: rec?.learning_issues_note || '',
         internalNotes: rec?.internal_notes || '',
       };
+      if (supplementary) setSuppTag(((rec?.notes || '').match(SUPP_TAG_RE)?.[0] || '').trim());
       setBase(loaded); setF(loaded);
       if (loaded.learningIssuesNote || loaded.internalNotes) setMoreOpen(true);
     } finally {
       setLoading(false);
     }
-  }, [studentId, date, subject]);
+  }, [studentId, date, subject, supplementary]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -123,11 +130,11 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
         understanding_score: f.understanding ? parseInt(f.understanding, 10) : null,
         homework_status: f.homeworkStatus,
         next_lesson_goal: f.nextGoal.trim() || null,
-        notes: f.notes.trim() || null,
+        notes: (supplementary && suppTag ? [suppTag, f.notes.trim()].filter(Boolean).join(' ') : f.notes.trim()) || null,
         learning_issues_note: f.learningIssuesNote.trim() || null,
         internal_notes: f.internalNotes.trim() || null,
       };
-      if (!f.recordId) payload.lesson_types = ['정규수업'];
+      if (!f.recordId) payload.lesson_types = supplementary ? ['보충수업'] : ['정규수업'];
       if (finalize) { payload.submitted = true; payload.submitted_at = new Date().toISOString(); }
       const res = await safeUpsertLessonRecord(payload, { preserveSubmitted: !finalize });
       if (res.error || !res.id) throw new Error(res.error?.message || '저장 실패');
