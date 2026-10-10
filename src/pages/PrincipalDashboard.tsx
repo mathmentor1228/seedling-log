@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  CheckCircle, Clock, XCircle, ChevronRight, LogIn, LogOut, Users, ClipboardList, CalendarDays, MessageSquare, Sunrise,
+  CheckCircle, Clock, XCircle, ChevronRight, LogIn, LogOut, Users, ClipboardList, CalendarDays, MessageSquare, Sunrise, Plus,
 } from 'lucide-react';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
 import { WeeklyCommentBoard } from '@/components/admin/WeeklyCommentBoard';
