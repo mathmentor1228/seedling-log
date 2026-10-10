@@ -296,6 +296,7 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
             <div className="mt-2 space-y-1.5">{past.map(s => <SlotRow key={s.scheduleId} slot={s} state="past" isNext={false} defaultOpen={false} />)}</div>
           </details>
         )}
+        <BatchSupplementaryModal open={extraOpen} onOpenChange={setExtraOpen} />
       </CardContent>
     </Card>
   );
