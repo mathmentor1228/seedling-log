@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn, getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar, Plus } from 'lucide-react';
 import { useTodayClasses, type TodayClassCard } from './useTodayClasses';
 import { getCardDisplay } from './cardStatus';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 
 
 function formatKoreanDay(dateStr: string): string {
