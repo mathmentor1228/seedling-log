@@ -190,5 +190,26 @@ Deno.serve(async (req) => {
     return json({ ok: true, student: m.student.name, result_id: result.id, warning: m.reason });
   }
 
+  // ── ensure_students: 과거 자료(노션 2025) 가져오기용 — 앱에 없는 학생을 '퇴원' 상태로 생성 (원장 결정 2026-10-11)
+  //    body.students = [{ name, school, grade }]  grade는 2025년 기준 표기('중3','고1'). 같은 학교·이름이 이미 있으면 만들지 않는다.
+  if (body.action === 'ensure_students') {
+    const list = (Array.isArray(body.students) ? body.students : []) as { name?: string; school?: string; grade?: string }[];
+    const created: any[] = []; const skipped: any[] = []; const errors: any[] = [];
+    for (const st of list) {
+      const name = normalizeName(st.name).replace(/_.*$/, ''); const school = normalizeSchool(st.school); const g = parseGrade(st.grade);
+      if (!name || !school) { errors.push({ ...st, error: '이름·학교 필요' }); continue; }
+      const exists = students.find(s => normalizeName(s.name) === name && normalizeSchool(s.school) === school);
+      if (exists) { skipped.push({ name, school, id: exists.id, status: exists.enrollment_status }); continue; }
+      if (body.dry_run) { created.push({ name, school, grade: st.grade, dry_run: true }); continue; }
+      const level = g.level || (school.endsWith('고') ? '고' : school.endsWith('중') ? '중' : school.endsWith('초') ? '초' : null);
+      const { data: ins, error } = await admin.from('students').insert({
+        name, school, school_level: level, grade_year: g.grade, grade: st.grade || null, enrollment_status: '퇴원',
+        notes: `2025 노션 과거자료 가져오기(${now.slice(0, 10)})로 생성. 학교·학년은 2025년 기준. 연락처·등록일 없음.`,
+      }).select('id').single();
+      if (error) errors.push({ name, school, error: error.message }); else { created.push({ name, school, grade: st.grade, id: ins.id }); students.push({ id: ins.id, name, school, school_level: level, grade_year: g.grade, enrollment_status: '퇴원' }); }
+    }
+    return json({ ok: true, created, skipped, errors });
+  }
+
   return json({ error: 'unknown action' }, 400);
 });
