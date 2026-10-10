@@ -430,7 +430,8 @@ export function ExamHub() {
               ) : (
               <StudentResultsTab rows={selected.rows} examLabel={`${selected.key.year} ${selected.cycle.semester} ${selected.cycle.exam_type}`}
                 syncs={data.syncs.filter(x => x.exam_year === selected.key.year && x.exam_period === selected.key.period)}
-                isTeacher={isTeacher} currentUserId={user?.id ?? null} />
+                isTeacher={isTeacher} currentUserId={user?.id ?? null}
+                isAdmin={isAdmin} examKey={selected.key} currentUserName={fullName ?? null} onChanged={data.reload} />
               )}
             </TabsContent>
             <TabsContent value="papers" className="mt-3">

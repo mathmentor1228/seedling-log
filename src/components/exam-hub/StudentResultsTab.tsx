@@ -1,6 +1,11 @@
 // EXAM-HUB-A ② 학생 결과 — 사이클 대상 학생×과목 표 + 누락 표시(vault 19 §15) + 과목별·선생님별 요약.
 // EXAM-SHEET-SYNC-V1(B단계): 점수 원본은 구글시트, 시험지는 드라이브. Apps Script가 15분마다 밀어 넣고 여기선 상태·미매칭·PDF 보기만.
+// EXAM-ADMIN-EDIT-V1(2026-10-10 원장): 원장 권한에서만 누락·공란 점수를 이 자리에서 바로 입력/수정하고 미응시 처리. source='manual'로 남기며,
+//   이후 시트에 값이 올라오면 시트 값이 덮어쓴다(시트 값이 비어 있으면 웹 입력을 유지).
 import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -8,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, ArrowDown, ArrowUp, FileText, Loader2, Minus, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, FileText, Loader2, Minus, Pencil, RefreshCw, Save, UserX, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { STATUS_META, type ResultPdf, type SheetSync, type StudentSubjectRow } from './examHubUtils';
@@ -20,7 +25,14 @@ interface Props {
   currentUserId: string | null;
   /** 이 사이클(연도·학기 키)의 동기화 기록, 최신순 */
   syncs?: SheetSync[];
+  /** EXAM-ADMIN-EDIT-V1: 원장만 점수 직접 입력 */
+  isAdmin?: boolean;
+  examKey?: { year: number; period: string; examType: string };
+  currentUserName?: string | null;
+  onChanged?: () => void;
 }
+
+const db = supabase as any;
 
 function Delta({ cur, prev }: { cur: number | null; prev: number | null }) {
   if (cur == null || prev == null) return <span className="text-muted-foreground">-</span>;
@@ -65,7 +77,35 @@ function PdfViewer({ pdf, title, onClose }: { pdf: ResultPdf | null; title: stri
   );
 }
 
-export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, syncs = [] }: Props) {
+export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, syncs = [], isAdmin = false, examKey, currentUserName, onChanged }: Props) {
+  const [edit, setEdit] = useState<{ key: string; expected: string; actual: string; note: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function startEdit(r: StudentSubjectRow) {
+    setEdit({ key: `${r.student.id}|${r.subject}`, expected: r.result?.expected_score != null ? String(r.result.expected_score) : '', actual: r.result?.actual_score != null ? String(r.result.actual_score) : '', note: r.result?.note || '' });
+  }
+  async function persist(r: StudentSubjectRow, mode: 'save' | 'absent') {
+    if (!examKey || !edit) return;
+    const toNum = (v: string) => { const t = v.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 && n <= 100 ? n : NaN; };
+    const expected = mode === 'absent' ? null : toNum(edit.expected); const actual = mode === 'absent' ? null : toNum(edit.actual);
+    if (Number.isNaN(expected) || Number.isNaN(actual)) { toast.error('점수는 0~100 숫자로 입력해 주세요'); return; }
+    let note = edit.note.trim();
+    if (mode === 'absent' && !note.includes('미응시')) note = note ? `미응시 · ${note}` : '미응시';
+    setSaving(true);
+    const now = new Date().toISOString();
+    const by = currentUserName || '원장';
+    const res = r.result
+      ? await db.from('student_exam_results').update({ expected_score: expected, actual_score: actual, note: note || null, source: 'manual', is_staff_upload: true, uploaded_by_staff: currentUserId, uploaded_by_staff_name: by, updated_at: now }).eq('id', r.result.id)
+      : await db.from('student_exam_results').insert({
+          student_id: r.student.id, school_name: r.student.school || '', subject: r.subject, exam_type: examKey.examType, exam_year: examKey.year, exam_period: examKey.period,
+          expected_score: expected, actual_score: actual, note: note || null, grade_at_exam: r.student.grade_year != null ? String(r.student.grade_year) : null,
+          is_staff_upload: true, uploaded_by_staff: currentUserId, uploaded_by_staff_name: by, source: 'manual', submitted_at: now, exam_date: null,
+        });
+    setSaving(false);
+    if (res.error) { toast.error('저장 실패: ' + res.error.message); return; }
+    toast.success(mode === 'absent' ? `${r.student.name} ${r.subject} 미응시 처리` : `${r.student.name} ${r.subject} 점수 저장`);
+    setEdit(null); onChanged?.();
+  }
   const [subject, setSubject] = useState('all');
   const [teacher, setTeacher] = useState('all');
   const [missingOnly, setMissingOnly] = useState(false);
@@ -241,8 +281,22 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
                     {r.teacherName || <span className="text-muted-foreground">미지정</span>}
                     {!r.teacherId && r.result?.sheet_teacher_name && <span className="ml-1 text-[10px] text-muted-foreground" title="시트의 담당선생님 열. 앱의 담당 매핑은 아직 없음">시트</span>}
                   </TableCell>
-                  <TableCell className="text-right text-sm">{r.result?.expected_score ?? <span className="text-muted-foreground">-</span>}</TableCell>
-                  <TableCell className="text-right text-sm font-medium">{r.result?.actual_score ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                  {isAdmin && edit?.key === `${r.student.id}|${r.subject}` ? (
+                    <>
+                      <TableCell className="text-right"><Input value={edit.expected} onChange={e => setEdit({ ...edit, expected: e.target.value })} inputMode="numeric" placeholder="가채점" className="h-7 w-16 text-xs text-right ml-auto" /></TableCell>
+                      <TableCell className="text-right"><Input value={edit.actual} onChange={e => setEdit({ ...edit, actual: e.target.value })} inputMode="numeric" placeholder="실점수" autoFocus className="h-7 w-16 text-xs text-right ml-auto" onKeyDown={e => { if (e.key === 'Enter') persist(r, 'save'); if (e.key === 'Escape') setEdit(null); }} /></TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell className="text-right text-sm">{r.result?.expected_score ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">
+                        {r.result?.actual_score ?? <span className="text-muted-foreground">-</span>}
+                        {isAdmin && r.status !== 'untracked' && (
+                          <button type="button" className="ml-1 inline-flex align-middle rounded p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-accent" title="원장 직접 입력" onClick={() => startEdit(r)}><Pencil className="w-3 h-3" /></button>
+                        )}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-right text-sm text-muted-foreground">{r.previousScore ?? '-'}</TableCell>
                   <TableCell className="text-right text-sm"><Delta cur={r.result?.actual_score ?? null} prev={r.previousScore} /></TableCell>
                   <TableCell className="text-center">
@@ -257,7 +311,21 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
                       </Tooltip>
                     )}
                   </TableCell>
-                  <TableCell><span className={cn('inline-block rounded px-1.5 py-0.5 text-[11px]', meta.cls)}>{meta.label}</span></TableCell>
+                  <TableCell>
+                    {isAdmin && edit?.key === `${r.student.id}|${r.subject}` ? (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Input value={edit.note} onChange={e => setEdit({ ...edit, note: e.target.value })} placeholder="비고" className="h-7 w-[110px] text-xs" />
+                        <Button size="icon" variant="default" className="h-7 w-7" disabled={saving} title="저장" onClick={() => persist(r, 'save')}>{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}</Button>
+                        <Button size="icon" variant="outline" className="h-7 w-7" disabled={saving} title="미응시 처리" onClick={() => persist(r, 'absent')}><UserX className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" disabled={saving} title="취소" onClick={() => setEdit(null)}><X className="w-3.5 h-3.5" /></Button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className={cn('inline-block rounded px-1.5 py-0.5 text-[11px]', meta.cls)}>{meta.label}</span>
+                        {r.result?.source === 'manual' && <span className="ml-1 text-[10px] text-muted-foreground" title={`웹에서 직접 입력${r.result.note ? ` · ${r.result.note}` : ''}`}>웹 입력</span>}
+                      </>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{r.result?.review_status ? r.result.review_status : '-'}</TableCell>
                 </TableRow>
               );
@@ -266,7 +334,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
         </Table>
       </div>
       <p className="text-xs text-muted-foreground">
-        대상 = 이 학교·학년 재원생 × 학원 수강 과목(담당 선생님 연결 기준) ∪ 성적취합표에 올라온 학생. 점수는 시트에서만 고칩니다. 미응시는 시트 비고에 "미응시"를 적으면 제외됩니다.
+        대상 = 이 학교·학년 재원생 × 학원 수강 과목(담당 선생님 연결 기준) ∪ 성적취합표에 올라온 학생. 점수 원본은 시트이며, {isAdmin ? '원장은 연필로 이 자리에서 바로 입력·수정하거나 미응시 처리할 수 있습니다(웹 입력 표시). 이후 시트에 값이 올라오면 시트 값이 우선합니다.' : '미응시는 시트 비고에 "미응시"를 적으면 제외됩니다.'}
       </p>
 
       <PdfViewer pdf={viewing?.pdf || null} title={viewing?.title || ''} onClose={() => setViewing(null)} />
