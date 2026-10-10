@@ -172,11 +172,17 @@ Deno.serve(async (req) => {
     // Storage 복사
     const bytes = Uint8Array.from(atob(f.data_base64 || ""), c => c.charCodeAt(0));
     // Storage 키는 ASCII만 (한글 학교·과목명은 거부될 수 있음) — 학교·과목은 DB 행에 있으므로 경로엔 결과 id만
-    const path = `sheet/${parsed.key.year}-${period}/${result.id}.pdf`;
+    const path = f.drive_file_id ? `sheet/${parsed.key.year}-${period}/${result.id}-${(f.drive_file_id as string).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60)}.pdf` : `sheet/${parsed.key.year}-${period}/${result.id}.pdf`;
     const { error: upErr } = await admin.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
     if (upErr) { await log(false, 'storage: ' + upErr.message); return json({ ok: false, reason: 'storage: ' + upErr.message }, 500); }
-    const { data: pdfRow } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('source', 'drive').maybeSingle();
-    const pdfPatch = { storage_path: path, display_title: f.name.replace(/\.pdf$/i, ''), file_size: f.size ?? bytes.length, source: 'drive', drive_file_id: f.drive_file_id ?? null, drive_file_name: f.name, drive_modified_at: f.modified ?? null, generated_by_name: '드라이브 시험지 동기화' };
+    // 같은 결과 행에 PDF가 여러 장일 수 있다(고3 확통+미적분, 언어와매체+화법과작문). 파일 단위(drive_file_id)로 찾고 없으면 새 행.
+    const fileKey = f.drive_file_id ?? null;
+    let pdfRow: any = null;
+    if (fileKey) { const { data } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('drive_file_id', fileKey).maybeSingle(); pdfRow = data; }
+    if (!pdfRow && !fileKey) { const { data } = await admin.from('student_exam_result_pdfs').select('id').eq('result_id', result.id).eq('source', 'drive').maybeSingle(); pdfRow = data; }
+    const safeId = (fileKey || 'file').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60);
+    const pdfPatch = { storage_path: path, display_title: (f as any).title || f.name.replace(/\.pdf$/i, ''), file_size: f.size ?? bytes.length, source: (body.source_label as string) || 'drive', drive_file_id: fileKey, drive_file_name: f.name, drive_modified_at: f.modified ?? null, generated_by_name: (body.source_label as string) === 'notion' ? '노션 과거자료 가져오기' : '드라이브 시험지 동기화' };
+    void safeId;
     if (pdfRow) await admin.from('student_exam_result_pdfs').update(pdfPatch).eq('id', pdfRow.id);
     else await admin.from('student_exam_result_pdfs').insert({ result_id: result.id, ...pdfPatch });
     await admin.from('student_exam_results').update({ synced_at: now }).eq('id', result.id);
