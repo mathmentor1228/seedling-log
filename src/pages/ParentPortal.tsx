@@ -7,7 +7,9 @@ import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
 import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
 import { TextbookAccountInfo } from '@/components/parent/TextbookAccountInfo';
 import { PublicAnnouncementBar } from '@/components/layout/PublicAnnouncementBar';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { periodKey, periodLabel } from '@/components/exam-hub/examHubUtils';
+import { baseSubject } from '@/components/exam-hub/ExamSubjectView';
 
 /* ═══════ Types ═══════ */
 interface StudentInfo { name: string; school: string | null; school_level: string | null; grade_year: number | null; grade: string | null; }
@@ -22,7 +24,9 @@ interface UpcomingSupplement { id: string; date: string; subject: string; range:
 interface UnpaidTextbook { id: string; textbook_name: string; subject: string; total_amount: number; created_at: string; }
 interface ExamPrepScheduleItem { course_id: string; subject: string; title: string; description: string | null; status: string; sessions: Array<{ session_label: string; schedule_date: string; start_time: string; end_time: string }>; }
 interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
+interface ExamTrendRow { exam_year: number; exam_period: string | null; exam_type: string | null; subject: string; score: number }
+interface AcademyAction { kind: 'comment' | 'message' | 'clinic' | 'note'; date: string; subject: string | null; text: string; by: string | null }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; exam_trend?: ExamTrendRow[]; academy_actions?: AcademyAction[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -187,6 +191,10 @@ export default function ParentPortal() {
         )}
 
         {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}
+
+        {/* PARENT-EXAM-TREND-V1: 시험 점수 흐름 + 학원의 조치 (학원 기록·학생 화면의 '학부모 공유 가능' 항목) */}
+        {data.exam_trend && data.exam_trend.length > 0 && <ExamTrendSection rows={data.exam_trend} studentName={student.name} />}
+        {data.academy_actions && data.academy_actions.length > 0 && <AcademyActionsSection actions={data.academy_actions} />}
 
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
@@ -579,6 +587,85 @@ function LearningTrendChart({ lessons }: { lessons: LessonRecord[] }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+/* ═══════ Exam Trend (PARENT-EXAM-TREND-V1) ═══════ */
+const TREND_COLOR: Record<string, string> = { '수학': '#2563EB', '영어': '#D97706', '국어': '#059669', '과학': '#7C3AED' };
+function ExamTrendSection({ rows, studentName }: { rows: ExamTrendRow[]; studentName: string }) {
+  const { points, subjects } = useMemo(() => {
+    const bySub = new Map<string, Map<number, { label: string; score: number }>>();
+    for (const r of rows) {
+      const s = baseSubject(r.subject); const k = periodKey(r.exam_year, r.exam_period, r.exam_type);
+      const m = bySub.get(s) || bySub.set(s, new Map()).get(s)!;
+      if (!m.has(k)) m.set(k, { label: periodLabel(r.exam_year, r.exam_period, r.exam_type), score: r.score });
+    }
+    const subjects = ['수학', '영어', '국어', '과학'].filter(s => bySub.has(s));
+    const keys = Array.from(new Set([...bySub.values()].flatMap(m => [...m.keys()]))).sort((a, b) => a - b).slice(-8);
+    const points = keys.map(k => { const row: any = { k, label: [...bySub.values()].map(m => m.get(k)?.label).find(Boolean) || '' }; for (const s of subjects) row[s] = bySub.get(s)!.get(k)?.score ?? null; return row; });
+    return { points, subjects };
+  }, [rows]);
+  if (points.length === 0 || subjects.length === 0) return null;
+  const last = points[points.length - 1];
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
+        <TrendingUp className="w-4 h-4 text-blue-500" />
+        <span className="text-xs font-bold text-gray-700">{studentName} 학교 시험 점수 흐름</span>
+        <span className="ml-auto text-[10px] text-gray-400">실점수 · 최근 {points.length}회차</span>
+      </div>
+      <div className="px-2 py-3" style={{ height: 190 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 9 }} stroke="#ccc" interval={0} angle={points.length > 5 ? -20 : 0} height={points.length > 5 ? 42 : 30} textAnchor={points.length > 5 ? 'end' : 'middle'} />
+            <YAxis domain={[0, 100]} ticks={[0, 50, 100]} tick={{ fontSize: 10 }} stroke="#ccc" width={28} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }} formatter={(v: any, n: any) => [`${v}점`, n]} />
+            {subjects.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} iconSize={8} />}
+            {subjects.map(s => <Line key={s} type="monotone" dataKey={s} name={s} stroke={TREND_COLOR[s] || '#64748B'} strokeWidth={2.5} dot={{ r: 3, fill: TREND_COLOR[s] || '#64748B' }} activeDot={{ r: 5 }} connectNulls isAnimationActive={false} />)}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="px-4 pb-3 flex flex-wrap gap-x-4 gap-y-1">
+        {subjects.map(s => {
+          const seq = points.map(p => p[s]).filter((v: any) => v != null) as number[];
+          if (seq.length === 0) return null;
+          const cur = seq[seq.length - 1]; const prev = seq.length >= 2 ? seq[seq.length - 2] : null; const d = prev != null ? cur - prev : null;
+          return <span key={s} className="text-[11px] text-gray-600"><span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ background: TREND_COLOR[s] }} />{s} <b className="text-gray-800">{cur}</b>{d != null && d !== 0 && <span className={d > 0 ? 'text-emerald-600' : 'text-red-600'}> {d > 0 ? `+${d}` : d}</span>}</span>;
+        })}
+        <span className="text-[10px] text-gray-400 w-full">{last.label} 기준 · 2026년 2학기 중간고사부터 모든 시험을 기록합니다. 그 이전은 확인된 점수만 보입니다.</span>
+      </div>
+    </div>
+  );
+}
+
+const ACTION_META: Record<AcademyAction['kind'], { label: string; cls: string }> = {
+  comment: { label: '선생님 코멘트', cls: 'bg-sky-50 text-sky-700' },
+  message: { label: '선생님 전달', cls: 'bg-sky-50 text-sky-700' },
+  clinic: { label: '클리닉', cls: 'bg-emerald-50 text-emerald-700' },
+  note: { label: '학원 조치', cls: 'bg-amber-50 text-amber-800' },
+};
+function AcademyActionsSection({ actions }: { actions: AcademyAction[] }) {
+  const [open, setOpen] = useState(false);
+  const list = open ? actions : actions.slice(0, 6);
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
+        <MessageSquare className="w-4 h-4 text-amber-500" />
+        <span className="text-xs font-bold text-gray-700">학원에서 하고 있는 것</span>
+        <span className="ml-auto text-[10px] text-gray-400">최근 6개월 · {actions.length}건</span>
+      </div>
+      <ul className="divide-y divide-gray-50">
+        {list.map((a, i) => { const m = ACTION_META[a.kind] || ACTION_META.note; return (
+          <li key={i} className="px-4 py-2 flex items-start gap-2 text-xs">
+            <span className="w-[40px] shrink-0 tabular-nums text-gray-400 pt-0.5">{a.date.slice(5).replace('-', '/')}</span>
+            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${m.cls}`}>{m.label}</span>
+            {a.subject && <span className="shrink-0 text-gray-500">{a.subject}</span>}
+            <span className="min-w-0 flex-1 text-gray-700 leading-snug">{a.text}{a.by && <span className="text-gray-400"> — {a.by}</span>}</span>
+          </li>); })}
+      </ul>
+      {actions.length > 6 && <button type="button" onClick={() => setOpen(v => !v)} className="w-full py-2 text-[11px] text-blue-600 hover:bg-gray-50">{open ? '접기' : `${actions.length - 6}건 더 보기`}</button>}
     </div>
   );
 }

@@ -342,6 +342,45 @@ Deno.serve(async (req) => {
         .filter((r: { start: string; end: string }) => r.end >= todayStr);
     } catch { optOutRanges = []; }
 
+    // PARENT-EXAM-TREND-V1 (2026-10-11): 시험 점수 흐름 + 학원의 조치(학부모 공유 가능 항목만) — 학원 기록·학생 화면과 같은 규칙
+    let examTrend: any[] = [];
+    let academyActions: any[] = [];
+    try {
+      const since180 = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+      const [trendRes, wsRes, clinicRes, notesRes] = await Promise.all([
+        supabase.from("student_exam_results").select("exam_year, exam_period, exam_type, subject, actual_score")
+          .eq("student_id", studentId).not("actual_score", "is", null).neq("exam_type", "performance").limit(300),
+        supabase.from("lesson_records").select("lesson_date, subject, teacher_display_name, weekly_summary, weekly_summary_week, parent_direct_message")
+          .eq("student_id", studentId).eq("submitted", true).gte("lesson_date", since180).order("lesson_date", { ascending: false }).limit(300),
+        supabase.from("clinic_records").select("clinic_date, subject, content, teacher_note, teacher_note_shown, teacher_display_name")
+          .eq("student_id", studentId).gte("clinic_date", since180).order("clinic_date", { ascending: false }).limit(60),
+        supabase.from("student_action_notes").select("note_date, subject, text, created_by_name")
+          .eq("student_id", studentId).eq("visibility", "external").gte("note_date", since180).order("note_date", { ascending: false }).limit(60)
+          .then((r: any) => r, () => ({ data: [] })),
+      ]);
+      examTrend = (trendRes.data || []).filter((r: any) => r.exam_year != null).map((r: any) => ({
+        exam_year: r.exam_year, exam_period: r.exam_period, exam_type: r.exam_type, subject: r.subject, score: r.actual_score,
+      }));
+      const clean = (t: any) => String(t || "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+      const seen = new Set<string>();
+      const pushAct = (kind: string, date: string, subject: string | null, text: string, by: string | null) => {
+        const t = clean(text); if (t.length < 2) return;
+        const k = `${kind}|${date}|${subject}|${t}`; if (seen.has(k)) return; seen.add(k);
+        academyActions.push({ kind, date, subject, text: t, by });
+      };
+      for (const w of (wsRes.data || []) as any[]) {
+        if (w.weekly_summary) pushAct("comment", w.weekly_summary_week || w.lesson_date, w.subject, w.weekly_summary, w.teacher_display_name);
+        if (w.parent_direct_message) pushAct("message", w.lesson_date, w.subject, w.parent_direct_message, w.teacher_display_name);
+      }
+      for (const c of (clinicRes.data || []) as any[]) {
+        if (c.content) pushAct("clinic", c.clinic_date, c.subject, c.content, c.teacher_display_name);
+        if (c.teacher_note_shown && c.teacher_note) pushAct("clinic", c.clinic_date, c.subject, c.teacher_note, c.teacher_display_name);
+      }
+      for (const n of ((notesRes && notesRes.data) || []) as any[]) pushAct("note", n.note_date, n.subject, n.text, n.created_by_name);
+      academyActions.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      academyActions = academyActions.slice(0, 40);
+    } catch { examTrend = []; academyActions = []; }
+
     // Map lessons
     const lessons = rawLessons.map((l: any) => ({
       id: l.id,
@@ -414,6 +453,8 @@ Deno.serve(async (req) => {
             })
             .map((e: any) => ({ id: e.id, title: e.title, start_at: e.start_at, end_at: e.end_at }));
         })(),
+        exam_trend: examTrend,
+        academy_actions: academyActions,
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
         published_analysis_reports: (publishedAnalysisRes.data || []).map((r: any) => ({
