@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  CheckCircle, Clock, XCircle, ChevronRight, LogIn, LogOut, Users, ClipboardList, CalendarDays, MessageSquare, Sunrise,
+  CheckCircle, Clock, XCircle, ChevronRight, LogIn, LogOut, Users, ClipboardList, CalendarDays, MessageSquare, Sunrise, Plus,
 } from 'lucide-react';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PrincipalActionCenter } from '@/components/principal/PrincipalActionCenter';
 import { WeeklyCommentBoard } from '@/components/admin/WeeklyCommentBoard';
@@ -249,6 +250,7 @@ function SlotRow({ slot, state, isNext, defaultOpen }: { slot: ClassroomSlot; st
 
 function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
   const [now, setNow] = useState(nowHHMM());
+  const [extraOpen, setExtraOpen] = useState(false);
   useEffect(() => { const t = setInterval(() => setNow(nowHHMM()), 30000); return () => clearInterval(t); }, []);
   const real = slots.filter(s => s.students.length > 0).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const empty = slots.filter(s => s.students.length === 0);
@@ -270,6 +272,10 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
             )}
           </h2>
           <span className="text-[11px] text-muted-foreground">진행 {active.length} · 예정 {upcoming.length} · 종료 {past.length}</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setExtraOpen(true)} title="예정에 없던 수업(보충 등)을 이 날짜에 추가합니다">
+            <Plus className="h-3.5 w-3.5" />
+            수업 추가
+          </Button>
         </div>
         {real.length === 0 && <p className="text-xs text-muted-foreground py-1">오늘 예정된 수업이 없습니다.</p>}
         {active.map(s => <SlotRow key={s.scheduleId} slot={s} state="active" isNext={false} defaultOpen />)}
@@ -290,6 +296,7 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
             <div className="mt-2 space-y-1.5">{past.map(s => <SlotRow key={s.scheduleId} slot={s} state="past" isNext={false} defaultOpen={false} />)}</div>
           </details>
         )}
+        <BatchSupplementaryModal open={extraOpen} onOpenChange={setExtraOpen} />
       </CardContent>
     </Card>
   );
