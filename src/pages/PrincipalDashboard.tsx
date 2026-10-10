@@ -272,6 +272,10 @@ function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
             )}
           </h2>
           <span className="text-[11px] text-muted-foreground">진행 {active.length} · 예정 {upcoming.length} · 종료 {past.length}</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setExtraOpen(true)} title="예정에 없던 수업(보충 등)을 이 날짜에 추가합니다">
+            <Plus className="h-3.5 w-3.5" />
+            수업 추가
+          </Button>
         </div>
         {real.length === 0 && <p className="text-xs text-muted-foreground py-1">오늘 예정된 수업이 없습니다.</p>}
         {active.map(s => <SlotRow key={s.scheduleId} slot={s} state="active" isNext={false} defaultOpen />)}
