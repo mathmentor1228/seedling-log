@@ -17,12 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+import { groupStudentsByGrade, getStudentGroupLabel } from '@/components/lessons/studentSelection';
 
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, X, Users } from 'lucide-react';
+import { Loader2, Plus, X, Users, Search, ChevronDown } from 'lucide-react';
 import { getTodayKST } from '@/lib/utils';
 
 const SUBJECTS = ['수학', '과학', '영어', '국어'] as const;
@@ -36,6 +42,9 @@ const TIME_OPTIONS = Array.from({ length: 25 }, (_, i) => {
 interface StudentOption {
   id: string;
   name: string;
+  school: string | null;
+  school_level: string | null;
+  grade_year: number | null;
 }
 
 interface TeacherOption {
@@ -73,6 +82,8 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
   // Entries
   const [entries, setEntries] = useState<SupplementEntry[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -83,13 +94,15 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
       setSharedTime('');
       setSharedSubject('');
       setSelectedStudentId('');
+      setPickerOpen(false);
+      setStudentSearch('');
     }
   }, [open]);
 
   async function fetchData() {
     setLoading(true);
     const [studentsRes, profilesRes] = await Promise.all([
-      supabase.from('students').select('id, name').neq('enrollment_status', '퇴원').order('name'),
+      supabase.from('students').select('id, name, school, school_level, grade_year').neq('enrollment_status', '퇴원').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
     ]);
     setStudents(studentsRes.data || []);
@@ -170,6 +183,22 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
   }
 
   const availableStudents = students.filter(s => !entries.some(e => e.student_id === s.id && e.subject === (sharedSubject || '')));
+  const searchTerm = studentSearch.trim();
+  const filteredStudents = searchTerm
+    ? availableStudents.filter(s =>
+        s.name.includes(searchTerm) ||
+        (s.school || '').includes(searchTerm) ||
+        (s.school_level || '').includes(searchTerm) ||
+        String(s.grade_year ?? '').includes(searchTerm)
+      )
+    : availableStudents;
+  const groupedStudents = groupStudentsByGrade(filteredStudents);
+
+  function pickStudent(id: string) {
+    setSelectedStudentId(id);
+    setPickerOpen(false);
+    setStudentSearch('');
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -247,17 +276,52 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
               <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
                 <Label className="text-sm font-semibold">학생 추가</Label>
                 <div className="flex gap-2">
-                  <Select value={selectedStudentId || '_placeholder_'} onValueChange={(v) => v !== '_placeholder_' && setSelectedStudentId(v)}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="학생 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_placeholder_" disabled>학생 선택</SelectItem>
-                      {availableStudents.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="flex-1 justify-between font-normal">
+                        <span className={selectedStudentId ? '' : 'text-muted-foreground'}>
+                          {selectedStudentId ? getStudentName(selectedStudentId) : '학생 선택'}
+                        </span>
+                        <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+                        <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <input
+                          autoFocus
+                          value={studentSearch}
+                          onChange={(e) => setStudentSearch(e.target.value)}
+                          placeholder="이름·학교·학년 검색"
+                          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                      <div className="max-h-[260px] overflow-y-auto p-1">
+                        {groupedStudents.length === 0 ? (
+                          <div className="py-6 text-center text-sm text-muted-foreground">검색 결과 없음</div>
+                        ) : (
+                          groupedStudents.map(([groupKey, groupStudents]) => (
+                            <div key={groupKey}>
+                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-popover">
+                                {getStudentGroupLabel(groupKey)}
+                              </div>
+                              {groupStudents.map(s => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => pickStudent(s.id)}
+                                  className="w-full text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground"
+                                >
+                                  {s.name}
+                                  {s.school && <span className="ml-1.5 text-xs text-muted-foreground">{s.school}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <Button
                     variant="outline"
                     size="sm"
