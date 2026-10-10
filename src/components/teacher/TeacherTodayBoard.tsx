@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn, getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Users, Clock, Calendar, Plus } from 'lucide-react';
 import { useTodayClasses, type TodayClassCard } from './useTodayClasses';
 import { getCardDisplay } from './cardStatus';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 
 
 function formatKoreanDay(dateStr: string): string {
@@ -80,6 +81,7 @@ export function TeacherTodayBoard() {
   const navigate = useNavigate();
   const [date, setDate] = useState(getTodayKST());
   const [activeDays, setActiveDays] = useState<number[]>([]);
+  const [extraOpen, setExtraOpen] = useState(false);
   const { cards, missedCount, loading, error, reload } = useTodayClasses(user?.id || '', date);
 
   useEffect(() => {
@@ -136,6 +138,16 @@ export function TeacherTodayBoard() {
               <Calendar className="h-3 w-3" />
               {selectedDayLabel}
             </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={() => setExtraOpen(true)}
+              title="예정에 없던 수업(보충 등)을 이 날짜에 추가합니다"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              수업 추가
+            </Button>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={reload} aria-label="새로고침">
               <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
             </Button>
@@ -205,6 +217,12 @@ export function TeacherTodayBoard() {
             ))}
           </div>
         )}
+
+        <BatchSupplementaryModal
+          open={extraOpen}
+          onOpenChange={setExtraOpen}
+          onSaved={reload}
+        />
       </CardContent>
     </Card>
   );
