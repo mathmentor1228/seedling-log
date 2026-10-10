@@ -64,7 +64,10 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => null);
   if (!body?.action) return json({ error: 'action required' }, 400);
 
-  const { data: studentsRaw, error: sErr } = await admin.from('students').select('id, name, school, school_level, grade_year, enrollment_status').in('enrollment_status', ['재학', '재등원']);
+  // 과거 자료 가져오기(노션 2023~2025)는 퇴원생도 매칭해야 하므로 allow_inactive 허용
+  let sq = admin.from('students').select('id, name, school, school_level, grade_year, enrollment_status');
+  if (!body.allow_inactive) sq = sq.in('enrollment_status', ['재학', '재등원']);
+  const { data: studentsRaw, error: sErr } = await sq;
   if (sErr) return json({ error: sErr.message }, 500);
   const students = (studentsRaw ?? []) as Student[];
   const now = new Date().toISOString();
@@ -128,7 +131,7 @@ Deno.serve(async (req) => {
   // ── file: 시험지 PDF 1개 ─────────────────────────────────────
   if (body.action === 'file') {
     const f = body.file as { name?: string; drive_file_id?: string; modified?: string; size?: number; data_base64?: string; subject_folder?: string } | undefined;
-    if (!f?.name || !f.data_base64) return json({ error: 'file {name, data_base64} required' }, 400);
+    if (!f?.name || (!f.data_base64 && !body.dry_run)) return json({ error: 'file {name, data_base64} required' }, 400);
     const parsed = parseDriveName(f.name);
     const log = async (ok: boolean, reason?: string, detail?: any) => {
       await admin.from('exam_sheet_syncs').insert({
@@ -139,7 +142,20 @@ Deno.serve(async (req) => {
     };
     if (!parsed) { await log(false, '파일명 규칙 불일치 (YYYY-S-a 과목 학교 이름.pdf)'); return json({ ok: false, reason: 'bad_name' }); }
     if (f.subject_folder && !f.subject_folder.includes(parsed.subject)) { /* 폴더와 과목이 다르면 경고만 */ }
-    const m = matchStudent(students, parsed.school, null, parsed.student);
+    const m = matchStudent(students, parsed.school, body.file?.grade ?? null, parsed.student);
+    if (body.dry_run) {
+      let existing: any = null;
+      if (m.student) {
+        const { data } = await admin.from('student_exam_results').select('id, actual_score, expected_score').eq('student_id', m.student.id).eq('subject', parsed.subject)
+          .eq('exam_year', parsed.key.year).eq('exam_period', examKeyToPeriod(parsed.key)).eq('exam_type', examKeyToType(parsed.key)).maybeSingle();
+        existing = data;
+        if (existing) {
+          const { data: pdf } = await admin.from('student_exam_result_pdfs').select('id, drive_file_name, source').eq('result_id', existing.id).maybeSingle();
+          existing = { ...existing, pdf };
+        }
+      }
+      return json({ ok: !!m.student, dry_run: true, parsed, student: m.student ? { id: m.student.id, name: m.student.name, school: m.student.school, grade_year: m.student.grade_year, status: m.student.enrollment_status } : null, reason: m.reason, existing });
+    }
     if (!m.student) { await log(false, m.reason); return json({ ok: false, reason: m.reason }); }
     const period = examKeyToPeriod(parsed.key); const examType = examKeyToType(parsed.key);
     // 결과 행 찾기/없으면 점수 없는 행 생성 (PDF를 붙일 자리)
