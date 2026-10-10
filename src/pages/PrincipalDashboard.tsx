@@ -250,6 +250,7 @@ function SlotRow({ slot, state, isNext, defaultOpen }: { slot: ClassroomSlot; st
 
 function TodayClasses({ slots }: { slots: ClassroomSlot[] }) {
   const [now, setNow] = useState(nowHHMM());
+  const [extraOpen, setExtraOpen] = useState(false);
   useEffect(() => { const t = setInterval(() => setNow(nowHHMM()), 30000); return () => clearInterval(t); }, []);
   const real = slots.filter(s => s.students.length > 0).sort((a, b) => a.startTime.localeCompare(b.startTime));
   const empty = slots.filter(s => s.students.length === 0);
