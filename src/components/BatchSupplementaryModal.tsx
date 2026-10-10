@@ -17,12 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { safeUpsertLessonRecords } from '@/lib/lessonRecordUpsert';
+import { groupStudentsByGrade, getStudentGroupLabel } from '@/components/lessons/studentSelection';
 
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, X, Users } from 'lucide-react';
+import { Loader2, Plus, X, Users, Search, ChevronDown } from 'lucide-react';
 import { getTodayKST } from '@/lib/utils';
 
 const SUBJECTS = ['수학', '과학', '영어', '국어'] as const;
@@ -36,6 +42,9 @@ const TIME_OPTIONS = Array.from({ length: 25 }, (_, i) => {
 interface StudentOption {
   id: string;
   name: string;
+  school: string | null;
+  school_level: string | null;
+  grade_year: number | null;
 }
 
 interface TeacherOption {
