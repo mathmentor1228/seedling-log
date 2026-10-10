@@ -81,6 +81,7 @@ export function TeacherTodayBoard() {
   const navigate = useNavigate();
   const [date, setDate] = useState(getTodayKST());
   const [activeDays, setActiveDays] = useState<number[]>([]);
+  const [extraOpen, setExtraOpen] = useState(false);
   const { cards, missedCount, loading, error, reload } = useTodayClasses(user?.id || '', date);
 
   useEffect(() => {
