@@ -17,7 +17,7 @@ import { PerfItemsCell } from './PerformanceItems';
 import { HelpTip } from '@/components/ui/help-tip';
 
 const db = supabase as any;
-const SOURCE_LABEL: Record<string, string> = { manual: '직접 입력', archive: '내신 자료실', neis: '나이스', homepage: '학교 홈페이지' };
+const SOURCE_LABEL: Record<string, string> = { manual: '직접 입력', archive: '내신 자료실', neis: '나이스', homepage: '학교 홈페이지', record: '성적·시험지 기록(사이클 없음)' };
 const POST_STATUS: Record<string, { label: string; cls: string }> = {
   new: { label: '새 글', cls: 'bg-primary/10 text-primary' },
   extracted: { label: 'AI 읽음', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' },

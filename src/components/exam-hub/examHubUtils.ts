@@ -6,6 +6,8 @@ export type Cycle = {
   id: string; school_id: string | null; school_name: string; school_level: string; grade_year: number;
   academic_year: number; semester: string; exam_type: string; start_date: string | null; end_date: string | null;
   status: 'draft' | 'confirmed' | 'cancelled'; source: string; source_url: string | null; notes: string | null;
+  /** PAST-CYCLES-V1: exam_cycles 행이 없는 지난 회차를 성적·시험지 기록에서 만든 가상 사이클. member_ids = 그 해 그 학교·학년이었던 학생 */
+  virtual?: boolean; member_ids?: Set<string>;
 };
 export type CycleSubject = {
   id: string; cycle_id: string; subject: string; exam_date: string | null; period: number | null; exam_time: string | null;
@@ -24,6 +26,8 @@ export type ExamResult = {
   note: string | null; review_status: string | null;
   // EXAM-SHEET-SYNC-V1
   source?: string | null; sheet_teacher_name?: string | null; previous_score?: number | null; synced_at?: string | null;
+  /** 시험 당시 학교(드라이브·노션 가져오기 때 기록). 비어 있으면 학생의 현재 학교로 본다 */
+  school_name?: string | null;
 };
 export type ResultPdf = { id: string; result_id: string; storage_path: string; display_title: string; source: string | null; drive_file_name: string | null; drive_modified_at: string | null };
 export type SheetSync = {
@@ -45,6 +49,19 @@ export type WatchPost = {
   post_url: string | null; attachments: { name: string; url: string }[]; matched_keywords: string[];
   status: 'new' | 'extracted' | 'applied' | 'ignored' | string; extracted: any | null; cycle_id: string | null; created_at: string;
 };
+/** EXAM-STUDENT-ANALYSIS-V1 */
+export type StudentAnalysis = {
+  id: string; result_id: string; student_id: string; subject: string; exam_year: number | null; exam_period: string | null;
+  status: 'draft' | 'teacher_confirmed' | 'published'; wrong_count: number; total_items: number | null;
+  final_text: string | null; academy_action_text: string | null; published_at: string | null; updated_at: string;
+};
+export type WrongReasonTag = { subject: string; code: string; label: string; sort_order: number };
+export const ANALYSIS_STATUS_META: Record<StudentAnalysis['status'], { label: string; cls: string }> = {
+  draft: { label: '초안', cls: 'bg-muted text-muted-foreground' },
+  teacher_confirmed: { label: '교사 컨펌', cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200' },
+  published: { label: '공개됨', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' },
+};
+
 /** EXAM-PARTICIPANTS-V1: 사이클별 응시 여부. 행 없음 = 응시 */
 export type Participant = { cycle_id: string; student_id: string; status: 'taking' | 'not_taking'; reason: string | null; decided_at: string };
 export type ParticipantView = 'taking' | 'not_taking' | 'confirm';
@@ -72,7 +89,58 @@ export function gradeLabel(c: Pick<Cycle, 'school_level' | 'grade_year'>): strin
 
 /** 학생이 이 사이클 대상인가: 학교 정규화 + 학년 일치 */
 export function studentInCycle(s: StudentRow, c: Cycle): boolean {
+  if (c.member_ids) return c.member_ids.has(s.id);
   return normalizeSchool(s.school) === normalizeSchool(c.school_name) && s.grade_year === c.grade_year;
+}
+
+// ── PAST-CYCLES-V1: 지난 회차 가상 사이클 ───────────────────────────────
+/** 학년도: 3월 시작 */
+export function academicYearOf(today: string): number { const y = Number(today.slice(0, 4)); return Number(today.slice(5, 7)) >= 3 ? y : y - 1; }
+function levelOf(level: string | null | undefined, school: string | null | undefined): '초' | '중' | '고' | null {
+  const l = level || '';
+  if (l.startsWith('초')) return '초'; if (l.startsWith('중')) return '중'; if (l.startsWith('고')) return '고';
+  const n = normalizeSchool(school) || '';
+  return n.endsWith('초') ? '초' : n.endsWith('중') ? '중' : n.endsWith('고') ? '고' : null;
+}
+/** 학생이 `year` 학년도에 몇 학년이었나 (초1=1 … 중1=7 … 고3=12 절대 학년으로 역산) */
+export function gradeAt(s: StudentRow, year: number, today: string): { level: '초' | '중' | '고'; grade: number } | null {
+  const lv = levelOf(s.school_level, s.school); if (!lv || !s.grade_year) return null;
+  const abs = (lv === '초' ? 0 : lv === '중' ? 6 : 9) + s.grade_year - (academicYearOf(today) - year);
+  if (abs < 1 || abs > 12) return null;
+  return abs <= 6 ? { level: '초', grade: abs } : abs <= 9 ? { level: '중', grade: abs - 6 } : { level: '고', grade: abs - 9 };
+}
+/** 회차의 대략 종료일(카드 정렬·'지난 시험' 판정용). 실제 날짜는 모른다 */
+const PERIOD_APPROX_END: Record<string, string> = { '1-a': '04-30', '1-b': '07-03', '2-a': '10-08', '2-b': '12-10' };
+/**
+ * exam_cycles 에 없는 (연도·회차·학교·학년) 조합을 결과 행에서 찾아 가상 사이클로 만든다.
+ * 2025년 노션 시험지처럼 사이클 없이 들어온 기록을 '지난 시험' 카드로 보여주기 위함. 퇴원생도 member 에 들어간다.
+ */
+export function buildVirtualCycles(cycles: Cycle[], results: ExamResult[], allStudents: StudentRow[], today: string): Cycle[] {
+  const byId = new Map(allStudents.map(s => [s.id, s]));
+  const real = new Set(cycles.map(c => { const k = cycleKey(c); return `${k.year}|${k.period}|${normalizeSchool(c.school_name)}|${c.grade_year}`; }));
+  const groups = new Map<string, { year: number; period: string; school: string; level: '초' | '중' | '고'; grade: number; members: Set<string> }>();
+  for (const r of results) {
+    if (r.exam_type === 'performance' || !r.exam_year || !r.exam_period || !/^[12]-[ab]$/.test(r.exam_period)) continue;
+    if (r.exam_year >= academicYearOf(today)) continue; // 올해는 실제 사이클(자동 감시)로
+    const s = byId.get(r.student_id); if (!s) continue;
+    const g = gradeAt(s, r.exam_year, today); if (!g) continue;
+    const nowLv = levelOf(s.school_level, s.school);
+    let school: string | null = null;
+    const rs = normalizeSchool(r.school_name); const rsLv = levelOf(null, rs);
+    if (rs && rsLv === g.level) school = rs;            // 가져오기 때 적힌 그때 학교
+    else if (nowLv === g.level) school = normalizeSchool(s.school); // 학교급이 같으면 지금 학교
+    if (!school) continue;                                 // 중학교 시절 학교를 모르면 못 넣는다
+    const key = `${r.exam_year}|${r.exam_period}|${school}|${g.grade}`;
+    if (real.has(key)) continue;
+    const grp = groups.get(key) || groups.set(key, { year: r.exam_year, period: r.exam_period, school, level: g.level, grade: g.grade, members: new Set() }).get(key)!;
+    grp.members.add(s.id);
+  }
+  return [...groups.entries()].map(([key, g]) => ({
+    id: `virt:${key}`, school_id: null, school_name: g.school, school_level: g.level === '초' ? '초등' : g.level === '중' ? '중등' : '고등', grade_year: g.grade,
+    academic_year: g.year, semester: g.period.startsWith('2') ? '2학기' : '1학기', exam_type: g.period.endsWith('a') ? '중간고사' : '기말고사',
+    start_date: `${g.year}-${PERIOD_APPROX_END[g.period]}`, end_date: `${g.year}-${PERIOD_APPROX_END[g.period]}`,
+    status: 'confirmed' as const, source: 'record', source_url: null, notes: null, virtual: true, member_ids: g.members,
+  }));
 }
 
 /**

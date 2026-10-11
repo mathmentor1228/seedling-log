@@ -107,22 +107,24 @@ export function ExamHub() {
       const same = sorted.filter(x => x.id !== c.id && normalizeSchool(x.school_name) === normalizeSchool(c.school_name) && x.grade_year === c.grade_year && (x.start_date || '') < (c.start_date || '9999'));
       return same[same.length - 1] || null;
     };
-    return data.cycles.map(c => {
+    return [...data.cycles, ...data.virtualCycles].map(c => {
       const key = cycleKey(c);
+      // PAST-CYCLES-V1: 가상(지난 기록) 사이클은 퇴원생까지 대상, 응시 확인은 하지 않는다
+      const pool = c.virtual ? data.allStudents : data.students;
       const subs = data.subjectsByCycle.get(c.id) || [];
       const cycleSubjects = subs.map(s => s.subject);
       const prev = prevCycleOf(c);
-      const allTargets = data.students.filter(s => studentInCycle(s, c));
+      const allTargets = pool.filter(s => studentInCycle(s, c));
       const cells: ParticipantCell[] = allTargets.map(s => {
         const row = participantByKey.get(`${c.id}|${s.id}`) || null;
         const priorNotTaking = !!prev && participantByKey.get(`${prev.id}|${s.id}`)?.status === 'not_taking';
-        const reasons = ambiguityReasons({ student: s, cycle: c, recentActiveIds: data.recentActiveIds, hasSubjects: (subjectsOf.get(s.id) || 0) > 0, priorNotTaking });
+        const reasons = c.virtual ? [] : ambiguityReasons({ student: s, cycle: c, recentActiveIds: data.recentActiveIds, hasSubjects: (subjectsOf.get(s.id) || 0) > 0, priorNotTaking });
         return { student: s, cycle: c, row, reasons };
       });
       const excluded = new Set(cells.filter(x => x.row?.status === 'not_taking').map(x => x.student.id));
       const needConfirm = cells.filter(x => x.row === null && x.reasons.length > 0);
       const rows = buildStudentSubjectRows({
-        cycle: c, key, students: data.students, classInfos: data.classInfos, links: data.links, teachers: data.teachers,
+        cycle: c, key, students: pool, classInfos: data.classInfos, links: data.links, teachers: data.teachers,
         results: data.results, cycleSubjects, excludedStudentIds: excluded, pdfs: data.pdfs,
       });
       const reports = data.reports.filter(r => reportInCycle(r, c, key));
@@ -134,8 +136,9 @@ export function ExamHub() {
       const done = rows.filter(r => r.status === 'done').length;
       const missing = rows.filter(r => r.status === 'missing' || r.status === 'score_empty').length;
       const scoped = subs.filter(s => !!s.scope).length;
-      const newPosts = data.posts.filter(p => p.status === 'new' && normalizeSchool(p.school_name) === normalizeSchool(c.school_name)).length;
-      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts, tracked };
+      const newPosts = c.virtual ? 0 : data.posts.filter(p => p.status === 'new' && normalizeSchool(p.school_name) === normalizeSchool(c.school_name)).length;
+      const pdfCount = rows.filter(r => r.pdf).length;
+      return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts, tracked, pdfCount };
     });
   }, [data, myStudentIds, today, participantByKey, subjectsOf]);
 
@@ -144,6 +147,7 @@ export function ExamHub() {
     return cycleCards.filter(cc => {
       const c = cc.cycle;
       if (!allCycles && isTeacher && !cc.mine) return false;
+      if (c.virtual && !showPast) return false;
       const end = c.end_date || c.start_date;
       const isPast = !!end && end < today;
       if (!showPast && isPast) {
@@ -273,7 +277,7 @@ export function ExamHub() {
 
       {/* ④ 기록·학생 */}
       {mode === 'student' && !data.loading && (
-        <ExamStudentView students={data.students} results={data.results} links={data.links} classInfos={data.classInfos} teachers={data.teachers}
+        <ExamStudentView students={data.students} results={data.results} pdfs={data.pdfs} links={data.links} classInfos={data.classInfos} teachers={data.teachers}
           currentUserId={user?.id ?? null} currentUserName={fullName ?? null} isAdmin={isAdmin} isTeacher={isTeacher} myStudentIds={myStudentIds}
           selectedId={params.get('student')} onSelect={id => { const p = new URLSearchParams(params); p.set('mode', 'student'); p.set('student', id); setParams(p); }} />
       )}
@@ -344,7 +348,7 @@ export function ExamHub() {
         <div className="flex gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-[92px] w-[230px] rounded-lg" />)}</div>
       ) : visibleCards.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">
-          {data.cycles.length === 0 ? '등록된 시험 사이클이 없습니다. 학교·시험 일정에서 추가하거나 자동 감시를 실행하세요.' : '조건에 맞는 시험이 없습니다. "지난 시험"이나 "전체 학교"를 켜 보세요.'}
+          {data.cycles.length === 0 ? '등록된 시험 사이클이 없습니다. 학교·시험 일정에서 추가하거나 자동 감시를 실행하세요.' : '조건에 맞는 시험이 없습니다. "지난 시험"(2025년 기록 포함)이나 "전체 학교"를 켜 보세요.'}
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
@@ -360,16 +364,18 @@ export function ExamHub() {
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-sm truncate">{c.school_name} {gradeLabel(c)}</span>
                   <span className="flex-1" />
-                  <Badge variant={urgent ? 'destructive' : after ? 'outline' : 'secondary'} className="text-[11px] shrink-0">{ddayLabel(cc.st)}</Badge>
+                  <Badge variant={urgent ? 'destructive' : after ? 'outline' : 'secondary'} className="text-[11px] shrink-0">{c.virtual ? `${c.academic_year}년 기록` : ddayLabel(cc.st)}</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {c.semester} {c.exam_type}{c.start_date ? ` · ${c.start_date.slice(5).replace('-', '/')}` : ''}
+                  {c.semester} {c.exam_type}{c.virtual ? ' · 날짜 미기록' : c.start_date ? ` · ${c.start_date.slice(5).replace('-', '/')}` : ''}
                   {c.status !== 'confirmed' && <span className="ml-1 text-amber-700">· 초안</span>}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1 min-h-[20px]">
                   {cc.subs.length > 0 && <Chip tone={cc.scoped === cc.subs.length ? 'ok' : !after ? 'warn' : 'muted'}>범위 {cc.scoped}/{cc.subs.length}</Chip>}
                   {cc.subs.length === 0 && !after && <Chip tone="warn">과목 정보 없음</Chip>}
                   {after && cc.expected > 0 && <Chip tone={cc.done === cc.expected ? 'ok' : 'muted'}>점수 {cc.done}/{cc.expected}</Chip>}
+                  {after && cc.pdfCount > 0 && <Chip tone="muted">시험지 {cc.pdfCount}</Chip>}
+                  {c.virtual && <Chip tone="muted">학생 {cc.targets.length}</Chip>}
                   {after && cc.missing > 0 && <Chip tone="warn">미입력 {cc.missing}</Chip>}
                   {after && (cc.reports.length > 0 || cc.subs.length > 0) && <Chip tone={cc.reports.length >= Math.max(cc.subs.length, 1) ? 'ok' : 'muted'}>분석 {cc.reports.length}/{Math.max(cc.subs.length, cc.reports.length)}</Chip>}
                   {cc.newPosts > 0 && <Chip tone="muted">공지 {cc.newPosts}</Chip>}
@@ -388,8 +394,8 @@ export function ExamHub() {
             <GraduationCap className="w-4 h-4 text-muted-foreground" />
             <span className="font-semibold">{cycleTitle(selected.cycle)}</span>
             <span className="text-xs text-muted-foreground flex items-center gap-1"><Users className="w-3.5 h-3.5" />대상 {selected.targets.length}명{selected.excluded.size > 0 ? ` · 미응시 ${selected.excluded.size}` : ''}{selected.needConfirm.length > 0 ? <span className="text-amber-700"> · 확인 필요 {selected.needConfirm.length}</span> : null}</span>
-            <span className="text-xs text-muted-foreground flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{ddayLabel(selected.st)}</span>
-            {(isAdmin || isTeacher) && selected.allTargets.length > 0 && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" />{selected.cycle.virtual ? `${selected.cycle.academic_year}년 기록 · 사이클 없이 성적·시험지에서 만든 카드(퇴원생 포함)` : ddayLabel(selected.st)}</span>
+            {(isAdmin || isTeacher) && selected.allTargets.length > 0 && !selected.cycle.virtual && (
               <Button size="sm" variant={manageOpen ? 'secondary' : 'ghost'} className="h-7 text-xs gap-1 ml-auto" onClick={() => setManageOpen(v => !v)}>
                 <UserCog className="w-3.5 h-3.5" />응시 대상 관리
               </Button>

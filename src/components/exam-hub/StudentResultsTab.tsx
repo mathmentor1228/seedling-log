@@ -46,7 +46,7 @@ function Delta({ cur, prev }: { cur: number | null; prev: number | null }) {
 const fmtTime = (iso: string) => { const d = new Date(iso); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 /** 드라이브에서 복사된 시험지 PDF를 페이지 안에서 연다 (원장 원칙: 링크가 아니라 웹 안에서 바로 보기) */
-function PdfViewer({ pdf, title, onClose }: { pdf: ResultPdf | null; title: string; onClose: () => void }) {
+export function PdfViewer({ pdf, title, onClose }: { pdf: ResultPdf | null; title: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {

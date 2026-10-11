@@ -13,11 +13,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, LabelList } from 'recharts';
-import { Copy, Loader2, Lock, MessageSquareText, NotebookPen, Stethoscope, GraduationCap, Trash2, Users } from 'lucide-react';
+import { Copy, FileText, Loader2, Lock, MessageSquareText, NotebookPen, Stethoscope, GraduationCap, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
-import { periodKey, periodLabel, type ClassInfo, type ExamResult, type StudentRow, type SubjectTeacherLink, type Teacher } from './examHubUtils';
+import { periodKey, periodLabel, type ClassInfo, type ExamResult, type ResultPdf, type StudentRow, type SubjectTeacherLink, type Teacher } from './examHubUtils';
+import { PdfViewer } from './StudentResultsTab';
 
 const db = supabase as any;
 /** 과목별 고정 색 (dataviz 검증: 명도·채도·대비 통과, CVD 경계는 선 끝 직접 라벨로 보완) */
@@ -36,6 +37,8 @@ function baseSubject(s: string): string {
 interface Props {
   students: StudentRow[];
   results: ExamResult[];
+  /** EXAM-SHEET-SYNC-V1 / PAST-CYCLES-V1: 결과 행에 붙은 시험지 PDF (드라이브·노션) */
+  pdfs?: ResultPdf[];
   links: SubjectTeacherLink[];
   classInfos: ClassInfo[];
   teachers: Teacher[];
@@ -115,7 +118,8 @@ const KIND_META: Record<Kind, { label: string; icon: React.ElementType; cls: str
 };
 const SCOPE_LABEL: Record<Scope, string> = { external: '학부모 공유 가능', internal: '내부용' };
 
-export function ExamStudentView({ students, results, links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect }: Props) {
+export function ExamStudentView({ students, results, pdfs = [], links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect }: Props) {
+  const [viewingPdf, setViewingPdf] = useState<{ pdf: ResultPdf; title: string } | null>(null);
   const [q, setQ] = useState('');
   const [mineOnly, setMineOnly] = useState(isTeacher);
   const [kindFilter, setKindFilter] = useState<string>(ALL);
@@ -165,6 +169,20 @@ export function ExamStudentView({ students, results, links, classInfos, teachers
     for (const [s, m] of bySubject) flat.set(s, [...m.entries()].sort((a, b) => a[0] - b[0]).map(([k, v]) => ({ k, ...v })));
     return { points, bySubject: flat };
   }, [results, student, visibleSubjects]);
+
+  // 시험지 PDF: 회차 오래된 순, 같은 회차면 과목순. 선생님은 담당 과목만
+  const paperList = useMemo(() => {
+    if (!student) return [] as { pdf: ResultPdf; k: number; label: string; subject: string; score: number | null }[];
+    const byResult = new Map<string, ResultPdf[]>();
+    for (const p of pdfs) (byResult.get(p.result_id) || byResult.set(p.result_id, []).get(p.result_id)!).push(p);
+    const out: { pdf: ResultPdf; k: number; label: string; subject: string; score: number | null }[] = [];
+    for (const r of results) {
+      if (r.student_id !== student.id || r.exam_type === 'performance') continue;
+      if (!isAdmin && !visibleSubjects.includes(baseSubject(r.subject))) continue;
+      for (const p of byResult.get(r.id) || []) out.push({ pdf: p, k: periodKey(r.exam_year, r.exam_period, r.exam_type), label: periodLabel(r.exam_year, r.exam_period, r.exam_type), subject: r.subject, score: r.actual_score });
+    }
+    return out.sort((a, b) => a.k - b.k || a.subject.localeCompare(b.subject, 'ko'));
+  }, [pdfs, results, student, isAdmin, visibleSubjects]);
 
   const visibleEvents = useMemo(() => tl.events.filter(e => {
     if (scope !== 'all' && e.scope !== scope) return false;
@@ -303,6 +321,22 @@ export function ExamStudentView({ students, results, links, classInfos, teachers
               </>
             )}
           </div>
+
+          {/* 시험지 — 결과 행에 붙은 PDF를 웹 안에서 바로 연다 (2025 노션 가져오기 포함) */}
+          {paperList.length > 0 && (
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center gap-2 mb-1.5"><span className="text-sm font-semibold">시험지</span><span className="text-[11px] text-muted-foreground">{paperList.length}장 · 누르면 바로 열림</span></div>
+              <div className="flex flex-wrap gap-1.5">
+                {paperList.map(x => (
+                  <button key={x.pdf.id} type="button" onClick={() => setViewingPdf({ pdf: x.pdf, title: `${student.name} · ${x.label} ${x.subject}` })}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
+                    <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
+                  </button>
+                ))}
+              </div>
+              <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
+            </div>
+          )}
 
           {/* 학원의 조치 */}
           <div className="rounded-lg border p-3 space-y-3">
