@@ -381,6 +381,19 @@ Deno.serve(async (req) => {
       academyActions = academyActions.slice(0, 40);
     } catch { examTrend = []; academyActions = []; }
 
+    // EXAM-STUDENT-ANALYSIS-V1: 공개된 학생별 시험 분석 (원장 컨펌 = 공개). 테이블 없으면 빈 배열.
+    let studentAnalyses: any[] = [];
+    try {
+      const { data: sa } = await supabase.from("exam_student_analyses")
+        .select("id, subject, exam_year, exam_period, wrong_count, total_items, final_text, academy_action_text, published_at, student_exam_results(actual_score, previous_score, exam_type)")
+        .eq("student_id", studentId).eq("status", "published").order("published_at", { ascending: false }).limit(12);
+      studentAnalyses = (sa || []).map((a: any) => ({
+        id: a.id, subject: a.subject, exam_year: a.exam_year, exam_period: a.exam_period, exam_type: a.student_exam_results?.exam_type ?? null,
+        score: a.student_exam_results?.actual_score ?? null, previous_score: a.student_exam_results?.previous_score ?? null,
+        wrong_count: a.wrong_count, total_items: a.total_items, final_text: a.final_text, academy_action_text: a.academy_action_text, published_at: a.published_at,
+      }));
+    } catch { studentAnalyses = []; }
+
     // Map lessons
     const lessons = rawLessons.map((l: any) => ({
       id: l.id,
@@ -454,6 +467,7 @@ Deno.serve(async (req) => {
             .map((e: any) => ({ id: e.id, title: e.title, start_at: e.start_at, end_at: e.end_at }));
         })(),
         exam_trend: examTrend,
+        student_analyses: studentAnalyses,
         academy_actions: academyActions,
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,

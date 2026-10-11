@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ddayLabel, gradeLabel, type Cycle, type DdayState, type DeepReportRow, type ReportRow, type StudentSubjectRow } from './examHubUtils';
+import { ddayLabel, gradeLabel, type Cycle, type DdayState, type DeepReportRow, type ReportRow, type StudentAnalysis, type StudentSubjectRow } from './examHubUtils';
 
 export interface ReviewCard {
   cycle: Cycle; st: DdayState; rows: StudentSubjectRow[]; reports: ReportRow[]; cycleSubjects: string[];
@@ -14,9 +14,10 @@ interface Props {
   deepByReport: Map<string, DeepReportRow>;
   currentUserId: string | null;
   onOpen: (c: Cycle, tab: 'results' | 'papers') => void;
+  analysesByResult?: Map<string, StudentAnalysis>;
 }
 
-type Line = { subject: string; teacherId: string | null; teacherName: string; n: number; done: number; scoreEmpty: number; missing: number; pdf: number; absent: number };
+type Line = { subject: string; teacherId: string | null; teacherName: string; n: number; done: number; scoreEmpty: number; missing: number; pdf: number; absent: number; anDraft: number; anConfirmed: number; anPublished: number };
 
 function Cell({ ok, warn, children, title }: { ok: boolean; warn?: boolean; children: React.ReactNode; title?: string }) {
   return (
@@ -29,13 +30,14 @@ function Cell({ ok, warn, children, title }: { ok: boolean; warn?: boolean; chil
   );
 }
 
-export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen }: Props) {
+export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen, analysesByResult }: Props) {
   const data = useMemo(() => cards.map(cc => {
     const byKey = new Map<string, Line>();
     for (const r of cc.rows) {
       const k = `${r.subject}|${r.teacherId || ''}`;
-      const l = byKey.get(k) || { subject: r.subject, teacherId: r.teacherId, teacherName: r.teacherName || '담당 미지정', n: 0, done: 0, scoreEmpty: 0, missing: 0, pdf: 0, absent: 0 };
-      if (r.status === 'absent' || r.status === 'untracked') { if (r.status === 'absent') l.absent += 1; } else { l.n += 1; if (r.status === 'done') l.done += 1; else if (r.status === 'score_empty') l.scoreEmpty += 1; else l.missing += 1; if (r.pdf) l.pdf += 1; }
+      const l = byKey.get(k) || { subject: r.subject, teacherId: r.teacherId, teacherName: r.teacherName || '담당 미지정', n: 0, done: 0, scoreEmpty: 0, missing: 0, pdf: 0, absent: 0, anDraft: 0, anConfirmed: 0, anPublished: 0 };
+      if (r.status === 'absent' || r.status === 'untracked') { if (r.status === 'absent') l.absent += 1; } else { l.n += 1; if (r.status === 'done') l.done += 1; else if (r.status === 'score_empty') l.scoreEmpty += 1; else l.missing += 1; if (r.pdf) l.pdf += 1;
+        const a = r.result ? analysesByResult?.get(r.result.id) : undefined; if (a) { if (a.status === 'published') l.anPublished += 1; else if (a.status === 'teacher_confirmed') l.anConfirmed += 1; else l.anDraft += 1; } }
       byKey.set(k, l);
     }
     const lines = [...byKey.values()].sort((a, b) => a.subject.localeCompare(b.subject, 'ko') || a.teacherName.localeCompare(b.teacherName, 'ko'));
@@ -45,7 +47,7 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen 
     const reportsDone = subjects.filter(s => reportBySubject.has(s)).length;
     const complete = totalN > 0 && totalDone === totalN && totalPdf === totalN && reportsDone === subjects.length;
     return { cc, lines, reportBySubject, subjects, totalN, totalDone, totalPdf, reportsDone, complete };
-  }), [cards]);
+  }), [cards, analysesByResult]);
 
   if (data.length === 0) {
     return <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">최근 60일 안에 끝난 시험이 없습니다. 시험이 끝나면 여기서 점수·시험지·분석지 입력 상태를 점검합니다.</div>;
@@ -75,12 +77,13 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen 
                   <th className="text-center px-2 py-1.5 font-medium">점수 입력</th>
                   <th className="text-center px-2 py-1.5 font-medium">시험지 PDF</th>
                   <th className="text-center px-2 py-1.5 font-medium">분석지</th>
+                  <th className="text-center px-2 py-1.5 font-medium">학생 분석 문안</th>
                   <th className="text-left px-2 py-1.5 font-medium">빠진 것</th>
                 </tr>
               </thead>
               <tbody>
                 {lines.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-4 text-xs text-muted-foreground">대상 학생이 없습니다(수강 과목·담당 연결 없음 또는 전원 미응시).</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-4 text-xs text-muted-foreground">대상 학생이 없습니다(수강 과목·담당 연결 없음 또는 전원 미응시).</td></tr>
                 )}
                 {lines.map(l => {
                   const mine = !!currentUserId && l.teacherId === currentUserId;
@@ -91,6 +94,8 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen 
                   if (l.scoreEmpty) gaps.push(`실점수 공란 ${l.scoreEmpty}`);
                   if (l.n - l.pdf > 0) gaps.push(`시험지 없음 ${l.n - l.pdf}`);
                   if (!rep) gaps.push('분석지 미작성'); else if (!rep.is_published) gaps.push('분석지 미공개');
+                  const anTotal = l.anDraft + l.anConfirmed + l.anPublished;
+                  if (l.done > 0 && l.anPublished < l.done) gaps.push(`학생 분석 공개 ${l.anPublished}/${l.done}`);
                   return (
                     <tr key={`${l.subject}|${l.teacherId}`} className={cn('border-t', mine && 'bg-primary/5')}>
                       <td className="px-4 py-2 whitespace-nowrap">
@@ -106,6 +111,9 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, onOpen 
                         <Cell ok={!!rep && rep.is_published} warn={!!rep} title={rep ? `${rep.created_by_name || ''} ${rep.updated_at?.slice(0, 10) || ''}` : undefined}>
                           {!rep ? '없음' : rep.is_published ? '공개' : deep?.teacher_notes ? '내부·메모' : '내부'}
                         </Cell>
+                      </td>
+                      <td className="text-center px-2 py-2">
+                        <Cell ok={l.done > 0 && l.anPublished === l.done} warn={anTotal > 0} title={`초안 ${l.anDraft} · 교사 컨펌 ${l.anConfirmed} · 공개 ${l.anPublished}`}>{l.done > 0 ? `공개 ${l.anPublished}/${l.done}` : '–'}</Cell>
                       </td>
                       <td className="px-2 py-2 text-xs text-muted-foreground">{gaps.length ? gaps.join(' · ') : <span className="text-emerald-700">완료</span>}</td>
                     </tr>

@@ -286,7 +286,7 @@ export function ExamHub() {
       {mode === 'review' && !data.loading && (
         <ExamCloseoutReview
           cards={reviewCards.map(cc => ({ cycle: cc.cycle, st: cc.st, rows: cc.rows, reports: cc.reports, cycleSubjects: cc.cycleSubjects }))}
-          deepByReport={data.deepByReport} currentUserId={user?.id ?? null}
+          deepByReport={data.deepByReport} currentUserId={user?.id ?? null} analysesByResult={data.analysesByResult}
           onOpen={(c, t) => { setMode('schedule'); const p = new URLSearchParams(); p.set('cycle', c.id); p.set('tab', t); setParams(p); }}
         />
       )}
@@ -437,7 +437,9 @@ export function ExamHub() {
               <StudentResultsTab rows={selected.rows} examLabel={`${selected.key.year} ${selected.cycle.semester} ${selected.cycle.exam_type}`}
                 syncs={data.syncs.filter(x => x.exam_year === selected.key.year && x.exam_period === selected.key.period)}
                 isTeacher={isTeacher} currentUserId={user?.id ?? null}
-                isAdmin={isAdmin} examKey={selected.key} currentUserName={fullName ?? null} onChanged={data.reload} />
+                isAdmin={isAdmin} examKey={selected.key} currentUserName={fullName ?? null} onChanged={data.reload}
+                analysesByResult={data.analysesByResult} reasonTags={data.reasonTags}
+                defaultTotalItemsBySubject={new Map(selected.reports.map(rp => [rp.subject, data.itemCountByReport.get(rp.id) || 0]).filter(([, n]) => (n as number) > 0) as [string, number][])} />
               )}
             </TabsContent>
             <TabsContent value="papers" className="mt-3">

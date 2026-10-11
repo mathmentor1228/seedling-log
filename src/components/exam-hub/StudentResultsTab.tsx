@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertTriangle, ArrowDown, ArrowUp, FileText, Loader2, Minus, Pencil, RefreshCw, Save, UserX, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
-import { STATUS_META, type ResultPdf, type SheetSync, type StudentSubjectRow } from './examHubUtils';
+import { ANALYSIS_STATUS_META, STATUS_META, type ResultPdf, type SheetSync, type StudentAnalysis, type StudentSubjectRow, type WrongReasonTag } from './examHubUtils';
+import { StudentAnalysisPanel } from './StudentAnalysisPanel';
 
 interface Props {
   rows: StudentSubjectRow[];
@@ -30,6 +31,10 @@ interface Props {
   examKey?: { year: number; period: string; examType: string };
   currentUserName?: string | null;
   onChanged?: () => void;
+  /** EXAM-STUDENT-ANALYSIS-V1 */
+  analysesByResult?: Map<string, StudentAnalysis>;
+  reasonTags?: WrongReasonTag[];
+  defaultTotalItemsBySubject?: Map<string, number>;
 }
 
 const db = supabase as any;
@@ -77,7 +82,8 @@ export function PdfViewer({ pdf, title, onClose }: { pdf: ResultPdf | null; titl
   );
 }
 
-export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, syncs = [], isAdmin = false, examKey, currentUserName, onChanged }: Props) {
+export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, syncs = [], isAdmin = false, examKey, currentUserName, onChanged, analysesByResult, reasonTags = [], defaultTotalItemsBySubject }: Props) {
+  const [analysisRow, setAnalysisRow] = useState<StudentSubjectRow | null>(null);
   const [edit, setEdit] = useState<{ key: string; expected: string; actual: string; note: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -326,7 +332,19 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
                       </>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.result?.review_status ? r.result.review_status : '-'}</TableCell>
+                  <TableCell className="text-xs">
+                    {(() => {
+                      const a = r.result ? analysesByResult?.get(r.result.id) || null : null;
+                      const canOpen = !!r.result && r.status === 'done';
+                      const m = a ? ANALYSIS_STATUS_META[a.status] : null;
+                      return (
+                        <button type="button" disabled={!canOpen} onClick={() => setAnalysisRow(r)} title={canOpen ? '틀린 문항·이유 태그·문안·컨펌' : '점수가 있어야 분석할 수 있습니다'}
+                          className={cn('rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap', m ? m.cls : canOpen ? 'border border-dashed text-muted-foreground hover:bg-accent' : 'text-muted-foreground/40')}>
+                          {m ? `${m.label}${a!.wrong_count ? ` · 틀림 ${a!.wrong_count}` : ''}` : canOpen ? '분석 시작' : '-'}
+                        </button>
+                      );
+                    })()}
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -338,6 +356,19 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
       </p>
 
       <PdfViewer pdf={viewing?.pdf || null} title={viewing?.title || ''} onClose={() => setViewing(null)} />
+
+      {analysisRow && (
+        <StudentAnalysisPanel
+          row={analysisRow} examLabel={examLabel}
+          analysis={analysisRow.result ? analysesByResult?.get(analysisRow.result.id) || null : null}
+          tags={reasonTags}
+          defaultTotalItems={defaultTotalItemsBySubject?.get(analysisRow.subject) ?? null}
+          isAdmin={isAdmin}
+          canEdit={isAdmin || (!!currentUserId && analysisRow.teacherId === currentUserId)}
+          onClose={() => setAnalysisRow(null)}
+          onChanged={() => onChanged?.()}
+        />
+      )}
 
       <Dialog open={unmatchedOpen} onOpenChange={setUnmatchedOpen}>
         <DialogContent className="max-w-2xl">

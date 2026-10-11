@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.generate-weekly-letter]
 verify_jwt = false
+
+[functions.generate-exam-student-analysis]
+verify_jwt = false

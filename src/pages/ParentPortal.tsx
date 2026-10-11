@@ -26,7 +26,8 @@ interface ExamPrepScheduleItem { course_id: string; subject: string; title: stri
 interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
 interface ExamTrendRow { exam_year: number; exam_period: string | null; exam_type: string | null; subject: string; score: number }
 interface AcademyAction { kind: 'comment' | 'message' | 'clinic' | 'note'; date: string; subject: string | null; text: string; by: string | null }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; exam_trend?: ExamTrendRow[]; academy_actions?: AcademyAction[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
+interface StudentAnalysisPub { id: string; subject: string; exam_year: number | null; exam_period: string | null; exam_type: string | null; score: number | null; previous_score: number | null; wrong_count: number; total_items: number | null; final_text: string | null; academy_action_text: string | null; published_at: string | null }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; exam_trend?: ExamTrendRow[]; academy_actions?: AcademyAction[]; student_analyses?: StudentAnalysisPub[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -191,6 +192,9 @@ export default function ParentPortal() {
         )}
 
         {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}
+
+        {/* EXAM-STUDENT-ANALYSIS-V1: 원장 컨펌으로 공개된 내 아이 시험 분석 */}
+        {data.student_analyses && data.student_analyses.length > 0 && <StudentAnalysesSection items={data.student_analyses} studentName={student.name} />}
 
         {/* PARENT-EXAM-TREND-V1: 시험 점수 흐름 + 학원의 조치 (학원 기록·학생 화면의 '학부모 공유 가능' 항목) */}
         {data.exam_trend && data.exam_trend.length > 0 && <ExamTrendSection rows={data.exam_trend} studentName={student.name} />}
@@ -588,6 +592,46 @@ function LearningTrendChart({ lessons }: { lessons: LessonRecord[] }) {
         </ResponsiveContainer>
       </div>
     </div>
+  );
+}
+
+/* ═══════ Student analyses (EXAM-STUDENT-ANALYSIS-V1) ═══════ */
+function StudentAnalysesSection({ items, studentName }: { items: StudentAnalysisPub[]; studentName: string }) {
+  const [openId, setOpenId] = useState<string | null>(items[0]?.id ?? null);
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
+        <Sparkles className="w-4 h-4 text-primary" />
+        <h3 className="text-xs font-semibold text-muted-foreground">{studentName} 시험 분석</h3>
+        <Badge variant="outline" className="text-[10px]">{items.length}건</Badge>
+      </div>
+      {items.map(a => {
+        const open = openId === a.id; const d = a.score != null && a.previous_score != null ? a.score - a.previous_score : null;
+        return (
+          <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <button type="button" onClick={() => setOpenId(open ? null : a.id)} className="w-full text-left px-4 py-3 flex items-center gap-2">
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{baseSubject(a.subject)}</span>
+              <span className="text-sm font-bold text-gray-800">{periodLabel(a.exam_year, a.exam_period, a.exam_type)}</span>
+              {a.score != null && <span className="text-xs text-gray-600">{a.score}점{d != null && d !== 0 && <span className={d > 0 ? 'text-emerald-600' : 'text-red-600'}> ({d > 0 ? `+${d}` : d})</span>}</span>}
+              {a.wrong_count > 0 && <span className="text-[11px] text-gray-400">틀린 문항 {a.wrong_count}{a.total_items ? `/${a.total_items}` : ''}</span>}
+              <span className="ml-auto text-[11px] text-blue-600">{open ? '접기' : '보기'}</span>
+            </button>
+            {open && (
+              <div className="px-4 pb-4 space-y-3">
+                {a.final_text && <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{a.final_text}</p>}
+                {a.academy_action_text && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+                    <p className="text-[11px] font-semibold text-amber-800 mb-1">학원에서는</p>
+                    <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{a.academy_action_text}</p>
+                  </div>
+                )}
+                {a.published_at && <p className="text-[10px] text-gray-400">{a.published_at.slice(0, 10)} 담당 선생님 작성 · 원장 확인</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
