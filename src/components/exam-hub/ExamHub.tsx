@@ -31,6 +31,7 @@ import { ExamSubjectView } from './ExamSubjectView';
 import { HelpTip } from '@/components/ui/help-tip';
 import { StudentResultsTab } from './StudentResultsTab';
 import { PaperAnalysisTab } from './PaperAnalysisTab';
+import { PastExamsTable } from './PastExamsTable';
 
 const ExamPrepScheduleManager = lazy(() => import('@/components/ExamPrepScheduleManager').then(m => ({ default: m.ExamPrepScheduleManager })));
 const PrincipalDirectionBoard = lazy(() => import('@/components/exam-board/PrincipalDirectionBoard').then(m => ({ default: m.PrincipalDirectionBoard })));
@@ -168,6 +169,10 @@ export function ExamHub() {
       return a.cycle.school_name.localeCompare(b.cycle.school_name, 'ko');
     });
   }, [cycleCards, query, allCycles, isTeacher, showPast, today]);
+
+  // PAST-CYCLES-V1: '지난 시험'을 켜면 끝난 시험은 카드 띠가 아니라 연도→학교→회차×과목 표로
+  const stripCards = useMemo(() => showPast ? visibleCards.filter(cc => cc.st.kind !== 'after') : visibleCards, [visibleCards, showPast]);
+  const pastCards = useMemo(() => showPast ? visibleCards.filter(cc => cc.st.kind === 'after') : [], [visibleCards, showPast]);
 
   // ── "오늘" 줄: 가장 가까운 시험 + 확인 필요 할 일 ──
   const todayLine = useMemo(() => {
@@ -352,7 +357,7 @@ export function ExamHub() {
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-          {visibleCards.map(cc => {
+          {stripCards.map(cc => {
             const c = cc.cycle;
             const active = c.id === selectedId;
             const urgent = cc.st.kind === 'during' || (cc.st.kind === 'before' && cc.st.days <= 7);
@@ -384,6 +389,12 @@ export function ExamHub() {
               </button>
             );
           })}
+        </div>
+      )}
+      {mode === 'schedule' && showPast && !data.loading && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold"><History className="w-4 h-4 text-muted-foreground" />지난 시험 정리<span className="text-[11px] font-normal text-muted-foreground">연도 → 학교·학년 → 회차 × 과목. 셀의 점수·시험지·분석을 누르면 해당 탭이 아래에 열립니다</span></div>
+          <PastExamsTable cards={pastCards} selectedId={selectedId} onSelect={(c, t) => select(c, t)} />
         </div>
       )}
 
