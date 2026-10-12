@@ -121,9 +121,40 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, isAdmin
                 {publishing === cc.cycle.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Send className="w-3.5 h-3.5 mr-1" />}면담 완료 {publishable.length}건 공개
               </Button>
             )}
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setMaterialsOpen(m => ({ ...m, [cc.cycle.id]: !m[cc.cycle.id] }))}>
+              <FolderUp className="w-3.5 h-3.5 mr-1" />자료 올리기{materialsOpen[cc.cycle.id] ? ' 닫기' : ''}
+            </Button>
             <button type="button" className="text-xs text-primary hover:underline" onClick={() => onOpen(cc.cycle, 'results')}>학생 결과 열기</button>
             <button type="button" className="text-xs text-primary hover:underline" onClick={() => onOpen(cc.cycle, 'papers')}>시험지 분석 열기</button>
           </div>
+          {materialsOpen[cc.cycle.id] && (
+            <div className="px-4 py-3 border-b bg-muted/10 space-y-3">
+              <p className="text-[11px] text-muted-foreground">과목별로 시험지 자료(원본·학생용·답안해설·교사용 분석지·학부모 카드뉴스)를 올리고, 문항별 난도·출제 포인트를 정리합니다. 정리한 내용은 학생 개별 피드백에 반영됩니다.</p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {subjects.map(subject => {
+                  const rep = reportBySubject.get(subject);
+                  return (
+                    <div key={subject} className={cn('rounded-md border p-3 space-y-2', !rep && 'border-dashed')}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{subject}</span>
+                        {rep ? (
+                          <Badge variant={rep.is_published ? 'default' : 'secondary'} className="text-[11px]">{rep.is_published ? '학부모 공개' : '내부'}</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[11px]">미작성</Badge>
+                        )}
+                        <span className="flex-1" />
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => void openEditor(cc, subject)}>
+                          <ClipboardList className="w-3 h-3 mr-1" />분석 정리
+                        </Button>
+                      </div>
+                      <PaperMaterialsSlots report={rep} ensureReport={() => ensureReport(cc, subject)} onChanged={reload} />
+                    </div>
+                  );
+                })}
+                {subjects.length === 0 && <div className="text-xs text-muted-foreground">과목 정보가 없습니다. 시험 정보 탭에서 과목을 채우세요.</div>}
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
