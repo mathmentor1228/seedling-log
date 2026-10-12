@@ -455,13 +455,15 @@ export function ExamHub() {
               )}
             </TabsContent>
             <TabsContent value="papers" className="mt-3">
-              {selected.st.kind !== 'after' && selected.reports.length === 0 ? (
-                <div className="rounded-md border p-4 text-sm text-muted-foreground">시험지 분석은 시험이 끝난 뒤 과목별로 작성합니다. 지금은 작성할 것이 없습니다.</div>
-              ) : (
+              {selected.st.kind !== 'after' && selected.reports.length === 0 && (
+                <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-200 mb-3">
+                  시험이 끝나기 전에도 과목별로 시험지·분석 자료를 미리 올리고 정리할 수 있습니다. 작성한 내용은 시험이 끝난 뒤 학생 개별 피드백에 반영됩니다.
+                </div>
+              )}
               <PaperAnalysisTab cycle={selected.cycle} reports={selected.reports} subjects={selected.cycleSubjects}
                 deepByReport={data.deepByReport} itemCountByReport={data.itemCountByReport}
                 examKey={selected.key} onChanged={data.reload} />
-              )}
+
             </TabsContent>
             {isAdmin && (
               <TabsContent value="principal" className="mt-3">
