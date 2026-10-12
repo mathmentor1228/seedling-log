@@ -81,9 +81,11 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
 
   // Entries
   const [entries, setEntries] = useState<SupplementEntry[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
+  const [excludeBusy, setExcludeBusy] = useState(true);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -110,16 +112,26 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     setLoading(false);
   }
 
-  function addEntry() {
-    if (!selectedStudentId) return;
-    if (entries.some(e => e.student_id === selectedStudentId && e.subject === (sharedSubject || ''))) return;
-    setEntries(prev => [...prev, {
-      student_id: selectedStudentId,
-      subject: sharedSubject,
-      time: sharedTime,
-    }]);
-    setSelectedStudentId('');
-  }
+  // 해당 날짜에 이미 수업(정규 시간표 또는 일지 기록)이 있는 학생
+  useEffect(() => {
+    if (!open || !lessonDate) return;
+    let cancelled = false;
+    (async () => {
+      const dow = new Date(`${lessonDate}T00:00:00`).getDay();
+      const [schedRes, lessonRes] = await Promise.all([
+        supabase.from('class_schedules').select('class_id').eq('day_of_week', dow).eq('is_active', true),
+        supabase.from('lesson_records').select('student_id').eq('lesson_date', lessonDate),
+      ]);
+      const classIds = [...new Set((schedRes.data || []).map(r => r.class_id))];
+      const ids = new Set<string>((lessonRes.data || []).map(r => r.student_id));
+      if (classIds.length > 0) {
+        const { data } = await supabase.from('class_students').select('student_id').in('class_id', classIds);
+        (data || []).forEach(r => ids.add(r.student_id));
+      }
+      if (!cancelled) setBusyIds(ids);
+    })();
+    return () => { cancelled = true; };
+  }, [open, lessonDate]);
 
   function removeEntry(idx: number) {
     setEntries(prev => prev.filter((_, i) => i !== idx));
@@ -182,7 +194,10 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     }
   }
 
-  const availableStudents = students.filter(s => !entries.some(e => e.student_id === s.id && e.subject === (sharedSubject || '')));
+  const availableStudents = students.filter(s =>
+    !entries.some(e => e.student_id === s.id && e.subject === (sharedSubject || '')) &&
+    !(excludeBusy && busyIds.has(s.id))
+  );
   const searchTerm = studentSearch.trim();
   const filteredStudents = searchTerm
     ? availableStudents.filter(s =>
@@ -194,8 +209,30 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     : availableStudents;
   const groupedStudents = groupStudentsByGrade(filteredStudents);
 
-  function pickStudent(id: string) {
-    setSelectedStudentId(id);
+  function toggleStudent(id: string) {
+    setPicked(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(ids: string[]) {
+    setPicked(prev => {
+      const next = new Set(prev);
+      const allOn = ids.every(id => next.has(id));
+      ids.forEach(id => (allOn ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+
+  function addPicked() {
+    if (picked.size === 0 || !sharedSubject) return;
+    const newOnes = [...picked]
+      .filter(id => !entries.some(e => e.student_id === id && e.subject === sharedSubject))
+      .map(id => ({ student_id: id, subject: sharedSubject, time: sharedTime }));
+    setEntries(prev => [...prev, ...newOnes]);
+    setPicked(new Set());
     setPickerOpen(false);
     setStudentSearch('');
   }
