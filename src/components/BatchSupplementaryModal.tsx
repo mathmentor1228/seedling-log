@@ -389,7 +389,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                 </div>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <Checkbox checked={excludeBusy} onCheckedChange={(v) => setExcludeBusy(!!v)} />
-                  이 날짜에 이미 수업이 있는 학생 제외
+                  이 날짜에 같은 과목 수업이 있는 학생 제외
                   {excludeBusy && busyIds.size > 0 && <span>({busyIds.size}명 숨김)</span>}
                 </label>
               </div>
