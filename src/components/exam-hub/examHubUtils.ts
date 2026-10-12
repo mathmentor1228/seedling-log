@@ -40,6 +40,8 @@ export type ReportRow = {
   is_published: boolean; published_at: string | null; original_pdf_path: string | null; answer_pdf_path: string | null;
   exam_difficulty: string | null; avg_score: number | null; card_image_paths: unknown; updated_at: string | null;
   created_by_name: string | null;
+  student_paper_path?: string | null; teacher_analysis_pdf_path?: string | null;
+  overall_review?: string | null; focus_summary?: string | null; tricky_points?: string | null;
 };
 export type DeepReportRow = { id: string; analysis_report_id: string; status: string; teacher_notes: string | null; published_at: string | null };
 export type ReportItemCount = { report_id: string; count: number };

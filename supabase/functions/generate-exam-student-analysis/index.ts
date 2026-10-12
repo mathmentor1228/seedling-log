@@ -105,22 +105,29 @@ Deno.serve(async (req) => {
 
   // 분석지 문항 난도 (같은 학교·학년·과목·회차)
   let diffByItem = new Map<number, string>(); let examDifficulty: string | null = null;
+  let infoByItem = new Map<number, string>(); let examContext = '';
   try {
     const grade = String(r.grade_at_exam || st.grade_year || '').replace(/[^0-9]/g, '');
     const schoolN = String(st.school || r.school_name || '').replace(/(등학교|학교)$/, '');
-    const { data: reps } = await admin.from('exam_analysis_reports').select('id, school_name, grade, subject, exam_year, exam_period, exam_type, exam_difficulty').eq('exam_year', r.exam_year).limit(50);
+    const { data: reps } = await admin.from('exam_analysis_reports').select('id, school_name, grade, subject, exam_year, exam_period, exam_type, exam_difficulty, overall_review, focus_summary, tricky_points').eq('exam_year', r.exam_year).limit(50);
     const rep = ((reps || []) as any[]).find(x => String(x.school_name || '').replace(/(등학교|학교)$/, '') === schoolN && String(x.grade).replace(/[^0-9]/g, '') === grade && baseSubject(x.subject) === subj
       && ((x.exam_period === r.exam_period) || (String(x.exam_period || '').startsWith(r.exam_period?.includes('2') ? '2' : '1') && ((x.exam_type || '').includes('중간') === (r.exam_period || '').endsWith('a')))));
     if (rep) {
       examDifficulty = rep.exam_difficulty || null;
-      const { data: ai } = await admin.from('exam_analysis_items').select('item_number, difficulty').eq('report_id', rep.id);
-      for (const it of (ai || []) as any[]) if (it.difficulty) diffByItem.set(it.item_number, it.difficulty);
+      const cut = (v: unknown, n = 400) => String(v || '').trim().slice(0, n);
+      examContext = [rep.overall_review && `- 출제 총평: ${cut(rep.overall_review)}`, rep.focus_summary && `- 주로 출제된 부분: ${cut(rep.focus_summary)}`, rep.tricky_points && `- 까다로운 포인트: ${cut(rep.tricky_points)}`].filter(Boolean).join('\n');
+      const { data: ai } = await admin.from('exam_analysis_items').select('item_number, difficulty, unit_name, question_type, note, points').eq('report_id', rep.id);
+      for (const it of (ai || []) as any[]) {
+        if (it.difficulty) diffByItem.set(it.item_number, it.difficulty);
+        const parts = [it.unit_name && `단원 ${cut(it.unit_name, 60)}`, it.question_type && `유형 ${cut(it.question_type, 40)}`, it.points != null && `${it.points}점`, it.note && `분석 메모: ${cut(it.note, 160)}`].filter(Boolean);
+        if (parts.length) infoByItem.set(it.item_number, parts.join(', '));
+      }
     }
   } catch { diffByItem = new Map(); }
 
   const g = givenName(st.name);
   const delta = r.previous_score != null ? r.actual_score - r.previous_score : null;
-  const wrongLines = wrong.map(w => `- ${w.item_number}번${diffByItem.get(w.item_number) ? ` (난도 ${diffByItem.get(w.item_number)})` : ''}: ${(w.reason_tags || []).map(label).join(', ') || '태그 없음'}${w.memo ? ` — ${w.memo}` : ''}`).join('\n');
+  const wrongLines = wrong.map(w => `- ${w.item_number}번${diffByItem.get(w.item_number) ? ` (난도 ${diffByItem.get(w.item_number)})` : ''}${infoByItem.get(w.item_number) ? ` [${infoByItem.get(w.item_number)}]` : ''}: ${(w.reason_tags || []).map(label).join(', ') || '태그 없음'}${w.memo ? ` — ${w.memo}` : ''}`).join('\n');
   const totalItems = an?.total_items || null;
   const userPrompt = `학생 호칭: "${g}이는" 또는 "아이"
 과목: ${r.subject}
@@ -128,9 +135,9 @@ Deno.serve(async (req) => {
 [기록]
 - 실점수 ${r.actual_score}점${delta != null ? ` (직전 시험 ${r.previous_score}점, ${delta >= 0 ? '+' : ''}${delta})` : ''}${r.expected_score != null ? ` · 가채점 ${r.expected_score}점` : ''}
 - 틀린 문항 ${wrong.length}개${totalItems ? ` / 전체 ${totalItems}문항` : ''}${examDifficulty ? ` · 이번 시험 전체 난도 ${examDifficulty}` : ''}${byStudent ? ' (틀린 이유는 아이가 직접 고른 것)' : ''}
-${wrongLines}${reflection ? `\n- 아이가 스스로 적은 "다음 시험까지 내가 할 것": ${reflection}` : ''}
+${wrongLines}${examContext ? `\n[선생님 시험지 분석]\n${examContext}` : ''}${reflection ? `\n- 아이가 스스로 적은 "다음 시험까지 내가 할 것": ${reflection}` : ''}
 
-위 기록만으로 학부모께 보내는 글(parent_text)을 JSON으로 작성하세요.${reflection ? ' 아이가 스스로 적은 다짐이 있으면 마지막 문장에서 그 내용을 그대로 살려 쓰세요(새 다짐을 만들지 않습니다).' : ''}`;
+위 기록만으로(선생님 시험지 분석이 있으면 틀린 문항의 난도·단원·까다로운 점과 연결해서) 학부모께 보내는 글(parent_text)을 JSON으로 작성하세요.${reflection ? ' 아이가 스스로 적은 다짐이 있으면 마지막 문장에서 그 내용을 그대로 살려 쓰세요(새 다짐을 만들지 않습니다).' : ''}`;
 
   const apiKey = Deno.env.get('LOVABLE_API_KEY'); if (!apiKey) return json({ error: 'LOVABLE_API_KEY_missing' }, 500);
   let text = '', violations: string[] = [], attempts = 0; let retry: string | undefined;

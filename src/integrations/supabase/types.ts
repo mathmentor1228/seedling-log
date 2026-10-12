@@ -1351,6 +1351,7 @@ export type Database = {
           exam_scope: string | null
           exam_type: string
           exam_year: number
+          focus_summary: string | null
           grade: string
           id: string
           is_locked: boolean | null
@@ -1364,9 +1365,12 @@ export type Database = {
           published_at: string | null
           school_name: string
           student_message: string | null
+          student_paper_path: string | null
           study_links: Json | null
           subject: string
+          teacher_analysis_pdf_path: string | null
           textbook: string | null
+          tricky_points: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1384,6 +1388,7 @@ export type Database = {
           exam_scope?: string | null
           exam_type: string
           exam_year: number
+          focus_summary?: string | null
           grade: string
           id?: string
           is_locked?: boolean | null
@@ -1397,9 +1402,12 @@ export type Database = {
           published_at?: string | null
           school_name: string
           student_message?: string | null
+          student_paper_path?: string | null
           study_links?: Json | null
           subject: string
+          teacher_analysis_pdf_path?: string | null
           textbook?: string | null
+          tricky_points?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1417,6 +1425,7 @@ export type Database = {
           exam_scope?: string | null
           exam_type?: string
           exam_year?: number
+          focus_summary?: string | null
           grade?: string
           id?: string
           is_locked?: boolean | null
@@ -1430,9 +1439,12 @@ export type Database = {
           published_at?: string | null
           school_name?: string
           student_message?: string | null
+          student_paper_path?: string | null
           study_links?: Json | null
           subject?: string
+          teacher_analysis_pdf_path?: string | null
           textbook?: string | null
+          tricky_points?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -9558,6 +9570,7 @@ export type Database = {
           exam_scope: string | null
           exam_type: string
           exam_year: number
+          focus_summary: string | null
           grade: string
           id: string
           is_locked: boolean | null
@@ -9571,9 +9584,12 @@ export type Database = {
           published_at: string | null
           school_name: string
           student_message: string | null
+          student_paper_path: string | null
           study_links: Json | null
           subject: string
+          teacher_analysis_pdf_path: string | null
           textbook: string | null
+          tricky_points: string | null
           updated_at: string | null
         }[]
         SetofOptions: {
@@ -9600,6 +9616,7 @@ export type Database = {
           exam_scope: string | null
           exam_type: string
           exam_year: number
+          focus_summary: string | null
           grade: string
           id: string
           is_locked: boolean | null
@@ -9613,9 +9630,12 @@ export type Database = {
           published_at: string | null
           school_name: string
           student_message: string | null
+          student_paper_path: string | null
           study_links: Json | null
           subject: string
+          teacher_analysis_pdf_path: string | null
           textbook: string | null
+          tricky_points: string | null
           updated_at: string | null
         }[]
         SetofOptions: {

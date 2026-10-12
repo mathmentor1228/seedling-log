@@ -86,7 +86,7 @@ export function useExamHubData(): ExamHubData {
         db.from('student_exam_results')
           .select('id, student_id, subject, exam_type, exam_year, exam_period, actual_score, expected_score, exam_date, submitted_at, note, review_status, source, sheet_teacher_name, previous_score, synced_at, school_name'),
         db.from('exam_analysis_reports')
-          .select('id, school_name, grade, subject, exam_year, exam_period, exam_type, is_published, published_at, original_pdf_path, answer_pdf_path, exam_difficulty, avg_score, card_image_paths, updated_at, created_by_name'),
+          .select('id, school_name, grade, subject, exam_year, exam_period, exam_type, is_published, published_at, original_pdf_path, answer_pdf_path, exam_difficulty, avg_score, card_image_paths, updated_at, created_by_name, student_paper_path, teacher_analysis_pdf_path, overall_review, focus_summary, tricky_points'),
         db.from('exam_deep_analysis_reports').select('id, analysis_report_id, status, teacher_notes, published_at'),
         db.from('exam_analysis_items').select('report_id'),
         db.from('school_textbooks').select('school_name, grade, subject, publisher, textbook_name, year'),
