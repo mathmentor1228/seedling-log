@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const EXAM_DIFF = ['매우쉬움', '쉬움', '중', '어려움', '매우어려움'];
@@ -66,6 +66,40 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
     });
   };
 
+  const [aiBusy, setAiBusy] = useState(false);
+  async function autoFill() {
+    if (!reportId) return;
+    if ((items.length || head.overall_review) && !confirm('올린 자료를 읽어 내용을 다시 정리합니다. 지금 칸의 내용이 바뀝니다. 계속할까요?')) return;
+    setAiBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('summarize-exam-paper', { body: { report_id: reportId } });
+      if (error || data?.error) {
+        let msg = data?.error || error?.message;
+        try { msg = (await (error as any)?.context?.json())?.error || msg; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      const r = data.result || {};
+      setHead(h => ({
+        exam_difficulty: EXAM_DIFF.includes(r.exam_difficulty) ? r.exam_difficulty : h.exam_difficulty,
+        avg_score: r.avg_score != null ? String(r.avg_score) : h.avg_score,
+        overall_review: r.overall_review || h.overall_review,
+        focus_summary: r.focus_summary || h.focus_summary,
+        tricky_points: r.tricky_points || h.tricky_points,
+      }));
+      if (Array.isArray(r.items) && r.items.length) {
+        const seen = new Set<number>();
+        const list: Item[] = r.items.map((i: any) => ({
+          item_number: parseInt(i.item_number) || 0, points: i.points != null ? String(i.points) : '',
+          unit_name: i.unit_name || '', question_type: i.question_type || '',
+          difficulty: ITEM_DIFF.includes(i.difficulty) ? i.difficulty : '', note: i.note || '',
+        })).filter((i: Item) => i.item_number > 0 && !seen.has(i.item_number) && seen.add(i.item_number))
+          .sort((a: Item, b: Item) => a.item_number - b.item_number);
+        setItems(list);
+      }
+      toast.success('자료를 읽어 정리했어요. 확인 후 저장을 눌러 주세요.');
+    } catch (e: any) { toast.error('자동 정리 실패: ' + (e?.message || e)); } finally { setAiBusy(false); }
+  }
+
   async function save() {
     if (!reportId) return;
     const nums = items.map(i => i.item_number);
@@ -108,6 +142,14 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
           <div className="flex items-center gap-2 text-sm text-muted-foreground p-6"><Loader2 className="w-4 h-4 animate-spin" />불러오는 중</div>
         ) : (
           <div className="space-y-4">
+            <div className="flex items-center gap-2 rounded-md border border-dashed p-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground flex-1">올린 자료(교사용 분석지 우선, 시험지·해설지)를 읽어 아래 칸을 자동으로 채웁니다.</span>
+              <Button size="sm" onClick={() => void autoFill()} disabled={aiBusy}>
+                {aiBusy ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1" />}
+                {aiBusy ? '읽는 중…' : '자료 읽어서 정리하기'}
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">전체 난이도</Label>
