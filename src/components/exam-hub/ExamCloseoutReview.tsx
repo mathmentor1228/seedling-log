@@ -3,12 +3,15 @@
 // EXAM-SELF-REVIEW-V1 (vault 19 §21): 학생 분석 열을 학생 제출 → 면담 완료 → 공개 3단계로 보여주고, 원장은 "면담 완료 N건 공개"로 일괄 공개.
 import { useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, Send } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, FolderUp, Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { analysisStage, ddayLabel, gradeLabel, type Cycle, type DdayState, type DeepReportRow, type ReportRow, type StudentAnalysis, type StudentSubjectRow } from './examHubUtils';
+import { PaperMaterialsSlots } from './PaperMaterialsSlots';
+import { PaperAnalysisEditor } from './PaperAnalysisEditor';
 
 export interface ReviewCard {
   cycle: Cycle; st: DdayState; rows: StudentSubjectRow[]; reports: ReportRow[]; cycleSubjects: string[];
