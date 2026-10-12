@@ -2057,6 +2057,7 @@ export type Database = {
           memo: string | null
           reason_tags: string[]
           result_id: string
+          source: string
           updated_at: string
         }
         Insert: {
@@ -2067,6 +2068,7 @@ export type Database = {
           memo?: string | null
           reason_tags?: string[]
           result_id: string
+          source?: string
           updated_at?: string
         }
         Update: {
@@ -2077,6 +2079,7 @@ export type Database = {
           memo?: string | null
           reason_tags?: string[]
           result_id?: string
+          source?: string
           updated_at?: string
         }
         Relationships: [
@@ -2304,6 +2307,8 @@ export type Database = {
         Row: {
           academy_action_text: string | null
           ai_draft: string | null
+          counseled_at: string | null
+          counseled_by: string | null
           created_at: string
           created_by: string | null
           exam_period: string | null
@@ -2316,6 +2321,8 @@ export type Database = {
           result_id: string
           status: string
           student_id: string
+          student_reflection: string | null
+          student_submitted_at: string | null
           subject: string
           teacher_confirmed_at: string | null
           teacher_confirmed_by: string | null
@@ -2326,6 +2333,8 @@ export type Database = {
         Insert: {
           academy_action_text?: string | null
           ai_draft?: string | null
+          counseled_at?: string | null
+          counseled_by?: string | null
           created_at?: string
           created_by?: string | null
           exam_period?: string | null
@@ -2338,6 +2347,8 @@ export type Database = {
           result_id: string
           status?: string
           student_id: string
+          student_reflection?: string | null
+          student_submitted_at?: string | null
           subject: string
           teacher_confirmed_at?: string | null
           teacher_confirmed_by?: string | null
@@ -2348,6 +2359,8 @@ export type Database = {
         Update: {
           academy_action_text?: string | null
           ai_draft?: string | null
+          counseled_at?: string | null
+          counseled_by?: string | null
           created_at?: string
           created_by?: string | null
           exam_period?: string | null
@@ -2360,6 +2373,8 @@ export type Database = {
           result_id?: string
           status?: string
           student_id?: string
+          student_reflection?: string | null
+          student_submitted_at?: string | null
           subject?: string
           teacher_confirmed_at?: string | null
           teacher_confirmed_by?: string | null
