@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -2048,6 +2048,47 @@ export type Database = {
           },
         ]
       }
+      exam_result_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_wrong: boolean
+          item_number: number
+          memo: string | null
+          reason_tags: string[]
+          result_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_wrong?: boolean
+          item_number: number
+          memo?: string | null
+          reason_tags?: string[]
+          result_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_wrong?: boolean
+          item_number?: number
+          memo?: string | null
+          reason_tags?: string[]
+          result_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_result_items_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "student_exam_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_reviews: {
         Row: {
           created_at: string | null
@@ -2259,6 +2300,90 @@ export type Database = {
         }
         Relationships: []
       }
+      exam_student_analyses: {
+        Row: {
+          academy_action_text: string | null
+          ai_draft: string | null
+          created_at: string
+          created_by: string | null
+          exam_period: string | null
+          exam_year: number | null
+          final_text: string | null
+          id: string
+          principal_confirmed_at: string | null
+          principal_confirmed_by: string | null
+          published_at: string | null
+          result_id: string
+          status: string
+          student_id: string
+          subject: string
+          teacher_confirmed_at: string | null
+          teacher_confirmed_by: string | null
+          total_items: number | null
+          updated_at: string
+          wrong_count: number
+        }
+        Insert: {
+          academy_action_text?: string | null
+          ai_draft?: string | null
+          created_at?: string
+          created_by?: string | null
+          exam_period?: string | null
+          exam_year?: number | null
+          final_text?: string | null
+          id?: string
+          principal_confirmed_at?: string | null
+          principal_confirmed_by?: string | null
+          published_at?: string | null
+          result_id: string
+          status?: string
+          student_id: string
+          subject: string
+          teacher_confirmed_at?: string | null
+          teacher_confirmed_by?: string | null
+          total_items?: number | null
+          updated_at?: string
+          wrong_count?: number
+        }
+        Update: {
+          academy_action_text?: string | null
+          ai_draft?: string | null
+          created_at?: string
+          created_by?: string | null
+          exam_period?: string | null
+          exam_year?: number | null
+          final_text?: string | null
+          id?: string
+          principal_confirmed_at?: string | null
+          principal_confirmed_by?: string | null
+          published_at?: string | null
+          result_id?: string
+          status?: string
+          student_id?: string
+          subject?: string
+          teacher_confirmed_at?: string | null
+          teacher_confirmed_by?: string | null
+          total_items?: number | null
+          updated_at?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_student_analyses_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: true
+            referencedRelation: "student_exam_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_student_analyses_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_student_self_checks: {
         Row: {
           id: string
@@ -2374,6 +2499,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      exam_wrong_reason_tags: {
+        Row: {
+          code: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          subject: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          subject: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          subject?: string
+        }
+        Relationships: []
       }
       historical_monthly_tuition: {
         Row: {
