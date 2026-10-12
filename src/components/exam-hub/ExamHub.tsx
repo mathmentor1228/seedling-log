@@ -463,7 +463,7 @@ export function ExamHub() {
               <PaperAnalysisTab cycle={selected.cycle} reports={selected.reports} subjects={selected.cycleSubjects}
                 deepByReport={data.deepByReport} itemCountByReport={data.itemCountByReport}
                 examKey={selected.key} onChanged={data.reload} />
-              )}
+
             </TabsContent>
             {isAdmin && (
               <TabsContent value="principal" className="mt-3">
