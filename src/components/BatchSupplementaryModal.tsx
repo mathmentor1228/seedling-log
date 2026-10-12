@@ -81,9 +81,11 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
 
   // Entries
   const [entries, setEntries] = useState<SupplementEntry[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
+  const [excludeBusy, setExcludeBusy] = useState(true);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -93,7 +95,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
       setTeacherId(user?.id || '');
       setSharedTime('');
       setSharedSubject('');
-      setSelectedStudentId('');
+      setPicked(new Set());
       setPickerOpen(false);
       setStudentSearch('');
     }
@@ -110,16 +112,26 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     setLoading(false);
   }
 
-  function addEntry() {
-    if (!selectedStudentId) return;
-    if (entries.some(e => e.student_id === selectedStudentId && e.subject === (sharedSubject || ''))) return;
-    setEntries(prev => [...prev, {
-      student_id: selectedStudentId,
-      subject: sharedSubject,
-      time: sharedTime,
-    }]);
-    setSelectedStudentId('');
-  }
+  // 해당 날짜에 이미 수업(정규 시간표 또는 일지 기록)이 있는 학생
+  useEffect(() => {
+    if (!open || !lessonDate) return;
+    let cancelled = false;
+    (async () => {
+      const dow = new Date(`${lessonDate}T00:00:00`).getDay();
+      const [schedRes, lessonRes] = await Promise.all([
+        supabase.from('class_schedules').select('class_id').eq('day_of_week', dow).eq('is_active', true),
+        supabase.from('lesson_records').select('student_id').eq('lesson_date', lessonDate),
+      ]);
+      const classIds = [...new Set((schedRes.data || []).map(r => r.class_id))];
+      const ids = new Set<string>((lessonRes.data || []).map(r => r.student_id));
+      if (classIds.length > 0) {
+        const { data } = await supabase.from('class_students').select('student_id').in('class_id', classIds);
+        (data || []).forEach(r => ids.add(r.student_id));
+      }
+      if (!cancelled) setBusyIds(ids);
+    })();
+    return () => { cancelled = true; };
+  }, [open, lessonDate]);
 
   function removeEntry(idx: number) {
     setEntries(prev => prev.filter((_, i) => i !== idx));
@@ -182,7 +194,10 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     }
   }
 
-  const availableStudents = students.filter(s => !entries.some(e => e.student_id === s.id && e.subject === (sharedSubject || '')));
+  const availableStudents = students.filter(s =>
+    !entries.some(e => e.student_id === s.id && e.subject === (sharedSubject || '')) &&
+    !(excludeBusy && busyIds.has(s.id))
+  );
   const searchTerm = studentSearch.trim();
   const filteredStudents = searchTerm
     ? availableStudents.filter(s =>
@@ -194,8 +209,30 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     : availableStudents;
   const groupedStudents = groupStudentsByGrade(filteredStudents);
 
-  function pickStudent(id: string) {
-    setSelectedStudentId(id);
+  function toggleStudent(id: string) {
+    setPicked(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(ids: string[]) {
+    setPicked(prev => {
+      const next = new Set(prev);
+      const allOn = ids.every(id => next.has(id));
+      ids.forEach(id => (allOn ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+
+  function addPicked() {
+    if (picked.size === 0 || !sharedSubject) return;
+    const newOnes = [...picked]
+      .filter(id => !entries.some(e => e.student_id === id && e.subject === sharedSubject))
+      .map(id => ({ student_id: id, subject: sharedSubject, time: sharedTime }));
+    setEntries(prev => [...prev, ...newOnes]);
+    setPicked(new Set());
     setPickerOpen(false);
     setStudentSearch('');
   }
@@ -279,8 +316,8 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                   <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="flex-1 justify-between font-normal">
-                        <span className={selectedStudentId ? '' : 'text-muted-foreground'}>
-                          {selectedStudentId ? getStudentName(selectedStudentId) : '학생 선택'}
+                        <span className={picked.size ? '' : 'text-muted-foreground'}>
+                          {picked.size ? `${picked.size}명 선택됨` : '학생 선택 (여러 명 가능)'}
                         </span>
                         <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                       </Button>
@@ -300,38 +337,61 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                         {groupedStudents.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">검색 결과 없음</div>
                         ) : (
-                          groupedStudents.map(([groupKey, groupStudents]) => (
-                            <div key={groupKey}>
-                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-popover">
-                                {getStudentGroupLabel(groupKey)}
-                              </div>
-                              {groupStudents.map(s => (
+                          groupedStudents.map(([groupKey, groupStudents]) => {
+                            const ids = groupStudents.map(s => s.id);
+                            const allOn = ids.every(id => picked.has(id));
+                            return (
+                              <div key={groupKey}>
                                 <button
-                                  key={s.id}
                                   type="button"
-                                  onClick={() => pickStudent(s.id)}
-                                  className="w-full text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground"
+                                  onClick={() => toggleGroup(ids)}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-popover z-10 hover:text-foreground"
                                 >
-                                  {s.name}
-                                  {s.school && <span className="ml-1.5 text-xs text-muted-foreground">{s.school}</span>}
+                                  <Checkbox checked={allOn} className="pointer-events-none" />
+                                  {getStudentGroupLabel(groupKey)} ({groupStudents.length}) · 전체
                                 </button>
-                              ))}
-                            </div>
-                          ))
+                                {groupStudents.map(s => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => toggleStudent(s.id)}
+                                    className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground"
+                                  >
+                                    <Checkbox checked={picked.has(s.id)} className="pointer-events-none" />
+                                    {s.name}
+                                    {s.school && <span className="text-xs text-muted-foreground">{s.school}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })
                         )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border">
+                        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setPicked(new Set())}>
+                          선택 해제
+                        </button>
+                        <Button size="sm" onClick={addPicked} disabled={picked.size === 0 || !sharedSubject}>
+                          {sharedSubject ? `${picked.size}명 추가` : '과목 먼저 선택'}
+                        </Button>
                       </div>
                     </PopoverContent>
                   </Popover>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={addEntry}
-                    disabled={!selectedStudentId || !sharedSubject}
+                    onClick={addPicked}
+                    disabled={picked.size === 0 || !sharedSubject}
                     className="h-10"
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={excludeBusy} onCheckedChange={(v) => setExcludeBusy(!!v)} />
+                  이 날짜에 이미 수업이 있는 학생 제외
+                  {excludeBusy && busyIds.size > 0 && <span>({busyIds.size}명 숨김)</span>}
+                </label>
               </div>
 
               {/* Entry list */}
