@@ -95,7 +95,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
       setTeacherId(user?.id || '');
       setSharedTime('');
       setSharedSubject('');
-      setSelectedStudentId('');
+      setPicked(new Set());
       setPickerOpen(false);
       setStudentSearch('');
     }
