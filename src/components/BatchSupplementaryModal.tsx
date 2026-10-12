@@ -112,15 +112,15 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     setLoading(false);
   }
 
-  // 해당 날짜에 이미 수업(정규 시간표 또는 일지 기록)이 있는 학생
+  // 해당 날짜에 같은 과목 수업(정규 시간표 또는 일지 기록)이 이미 있는 학생
   useEffect(() => {
-    if (!open || !lessonDate) return;
+    if (!open || !lessonDate || !sharedSubject) { setBusyIds(new Set()); return; }
     let cancelled = false;
     (async () => {
       const dow = new Date(`${lessonDate}T00:00:00`).getDay();
       const [schedRes, lessonRes] = await Promise.all([
-        supabase.from('class_schedules').select('class_id').eq('day_of_week', dow).eq('is_active', true),
-        supabase.from('lesson_records').select('student_id').eq('lesson_date', lessonDate),
+        supabase.from('class_schedules').select('class_id, classes!inner(subject)').eq('day_of_week', dow).eq('is_active', true).eq('classes.subject', sharedSubject as any),
+        supabase.from('lesson_records').select('student_id').eq('lesson_date', lessonDate).eq('subject', sharedSubject as any),
       ]);
       const classIds = [...new Set((schedRes.data || []).map(r => r.class_id))];
       const ids = new Set<string>((lessonRes.data || []).map(r => r.student_id));
@@ -131,7 +131,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
       if (!cancelled) setBusyIds(ids);
     })();
     return () => { cancelled = true; };
-  }, [open, lessonDate]);
+  }, [open, lessonDate, sharedSubject]);
 
   function removeEntry(idx: number) {
     setEntries(prev => prev.filter((_, i) => i !== idx));
@@ -389,7 +389,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                 </div>
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                   <Checkbox checked={excludeBusy} onCheckedChange={(v) => setExcludeBusy(!!v)} />
-                  이 날짜에 이미 수업이 있는 학생 제외
+                  이 날짜에 같은 과목 수업이 있는 학생 제외
                   {excludeBusy && busyIds.size > 0 && <span>({busyIds.size}명 숨김)</span>}
                 </label>
               </div>
