@@ -1353,6 +1353,7 @@ export type Database = {
           exam_year: number
           focus_summary: string | null
           grade: string
+          grade_cutoffs: string | null
           id: string
           is_locked: boolean | null
           is_published: boolean
@@ -1390,6 +1391,7 @@ export type Database = {
           exam_year: number
           focus_summary?: string | null
           grade: string
+          grade_cutoffs?: string | null
           id?: string
           is_locked?: boolean | null
           is_published?: boolean
@@ -1427,6 +1429,7 @@ export type Database = {
           exam_year?: number
           focus_summary?: string | null
           grade?: string
+          grade_cutoffs?: string | null
           id?: string
           is_locked?: boolean | null
           is_published?: boolean
@@ -9572,6 +9575,7 @@ export type Database = {
           exam_year: number
           focus_summary: string | null
           grade: string
+          grade_cutoffs: string | null
           id: string
           is_locked: boolean | null
           is_published: boolean
@@ -9618,6 +9622,7 @@ export type Database = {
           exam_year: number
           focus_summary: string | null
           grade: string
+          grade_cutoffs: string | null
           id: string
           is_locked: boolean | null
           is_published: boolean

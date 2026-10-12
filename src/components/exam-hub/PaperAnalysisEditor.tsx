@@ -26,7 +26,7 @@ interface Props {
 export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [head, setHead] = useState({ exam_difficulty: '', avg_score: '', overall_review: '', focus_summary: '', tricky_points: '' });
+  const [head, setHead] = useState({ exam_difficulty: '', avg_score: '', grade_cutoffs: '', overall_review: '', focus_summary: '', tricky_points: '' });
   const [items, setItems] = useState<Item[]>([]);
   const [origNums, setOrigNums] = useState<number[]>([]);
   const [bulkCount, setBulkCount] = useState('');
@@ -37,11 +37,12 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
     (async () => {
       const db = supabase as any;
       const [{ data: r }, { data: its }] = await Promise.all([
-        db.from('exam_analysis_reports').select('exam_difficulty, avg_score, overall_review, focus_summary, tricky_points').eq('id', reportId).maybeSingle(),
+        db.from('exam_analysis_reports').select('exam_difficulty, avg_score, grade_cutoffs, overall_review, focus_summary, tricky_points').eq('id', reportId).maybeSingle(),
         db.from('exam_analysis_items').select('item_number, points, unit_name, question_type, difficulty, note').eq('report_id', reportId).order('item_number'),
       ]);
       setHead({
         exam_difficulty: r?.exam_difficulty || '', avg_score: r?.avg_score != null ? String(r.avg_score) : '',
+        grade_cutoffs: r?.grade_cutoffs || '',
         overall_review: r?.overall_review || '', focus_summary: r?.focus_summary || '', tricky_points: r?.tricky_points || '',
       });
       const list: Item[] = ((its || []) as any[]).map(i => ({
@@ -80,6 +81,7 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
       }
       const r = data.result || {};
       setHead(h => ({
+        ...h,
         exam_difficulty: EXAM_DIFF.includes(r.exam_difficulty) ? r.exam_difficulty : h.exam_difficulty,
         avg_score: r.avg_score != null ? String(r.avg_score) : h.avg_score,
         overall_review: r.overall_review || h.overall_review,
@@ -111,6 +113,7 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
       const avg = head.avg_score.trim() ? Number(head.avg_score) : null;
       const { error } = await db.from('exam_analysis_reports').update({
         exam_difficulty: head.exam_difficulty || null, avg_score: avg != null && !isNaN(avg) ? avg : null,
+        grade_cutoffs: head.grade_cutoffs.trim() || null,
         overall_review: head.overall_review.trim() || null, focus_summary: head.focus_summary.trim() || null,
         tricky_points: head.tricky_points.trim() || null, updated_at: new Date().toISOString(),
       }).eq('id', reportId);
@@ -150,7 +153,7 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
                 {aiBusy ? '읽는 중…' : '자료 읽어서 정리하기'}
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">전체 난이도</Label>
                 <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={head.exam_difficulty}
@@ -160,8 +163,12 @@ export function PaperAnalysisEditor({ open, onOpenChange, reportId, title, onSav
                 </select>
               </div>
               <div>
-                <Label className="text-xs">학교 평균</Label>
-                <Input type="number" value={head.avg_score} onChange={e => setHead(h => ({ ...h, avg_score: e.target.value }))} />
+                <Label htmlFor="paper-average" className="text-xs">학교 평균</Label>
+                <Input id="paper-average" type="number" value={head.avg_score} onChange={e => setHead(h => ({ ...h, avg_score: e.target.value }))} />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <Label htmlFor="paper-grade-cutoffs" className="text-xs">등급컷 (선택)</Label>
+                <Input id="paper-grade-cutoffs" placeholder="예: 1등급 90 / 2등급 80" value={head.grade_cutoffs} onChange={e => setHead(h => ({ ...h, grade_cutoffs: e.target.value }))} />
               </div>
             </div>
             <div>

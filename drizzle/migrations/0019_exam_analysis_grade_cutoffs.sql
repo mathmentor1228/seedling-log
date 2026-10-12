@@ -1,0 +1,2 @@
+ALTER TABLE public.exam_analysis_reports ADD COLUMN IF NOT EXISTS grade_cutoffs text;
+COMMENT ON COLUMN public.exam_analysis_reports.grade_cutoffs IS 'Optional free-text grade cutoff notes for the exam analysis.';
