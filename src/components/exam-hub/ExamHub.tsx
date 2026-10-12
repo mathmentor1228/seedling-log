@@ -459,7 +459,8 @@ export function ExamHub() {
                 <div className="rounded-md border p-4 text-sm text-muted-foreground">시험지 분석은 시험이 끝난 뒤 과목별로 작성합니다. 지금은 작성할 것이 없습니다.</div>
               ) : (
               <PaperAnalysisTab cycle={selected.cycle} reports={selected.reports} subjects={selected.cycleSubjects}
-                deepByReport={data.deepByReport} itemCountByReport={data.itemCountByReport} />
+                deepByReport={data.deepByReport} itemCountByReport={data.itemCountByReport}
+                examKey={selected.key} onChanged={data.reload} />
               )}
             </TabsContent>
             {isAdmin && (
