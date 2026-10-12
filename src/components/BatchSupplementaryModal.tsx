@@ -119,7 +119,7 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
     (async () => {
       const dow = new Date(`${lessonDate}T00:00:00`).getDay();
       const [schedRes, lessonRes] = await Promise.all([
-        supabase.from('class_schedules').select('class_id, classes!inner(subject)').eq('day_of_week', dow).eq('is_active', true).eq('classes.subject', sharedSubject),
+        supabase.from('class_schedules').select('class_id, classes!inner(subject)').eq('day_of_week', dow).eq('is_active', true).eq('classes.subject', sharedSubject as any),
         supabase.from('lesson_records').select('student_id').eq('lesson_date', lessonDate).eq('subject', sharedSubject as any),
       ]);
       const classIds = [...new Set((schedRes.data || []).map(r => r.class_id))];
