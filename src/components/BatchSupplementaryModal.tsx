@@ -316,8 +316,8 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                   <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="flex-1 justify-between font-normal">
-                        <span className={selectedStudentId ? '' : 'text-muted-foreground'}>
-                          {selectedStudentId ? getStudentName(selectedStudentId) : '학생 선택'}
+                        <span className={picked.size ? '' : 'text-muted-foreground'}>
+                          {picked.size ? `${picked.size}명 선택됨` : '학생 선택 (여러 명 가능)'}
                         </span>
                         <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                       </Button>
@@ -337,38 +337,61 @@ export function BatchSupplementaryModal({ open, onOpenChange, onSaved }: BatchSu
                         {groupedStudents.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">검색 결과 없음</div>
                         ) : (
-                          groupedStudents.map(([groupKey, groupStudents]) => (
-                            <div key={groupKey}>
-                              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-popover">
-                                {getStudentGroupLabel(groupKey)}
-                              </div>
-                              {groupStudents.map(s => (
+                          groupedStudents.map(([groupKey, groupStudents]) => {
+                            const ids = groupStudents.map(s => s.id);
+                            const allOn = ids.every(id => picked.has(id));
+                            return (
+                              <div key={groupKey}>
                                 <button
-                                  key={s.id}
                                   type="button"
-                                  onClick={() => pickStudent(s.id)}
-                                  className="w-full text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground"
+                                  onClick={() => toggleGroup(ids)}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-popover z-10 hover:text-foreground"
                                 >
-                                  {s.name}
-                                  {s.school && <span className="ml-1.5 text-xs text-muted-foreground">{s.school}</span>}
+                                  <Checkbox checked={allOn} className="pointer-events-none" />
+                                  {getStudentGroupLabel(groupKey)} ({groupStudents.length}) · 전체
                                 </button>
-                              ))}
-                            </div>
-                          ))
+                                {groupStudents.map(s => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => toggleStudent(s.id)}
+                                    className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground"
+                                  >
+                                    <Checkbox checked={picked.has(s.id)} className="pointer-events-none" />
+                                    {s.name}
+                                    {s.school && <span className="text-xs text-muted-foreground">{s.school}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })
                         )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border">
+                        <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setPicked(new Set())}>
+                          선택 해제
+                        </button>
+                        <Button size="sm" onClick={addPicked} disabled={picked.size === 0 || !sharedSubject}>
+                          {sharedSubject ? `${picked.size}명 추가` : '과목 먼저 선택'}
+                        </Button>
                       </div>
                     </PopoverContent>
                   </Popover>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={addEntry}
-                    disabled={!selectedStudentId || !sharedSubject}
+                    onClick={addPicked}
+                    disabled={picked.size === 0 || !sharedSubject}
                     className="h-10"
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={excludeBusy} onCheckedChange={(v) => setExcludeBusy(!!v)} />
+                  이 날짜에 이미 수업이 있는 학생 제외
+                  {excludeBusy && busyIds.size > 0 && <span>({busyIds.size}명 숨김)</span>}
+                </label>
               </div>
 
               {/* Entry list */}
