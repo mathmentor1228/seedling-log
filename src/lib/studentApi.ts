@@ -97,6 +97,8 @@ export const studentApi = {
     total_points: number;
     /** EXAM-PARTICIPANTS-V1: 미응시로 확정된 시험이 남아 있으면 true → 시험 D-day 배너 숨김 */
     hide_exam_schedule?: boolean;
+    /** EXAM-SELF-REVIEW-V1: 점수는 들어왔는데 셀프 피드백을 아직 안 낸 시험 수 */
+    exam_self_review_pending?: number;
     pending_homework: any[];
     upcoming_classes: any[];
     vocab_schedules?: any[];
@@ -130,6 +132,22 @@ export const studentApi = {
   getFeedback: () => studentApiCall<{ feedback: any[] }>('feedback'),
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
+
+  /** EXAM-SELF-REVIEW-V1 (vault 19 §21): 내 시험 돌아보기 — 점수·시험지·틀린 번호·이유·다짐 */
+  getExamSelfReviews: () => studentApiCall<{
+    reviews: Array<{
+      id: string; subject: string; exam_type: string | null; exam_date: string | null; exam_year: number | null; exam_period: string | null;
+      actual_score: number | null; previous_score: number | null; school_name: string | null;
+      pdfs: Array<{ id: string; title: string | null; url: string | null }>;
+      items: Array<{ item_number: number; reason: string | null; memo: string | null; source: 'student' | 'teacher' }>;
+      total_items: number | null; student_reflection: string | null; student_submitted_at: string | null; counseled_at: string | null;
+      published_at: string | null; final_text: string | null; academy_action_text: string | null; locked: boolean;
+    }>;
+    tags: Array<{ subject: string; code: string; label: string; sort_order: number }>;
+  }>('exam_self_reviews'),
+
+  submitExamSelfReview: (params: { result_id: string; items: Array<{ item_number: number; reason: string | null; memo?: string | null }>; reflection: string; total_items?: number | null }) =>
+    studentApiCall<{ success: boolean; wrong_count: number }>('submit_exam_self_review', params),
 
   getExamReviews: (examYear?: number | null) => studentApiCall<{
     reviews: any[];

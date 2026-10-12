@@ -88,13 +88,16 @@ Deno.serve(async (req) => {
   if (r.actual_score == null) return json({ error: 'score_missing', message: '실점수가 있어야 초안을 만들 수 있습니다.' }, 400);
   const [{ data: st }, { data: items }, { data: tags }, { data: an }] = await Promise.all([
     admin.from('students').select('id, name, school, grade_year').eq('id', r.student_id).maybeSingle(),
-    admin.from('exam_result_items').select('item_number, is_wrong, reason_tags, memo').eq('result_id', resultId).eq('is_wrong', true).order('item_number'),
+    admin.from('exam_result_items').select('item_number, is_wrong, reason_tags, memo, source').eq('result_id', resultId).eq('is_wrong', true).order('item_number'),
     admin.from('exam_wrong_reason_tags').select('subject, code, label'),
-    admin.from('exam_student_analyses').select('id, total_items, academy_action_text, final_text, status').eq('result_id', resultId).maybeSingle(),
+    admin.from('exam_student_analyses').select('id, total_items, academy_action_text, final_text, status, student_reflection, student_submitted_at').eq('result_id', resultId).maybeSingle(),
   ]);
   if (!st) return json({ error: 'student_not_found' }, 404);
-  const wrong = (items || []) as { item_number: number; reason_tags: string[]; memo: string | null }[];
-  if (wrong.length === 0) return json({ error: 'no_wrong_items', message: '틀린 문항을 먼저 표시해 주세요. 태그가 하나도 없으면 초안을 만들지 않습니다.' }, 400);
+  const wrong = (items || []) as { item_number: number; reason_tags: string[]; memo: string | null; source?: string | null }[];
+  if (wrong.length === 0) return json({ error: 'no_wrong_items', message: '틀린 문항이 아직 없습니다. 학생이 앱에서 셀프 피드백을 제출하거나, 패널에서 대신 표시해 주세요.' }, 400);
+  // EXAM-SELF-REVIEW-V1: 학생이 직접 적은 것인지(셀프 피드백) 교사가 대신 표시한 것인지 재료에 밝힌다
+  const byStudent = wrong.some(w => w.source === 'student');
+  const reflection = typeof an?.student_reflection === 'string' && an.student_reflection.trim() ? an.student_reflection.trim() : null;
   const tagLabel = new Map(((tags || []) as any[]).map(t => [`${t.subject}|${t.code}`, t.label]));
   const subj = baseSubject(r.subject);
   const label = (code: string) => tagLabel.get(`${subj}|${code}`) || tagLabel.get(`공통|${code}`) || code;
@@ -124,10 +127,10 @@ Deno.serve(async (req) => {
 시험: ${periodLabel(r.exam_year, r.exam_period, r.exam_type)}
 [기록]
 - 실점수 ${r.actual_score}점${delta != null ? ` (직전 시험 ${r.previous_score}점, ${delta >= 0 ? '+' : ''}${delta})` : ''}${r.expected_score != null ? ` · 가채점 ${r.expected_score}점` : ''}
-- 틀린 문항 ${wrong.length}개${totalItems ? ` / 전체 ${totalItems}문항` : ''}${examDifficulty ? ` · 이번 시험 전체 난도 ${examDifficulty}` : ''}
-${wrongLines}
+- 틀린 문항 ${wrong.length}개${totalItems ? ` / 전체 ${totalItems}문항` : ''}${examDifficulty ? ` · 이번 시험 전체 난도 ${examDifficulty}` : ''}${byStudent ? ' (틀린 이유는 아이가 직접 고른 것)' : ''}
+${wrongLines}${reflection ? `\n- 아이가 스스로 적은 "다음 시험까지 내가 할 것": ${reflection}` : ''}
 
-위 기록만으로 학부모께 보내는 글(parent_text)을 JSON으로 작성하세요.`;
+위 기록만으로 학부모께 보내는 글(parent_text)을 JSON으로 작성하세요.${reflection ? ' 아이가 스스로 적은 다짐이 있으면 마지막 문장에서 그 내용을 그대로 살려 쓰세요(새 다짐을 만들지 않습니다).' : ''}`;
 
   const apiKey = Deno.env.get('LOVABLE_API_KEY'); if (!apiKey) return json({ error: 'LOVABLE_API_KEY_missing' }, 500);
   let text = '', violations: string[] = [], attempts = 0; let retry: string | undefined;

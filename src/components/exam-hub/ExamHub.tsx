@@ -291,7 +291,8 @@ export function ExamHub() {
       {mode === 'review' && !data.loading && (
         <ExamCloseoutReview
           cards={reviewCards.map(cc => ({ cycle: cc.cycle, st: cc.st, rows: cc.rows, reports: cc.reports, cycleSubjects: cc.cycleSubjects }))}
-          deepByReport={data.deepByReport} currentUserId={user?.id ?? null} analysesByResult={data.analysesByResult}
+          deepByReport={data.deepByReport} currentUserId={user?.id ?? null} isAdmin={isAdmin} analysesByResult={data.analysesByResult}
+          onChanged={data.reload}
           onOpen={(c, t) => { setMode('schedule'); const p = new URLSearchParams(); p.set('cycle', c.id); p.set('tab', t); setParams(p); }}
         />
       )}

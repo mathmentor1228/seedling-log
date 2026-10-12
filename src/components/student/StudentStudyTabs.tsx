@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 const TAB_ITEMS = [
   { href: '/student/vocab', label: '단어시험', icon: BookOpen },
   { href: '/student/math-quiz', label: '수학질문', icon: Calculator },
-  { href: '/student/exam-review', label: '시험리뷰', icon: ClipboardCheck },
+  { href: '/student/exam-review', label: '시험 돌아보기', icon: ClipboardCheck },
 ];
 
 export function StudentStudyTabs() {

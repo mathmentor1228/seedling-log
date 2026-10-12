@@ -389,9 +389,21 @@ Deno.serve(async (req) => {
           });
         } catch { hideExamSchedule = false; }
 
+        // EXAM-SELF-REVIEW-V1: 점수는 들어왔는데 아직 셀프 피드백을 안 낸 시험 수 (홈 카드용)
+        let examSelfReviewPending = 0;
+        try {
+          const { data: scored } = await supabase.from('student_exam_results').select('id').eq('student_id', student_id).not('actual_score', 'is', null).gte('exam_year', 2026);
+          const scoredIds = (scored || []).map((r: any) => r.id);
+          if (scoredIds.length) {
+            const { data: submitted } = await supabase.from('exam_student_analyses').select('result_id').in('result_id', scoredIds).not('student_submitted_at', 'is', null);
+            examSelfReviewPending = scoredIds.length - (submitted || []).length;
+          }
+        } catch { examSelfReviewPending = 0; }
+
         result = {
           total_points: studentData?.total_points || 0,
           hide_exam_schedule: hideExamSchedule,
+          exam_self_review_pending: examSelfReviewPending,
           pending_homework: (homeworkData || []).filter((hw: any) => hw.content?.trim() !== '없음'),
           upcoming_classes: upcomingClasses,
           vocab_schedules: vocabScheduleRes.data || [],
@@ -1158,6 +1170,106 @@ Deno.serve(async (req) => {
             exam_reviews: latestReviewByResult.has(row.id) ? [latestReviewByResult.get(row.id)] : [],
           })),
         };
+        break;
+      }
+
+      // EXAM-SELF-REVIEW-V1 (vault 19 §21): 학생 셀프 피드백 — 틀린 번호·이유·다짐. 점수·PDF는 시트·드라이브에서 온 것만 읽는다.
+      case 'exam_self_reviews': {
+        const { data: results } = await supabase
+          .from('student_exam_results')
+          .select('id, subject, exam_type, exam_date, exam_year, exam_period, actual_score, previous_score, school_name')
+          .eq('student_id', student_id)
+          .not('actual_score', 'is', null)
+          .order('exam_year', { ascending: false, nullsFirst: false })
+          .order('exam_period', { ascending: false, nullsFirst: false })
+          .order('subject', { ascending: true })
+          .limit(24);
+        const rows = (results || []) as any[];
+        const ids = rows.map(r => r.id);
+        let pdfs: any[] = [], items: any[] = [], analyses: any[] = [], tags: any[] = [];
+        if (ids.length) {
+          const [p, it, an, tg] = await Promise.all([
+            supabase.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
+            supabase.from('exam_result_items').select('result_id, item_number, reason_tags, memo, source').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
+            supabase.from('exam_student_analyses').select('result_id, status, total_items, wrong_count, student_reflection, student_submitted_at, counseled_at, published_at, final_text, academy_action_text').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
+            supabase.from('exam_wrong_reason_tags').select('subject, code, label, sort_order').eq('is_active', true).order('sort_order').then((r: any) => r, () => ({ data: [] })),
+          ]);
+          pdfs = p.data || []; items = it.data || []; analyses = an.data || []; tags = tg.data || [];
+        }
+        const signedPdf = new Map<string, string>();
+        await Promise.all(pdfs.map(async (pf: any) => {
+          try {
+            const { data: s } = await supabase.storage.from('exam-results').createSignedUrl(pf.storage_path, 3600);
+            if (s?.signedUrl) signedPdf.set(pf.id, s.signedUrl);
+          } catch { /* 서명 실패는 PDF 없음으로 */ }
+        }));
+        const anByResult = new Map<string, any>(analyses.map((a: any) => [a.result_id, a]));
+        result = {
+          reviews: rows.map(r => {
+            const a = anByResult.get(r.id) || null;
+            const published = a?.status === 'published';
+            return {
+              id: r.id, subject: r.subject, exam_type: r.exam_type, exam_date: r.exam_date, exam_year: r.exam_year, exam_period: r.exam_period,
+              actual_score: r.actual_score, previous_score: r.previous_score, school_name: r.school_name,
+              pdfs: pdfs.filter((pf: any) => pf.result_id === r.id).map((pf: any) => ({ id: pf.id, title: pf.display_title, url: signedPdf.get(pf.id) || null })),
+              items: items.filter((it: any) => it.result_id === r.id).map((it: any) => ({ item_number: it.item_number, reason: (it.reason_tags || [])[0] || null, memo: it.memo, source: it.source })).sort((x: any, y: any) => x.item_number - y.item_number),
+              total_items: a?.total_items ?? null,
+              student_reflection: a?.student_reflection ?? null,
+              student_submitted_at: a?.student_submitted_at ?? null,
+              counseled_at: a?.counseled_at ?? null,
+              published_at: published ? a?.published_at : null,
+              // 공개된 뒤에는 선생님 글·학원 대응도 학생에게 보여준다
+              final_text: published ? a?.final_text : null,
+              academy_action_text: published ? a?.academy_action_text : null,
+              locked: published,
+            };
+          }),
+          tags,
+        };
+        break;
+      }
+      case 'submit_exam_self_review': {
+        const { result_id, items: rawItems, reflection, total_items } = params as any;
+        if (!result_id || !Array.isArray(rawItems)) {
+          return new Response(JSON.stringify({ error: 'Missing result_id/items' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: res } = await supabase.from('student_exam_results').select('id, student_id, subject, exam_year, exam_period, actual_score').eq('id', result_id).maybeSingle();
+        if (!res || (res as any).student_id !== student_id) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: an } = await supabase.from('exam_student_analyses').select('id, status, total_items').eq('result_id', result_id).maybeSingle();
+        if ((an as any)?.status === 'published') {
+          return new Response(JSON.stringify({ error: '이미 공개된 시험 분석은 고칠 수 없어요.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // 문항: 번호 1~60, 이유 하나, 메모 200자
+        const clean = new Map<number, { reason: string | null; memo: string | null }>();
+        for (const it of rawItems) {
+          const n = Number(it?.item_number); if (!Number.isInteger(n) || n < 1 || n > 60) continue;
+          const reason = typeof it?.reason === 'string' && it.reason.trim() ? it.reason.trim().slice(0, 40) : null;
+          const memo = typeof it?.memo === 'string' && it.memo.trim() ? it.memo.trim().slice(0, 200) : null;
+          clean.set(n, { reason, memo });
+        }
+        const wrongNums = [...clean.keys()].sort((a, b) => a - b);
+        // 학생이 다시 제출하면 이전 표시는 지우고 다시 쓴다. 교사가 대신 표시한 것(source=teacher)보다 학생 제출이 우선.
+        const { error: delErr } = await supabase.from('exam_result_items').delete().eq('result_id', result_id);
+        if (delErr) throw delErr;
+        if (wrongNums.length) {
+          const { error: insErr } = await supabase.from('exam_result_items').insert(wrongNums.map(n => ({
+            result_id, item_number: n, is_wrong: true, reason_tags: clean.get(n)!.reason ? [clean.get(n)!.reason] : [], memo: clean.get(n)!.memo, source: 'student',
+          })));
+          if (insErr) throw insErr;
+        }
+        const totalN = Number.isInteger(Number(total_items)) && Number(total_items) > 0 ? Math.min(60, Number(total_items)) : ((an as any)?.total_items ?? null);
+        const payload: any = {
+          result_id, student_id, subject: (res as any).subject, exam_year: (res as any).exam_year, exam_period: (res as any).exam_period,
+          wrong_count: wrongNums.length, total_items: totalN,
+          student_reflection: typeof reflection === 'string' && reflection.trim() ? reflection.trim().slice(0, 500) : null,
+          student_submitted_at: new Date().toISOString(),
+        };
+        if (!(an as any)?.id) payload.status = 'draft';
+        const { error: upErr } = await supabase.from('exam_student_analyses').upsert(payload, { onConflict: 'result_id' });
+        if (upErr) throw upErr;
+        result = { success: true, wrong_count: wrongNums.length };
         break;
       }
 

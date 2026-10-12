@@ -1,555 +1,265 @@
+// EXAM-SELF-REVIEW-V1 (vault 19 §21) — 학생 앱 "내 시험 돌아보기"
+//   점수·시험지(시트·드라이브에서 온 것)를 보고 ① 틀린 번호를 누르고 ② 번호마다 이유 하나 ③ "다음 시험까지 내가 할 것" 한 줄 → 제출.
+//   제출본은 담당 선생님 면담 재료가 되고, 원장이 공개하면 선생님 글·학원 대응이 여기에도 보인다. 공개 뒤에는 잠김.
+//   옛 채점 루프(시험지 업로드→오버레이 채점→자가진단)는 2026-10-09 폐기. 이 페이지가 그 자리를 대신한다.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
-import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
-import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
-import { useStudentAuth } from '@/lib/studentAuth';
-import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ClipboardCheck, FileText, Loader2, Lock, MessageCircle, Send } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
-type ReviewStatus = 'pending' | 'in_review' | 'done';
-type ItemResult = 'correct' | 'wrong' | 'partial' | null;
+type ReviewList = NonNullable<Awaited<ReturnType<typeof studentApi.getExamSelfReviews>>['data']>['reviews'];
+type Review = ReviewList[number];
+type Tag = { subject: string; code: string; label: string; sort_order: number };
+type Draft = { wrong: Map<number, { reason: string | null; memo: string }>; reflection: string; total: number };
 
-interface ReviewItem {
-  id: string;
-  item_number: number;
-  result: ItemResult;
-  error_types: string[];
-  item_comment: string | null;
-  score_earned?: number | null;
-  page_number?: number | null;
-  custom_reason?: string | null;
+const baseSubject = (s: string) => s.startsWith('수학') || /대수|기하|미적분|확률/.test(s) ? '수학' : s.includes('영어') ? '영어' : s.startsWith('국어') || /화법|문학|독서/.test(s) ? '국어' : s.startsWith('과학') || /물리|화학|생명|지구|통합과학/.test(s) ? '과학' : s;
+function examLabel(r: Review): string {
+  const y = r.exam_year ? `${r.exam_year}년 ` : '';
+  const p = r.exam_period || '';
+  const sem = p.startsWith('2') ? '2학기' : p.startsWith('1') ? '1학기' : p;
+  const t = r.exam_type || '';
+  const type = t.includes('final') || t.includes('기말') || p.endsWith('b') ? '기말' : t.includes('mid') || t.includes('중간') || p.endsWith('a') ? '중간' : t;
+  return `${y}${sem} ${type}`.trim();
 }
-
-interface SelfCheckRow {
-  id?: string;
-  item_number: number;
-  q_remembered: boolean | null;
-  q_concept_confused: boolean | null;
-  q_academy_helped: boolean | null;
-  q_need_more: string | null;
-  self_error_types: string[];
-  self_custom_reason?: string | null;
-}
-
-interface ReviewData {
-  id: string;
-  earned_score: number | null;
-  total_score: number | null;
-  overall_comment: string | null;
-  reviewed_at: string | null;
-  reviewed_by_name: string | null;
-  exam_item_reviews: ReviewItem[];
-  self_check_completed?: boolean;
-  self_checks?: SelfCheckRow[];
-  is_published?: boolean;
-  published_at?: string | null;
-  template?: { id: string; error_types: string[]; items: Array<{ no: number; points: number }> } | null;
-}
-
-interface ExamReviewRow {
-  id: string;
-  subject: string;
-  exam_type: string;
-  exam_date: string | null;
-  exam_year: number | null;
-  exam_period: string | null;
-  actual_score: number | null;
-  expected_score: number | null;
-  review_status: ReviewStatus | null;
-  school_name: string;
-  submitted_at: string;
-  student_exam_result_photos: Array<{ id: string; storage_path: string; sort_order: number; signed_url: string | null }>;
-  exam_reviews: ReviewData[];
-}
-
-interface SchoolExamReport {
-  id: string;
-  school_name: string;
-  subject: string;
-  grade: string;
-  exam_type: string;
-  exam_year: number;
-  exam_period: string;
-  total_students: number | null;
-  academy_helped_rate: number | null;
-  wrong_item_stats: Array<{ wrong_rate?: number; item_number?: number }> | null;
-  final_report: string | null;
-  recommended_study: string[] | null;
-  top_weak_concepts: string[] | null;
-  ai_report?: string | null;
-}
-
-interface DeepExamReport {
-  id: string;
-  overall_insights: string | null;
-  difficult_points: Array<{ title?: string; reason?: string; study_tip?: string; items?: number[] }>;
-  score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string; actions?: string[] }>;
-  student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] }>;
-  my_recommendation?: { score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] } | null;
-  published_at: string | null;
-  exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null };
-}
-
-interface SelfCheckTarget {
-  row: ExamReviewRow;
-  review: ReviewData;
-}
-
-const EXAM_TYPE_LABELS: Record<string, string> = {
-  midterm: '중간고사',
-  final: '기말고사',
-  performance: '수행평가',
-  other: '기타',
+type Stage = 'todo' | 'submitted' | 'counseled' | 'published';
+function stageOf(r: Review): Stage { return r.locked ? 'published' : r.counseled_at ? 'counseled' : r.student_submitted_at ? 'submitted' : 'todo'; }
+const STAGE: Record<Stage, { label: string; cls: string }> = {
+  todo: { label: '돌아보기 전', cls: 'bg-amber-100 text-amber-900' },
+  submitted: { label: '제출함 · 면담 전', cls: 'bg-sky-100 text-sky-900' },
+  counseled: { label: '면담 완료', cls: 'bg-violet-100 text-violet-900' },
+  published: { label: '선생님 글 도착', cls: 'bg-emerald-100 text-emerald-900' },
 };
-
-const RESULT_LABELS: Record<Exclude<ItemResult, null>, string> = {
-  correct: 'O',
-  wrong: 'X',
-  partial: '△',
-};
-
-function toStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-function ExamReportOverview({
-  schoolReport, reviews, onOpenSelfCheck,
-}: {
-  schoolReport: SchoolExamReport | null;
-  reviews: ExamReviewRow[];
-  onOpenSelfCheck: (target: SelfCheckTarget) => void;
-}) {
-  const recommended = toStringList(schoolReport?.recommended_study);
-  const weakConcepts = toStringList(schoolReport?.top_weak_concepts);
-  const topWrongRate = schoolReport?.wrong_item_stats?.[0]?.wrong_rate ?? 0;
-
-  return (
-    <div className="space-y-4">
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <School className="h-4 w-4 text-primary" />
-          <h2 className="text-base font-bold text-foreground">종합 리포트</h2>
-        </div>
-        {schoolReport ? (
-          <div className="rounded-2xl bg-gradient-to-br from-primary to-info p-5 text-primary-foreground shadow-sm">
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <p className="mb-1 text-xs text-primary-foreground/70">
-                  {schoolReport.school_name} · {schoolReport.exam_year}년 {schoolReport.exam_period} {schoolReport.exam_type}
-                </p>
-                <h3 className="text-xl font-bold">📊 시험 종합 리포트</h3>
-              </div>
-              <span className="rounded-full bg-success/25 px-3 py-1 text-[11px] font-medium text-success-foreground">더멘토학원 분석</span>
-            </div>
-
-            <div className="mb-5 grid grid-cols-3 gap-2">
-              <MetricCard value={`${schoolReport.total_students ?? 0}명`} label="더멘토 수강생" tone="success" />
-              <MetricCard value={`${schoolReport.academy_helped_rate ?? 0}%`} label="학원 수업 도움됨" tone="warning" />
-              <MetricCard value={`${topWrongRate}%`} label="최고 오답률 문항" tone="destructive" />
-            </div>
-
-            <div className="mb-3 rounded-xl bg-primary-foreground/10 p-4">
-              <p className="mb-2 text-xs font-semibold text-primary-foreground/75">📝 시험 총평</p>
-              <p className="whitespace-pre-wrap text-sm leading-7 text-primary-foreground/90">{schoolReport.final_report || '등록된 시험 총평이 없습니다.'}</p>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <InsightBox title="✅ 학원이 도움준 것" items={weakConcepts.length ? weakConcepts : ['핵심 개념 정리 및 문제풀이 전략']} tone="success" />
-              <InsightBox title="🎯 앞으로 집중할 것" items={recommended.length ? recommended : ['취약 단원 반복 학습 필요']} tone="warning" />
-            </div>
-          </div>
-        ) : (
-          <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">공개된 학교별 종합 리포트가 없습니다.</CardContent></Card>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-base font-bold text-foreground">개인 리포트</h2>
-        {reviews.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">아직 리뷰가 없습니다.</CardContent></Card>
-        ) : (
-          reviews.map((row) => <PersonalReportCard key={row.id} row={row} onOpenSelfCheck={onOpenSelfCheck} />)
-        )}
-      </section>
-    </div>
-  );
-}
-
-function DeepExamReportSection({ reports }: { reports: DeepExamReport[] }) {
-  if (reports.length === 0) return null;
-  return <section className="space-y-3"><h2 className="text-base font-bold text-foreground">시험지 분석 & 점수대별 학습 추천</h2>{reports.map((report) => { const meta = report.exam_analysis_reports; return <Card key={report.id} className="rounded-2xl border-primary/20"><CardContent className="space-y-4 p-5"><div><Badge variant="outline">{meta?.subject || '내신'}</Badge><h3 className="mt-2 text-lg font-bold text-foreground">{meta?.school_name} {meta?.exam_year}년 {meta?.exam_period} {meta?.exam_type}</h3>{meta?.exam_scope ? <p className="mt-1 text-xs text-muted-foreground">범위: {meta.exam_scope}</p> : null}</div><p className="whitespace-pre-wrap rounded-xl bg-primary/10 p-3 text-sm leading-7 text-foreground">{report.overall_insights}</p>{report.my_recommendation ? <div className="rounded-xl bg-success/10 p-3"><p className="text-sm font-semibold text-success">내 점수대 추천</p><p className="mt-1 text-xs leading-5 text-foreground">{report.my_recommendation.summary}</p>{report.my_recommendation.recommended_actions?.length ? <p className="mt-2 text-xs text-primary">{report.my_recommendation.recommended_actions.join(' · ')}</p> : null}</div> : null}<div className="space-y-2"><p className="text-sm font-semibold text-foreground">학생들이 어려웠을 부분</p>{report.difficult_points.slice(0, 3).map((item, index) => <div key={index} className="rounded-xl bg-warning/10 p-3"><p className="text-sm font-semibold text-warning">{item.title}</p><p className="mt-1 text-xs leading-5 text-foreground">{item.reason}</p>{item.study_tip ? <p className="mt-2 text-xs text-primary">추천: {item.study_tip}</p> : null}</div>)}</div><div className="space-y-2"><p className="text-sm font-semibold text-foreground">점수대별 학습 방향</p>{report.score_band_recommendations.map((band, index) => <div key={index} className="rounded-xl border bg-card p-3"><p className="text-sm font-bold text-primary">{band.band}</p><p className="mt-1 text-xs text-muted-foreground">{band.diagnosis}</p><p className="mt-1 text-xs text-foreground">{band.priority}</p></div>)}</div></CardContent></Card>; })}</section>;
-}
-
-function MetricCard({ value, label, tone }: { value: string; label: string; tone: 'success' | 'warning' | 'destructive' }) {
-  const toneClass = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-destructive';
-  return <div className="rounded-xl bg-primary-foreground/10 p-3 text-center"><p className={`text-2xl font-bold ${toneClass}`}>{value}</p><p className="text-[11px] text-primary-foreground/65">{label}</p></div>;
-}
-
-function InsightBox({ title, items, tone }: { title: string; items: string[]; tone: 'success' | 'warning' }) {
-  const className = tone === 'success' ? 'border-success/40 bg-success/20 text-success' : 'border-warning/40 bg-warning/20 text-warning';
-  return <div className={`rounded-xl border p-3 ${className}`}><p className="mb-2 text-xs font-semibold">{title}</p><ul className="m-0 list-disc space-y-1 pl-4 text-xs text-primary-foreground/85">{items.map((item, index) => <li key={index}>{item}</li>)}</ul></div>;
-}
-
-function PersonalReportCard({ row, onOpenSelfCheck }: { row: ExamReviewRow; onOpenSelfCheck: (target: SelfCheckTarget) => void }) {
-  const review = row.exam_reviews[0];
-  const items = review?.exam_item_reviews || [];
-  const teacherDone = row.review_status === 'done' && !!review?.reviewed_at;
-  const isPublished = !!review?.is_published;
-  const selfChecks = review?.self_checks || [];
-  const correct = items.filter((item) => item.result === 'correct').length;
-  const wrong = items.filter((item) => item.result === 'wrong').length;
-  const helped = selfChecks.filter((check) => check.q_academy_helped).length;
-  const helpedRate = selfChecks.length > 0 ? `${Math.round((helped / selfChecks.length) * 100)}%` : '-';
-  const needMore = selfChecks.filter((check) => check.q_need_more).slice(0, 2);
-
-  return (
-    <Card className="rounded-2xl">
-      <CardContent className="p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Badge variant="success">{row.subject}</Badge>
-            <span className="text-sm text-muted-foreground">{row.exam_year ?? '-'}년 {row.exam_period ?? '-'} {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</span>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-primary">{isPublished ? (review?.earned_score ?? row.actual_score ?? '-') : '-'}점</p>
-            <p className="text-[11px] text-muted-foreground">/ {isPublished ? (review?.total_score ?? '-') : '-'}점 만점</p>
-          </div>
-        </div>
-        <div className="mb-4 flex items-center justify-end gap-2">
-          {teacherDone ? (
-            <>
-              {!review?.self_check_completed ? (
-                <button type="button" onClick={() => review && onOpenSelfCheck({ row, review })} className="rounded-full border-0 bg-success/15 px-3 py-1 text-xs font-medium text-success">자가진단 하기 (+15P) 🎯</button>
-              ) : (
-                <span className="text-xs text-primary">✦ 자가진단 완료</span>
-              )}
-              {isPublished
-                ? <span className="text-xs font-medium text-success">✓ 리뷰 공개됨</span>
-                : <span className="text-xs font-medium text-warning">⏳ 원장 검토중</span>}
-            </>
-          ) : (
-            <span className="text-xs text-muted-foreground">리뷰 준비중</span>
-          )}
-        </div>
-        {isPublished ? (
-          <>
-            <div className="mb-4 grid grid-cols-3 gap-2">
-              <MiniStat value={String(correct)} label="맞음" variant="success" />
-              <MiniStat value={String(wrong)} label="틀림" variant="destructive" />
-              <MiniStat value={helpedRate} label="학원도움" variant="primary" />
-            </div>
-            {review?.overall_comment ? <div className="mb-3 rounded-xl border border-success/20 bg-success/10 p-3"><p className="mb-1 text-xs font-semibold text-success">선생님 코멘트</p><p className="whitespace-pre-wrap text-sm leading-7 text-foreground">{review.overall_comment}</p></div> : null}
-            {selfChecks.length > 0 ? <div className="grid gap-2 md:grid-cols-2"><div className="rounded-xl bg-success/10 p-3"><p className="mb-2 text-xs font-semibold text-success">✅ 학원이 도움준 부분</p>{selfChecks.filter((check) => check.q_academy_helped).slice(0, 3).map((check) => <p key={check.item_number} className="text-xs text-success">· {check.item_number}번 문항 관련 학습</p>) || null}{helped === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div><div className="rounded-xl bg-warning/10 p-3"><p className="mb-2 text-xs font-semibold text-warning">🎯 앞으로 집중할 부분</p>{needMore.map((check) => <p key={check.item_number} className="text-xs text-warning">· {check.q_need_more}</p>)}{needMore.length === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div></div> : null}
-          </>
-        ) : (
-          <div className="rounded-xl bg-warning/10 p-4 text-center">
-            <p className="text-sm font-semibold text-warning">⏳ 원장 선생님 검토 후 공개됩니다</p>
-            <p className="mt-1 text-xs text-muted-foreground">자가진단을 먼저 완료하면 더 정확한 리뷰를 받을 수 있어요</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MiniStat({ value, label, variant }: { value: string; label: string; variant: 'success' | 'destructive' | 'primary' }) {
-  const className = variant === 'success' ? 'bg-success/10 text-success' : variant === 'destructive' ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary';
-  return <div className={`rounded-lg p-3 text-center ${className}`}><p className="text-lg font-bold">{value}</p><p className="text-[11px]">{label}</p></div>;
-}
 
 export default function StudentExamReview() {
-  const { student } = useStudentAuth();
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<ExamReviewRow[]>([]);
-  const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
-  const [deepReports, setDeepReports] = useState<DeepExamReport[]>([]);
-  const [publishedReports, setPublishedReports] = useState<PublishedReportLite[]>([]);
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selected, setSelected] = useState<ExamReviewRow | null>(null);
-  const [selfCheckTarget, setSelfCheckTarget] = useState<SelfCheckTarget | null>(null);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await studentApi.getExamReviews(selectedYear);
-    setRows((data?.reviews || []) as ExamReviewRow[]);
-    setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
-    setDeepReports((data?.deep_reports || []) as DeepExamReport[]);
-    setPublishedReports(((data as any)?.published_analysis_reports || []) as PublishedReportLite[]);
-    setAvailableYears((data?.available_years || []) as number[]);
-    setSelectedYear((data?.selected_exam_year ?? null) as number | null);
-    setLoading(false);
-  }, [selectedYear]);
-
+    const { data, error } = await studentApi.getExamSelfReviews();
+    if (error || !data) { toast.error('시험 정보를 불러오지 못했어요'); setLoading(false); return; }
+    setReviews(data.reviews); setTags(data.tags); setLoading(false);
+  }, []);
   useEffect(() => { void load(); }, [load]);
 
-  const openSelfCheck = useCallback((target: SelfCheckTarget) => {
-    setSelected(null);
-    setSelfCheckTarget(target);
-  }, []);
-
-
-  const selectedReview = selected?.exam_reviews?.[0] ?? null;
-
-  const summary = useMemo(() => {
-    const items = selectedReview?.exam_item_reviews || [];
-    const wrongNumbers = items.filter((item) => item.result === 'wrong' || item.result === 'partial').map((item) => item.item_number);
-    const errorTypes = [...new Set(items.flatMap((item) => item.error_types))];
-    return { wrongNumbers, errorTypes };
-  }, [selectedReview]);
-
-  const completedReviews = useMemo(() => rows.filter((row) => row.exam_reviews?.[0]?.reviewed_at), [rows]);
-  const hasSubmittedExamPhotos = rows.length > 0;
+  const selected = useMemo(() => reviews.find(r => r.id === openId) || null, [reviews, openId]);
+  const todo = reviews.filter(r => stageOf(r) === 'todo');
 
   return (
-    <div className="space-y-4 pb-20">
-      <div className="space-y-2">
-        <h1 className="flex items-center gap-2 text-xl font-bold">
-          <ClipboardCheck className="h-5 w-5 text-primary" />
-          내신 시험지 리뷰
-        </h1>
-        <StudentStudyTabs />
+    <div className="space-y-4 pb-6">
+      <StudentStudyTabs />
+      <div className="px-1">
+        <h1 className="text-lg font-bold flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-primary" />내 시험 돌아보기</h1>
+        <p className="text-sm text-muted-foreground mt-1">시험지를 보면서 틀린 번호와 이유를 적어요. 적은 내용을 가지고 선생님과 1:1로 공부 방법을 이야기해요.</p>
       </div>
 
-      {!loading && availableYears.length > 0 ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">조회 연도</p>
-            <p className="text-xs text-muted-foreground">시험 본 연도 기준으로 표시됩니다.</p>
-          </div>
-          <Select value={selectedYear ? String(selectedYear) : undefined} onValueChange={(value) => setSelectedYear(Number(value))}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="연도 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map((year) => <SelectItem key={year} value={String(year)}>{year}년</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
-
-      {!loading && publishedReports.length > 0 ? (
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-pink-500" />
-            <h2 className="text-base font-bold text-foreground">새로 도착한 시험 분석</h2>
-            <Badge variant="outline" className="text-[10px]">{publishedReports.length}건</Badge>
-          </div>
-          <div className="space-y-3">
-            {publishedReports.map((report) => (
-              <PublishedReportCard
-                key={report.id}
-                report={report}
-                audience="student"
-                studentId={student?.id ?? null}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {!loading && hasSubmittedExamPhotos ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
-      {!loading && hasSubmittedExamPhotos ? <DeepExamReportSection reports={deepReports} /> : null}
-
       {loading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-      ) : rows.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">등록된 시험지가 없습니다.</CardContent>
-        </Card>
+        <div className="space-y-2">{[0, 1, 2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+      ) : reviews.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">아직 점수가 들어온 시험이 없어요. 시험이 끝나고 점수가 올라오면 여기서 돌아볼 수 있어요.</CardContent></Card>
       ) : (
-        <div className="space-y-3">
-          {rows.map((row) => {
-            const review = row.exam_reviews?.[0];
-            const teacherDone = (row.review_status ?? 'pending') === 'done' && !!review?.reviewed_at;
-            const published = !!review?.is_published;
-            const needsSelfCheck = teacherDone && !review?.self_check_completed;
-            const statusLabel = !teacherDone
-              ? '리뷰 준비중'
-              : !published
-                ? (needsSelfCheck ? '자가진단 후 공개대기' : '원장 검토중')
-                : '리뷰 공개';
-            const statusVariant: 'muted' | 'warning' | 'success' = !teacherDone
-              ? 'muted'
-              : !published ? 'warning' : 'success';
+        <div className="space-y-2">
+          {todo.length > 0 && <p className="px-1 text-xs font-medium text-amber-700">아직 돌아보지 않은 시험 {todo.length}개</p>}
+          {reviews.map(r => {
+            const st = stageOf(r); const d = r.previous_score != null && r.actual_score != null ? r.actual_score - r.previous_score : null;
             return (
-              <button
-                key={row.id}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (needsSelfCheck && review) {
-                    openSelfCheck({ row, review });
-                    return;
-                  }
-                  if (published) {
-                    setActiveTab('teacher');
-                    setSelected(row);
-                  }
-                }}
-                className="w-full text-left"
-              >
-                <Card className={published ? 'border-success/30' : teacherDone ? 'border-warning/30' : 'border-border'}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-semibold text-foreground">{row.subject} · {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</p>
-                          {needsSelfCheck ? <span className="h-2 w-2 rounded-full bg-destructive" /> : null}
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {row.exam_date ?? row.submitted_at.slice(0, 10)} · {row.exam_year ?? '-'} / {row.exam_period ?? '-'}
-                        </p>
-                        <p className="mt-2 text-sm text-foreground">
-                          점수 {published ? (row.actual_score ?? row.expected_score ?? '-') : '-'}
-                        </p>
-                      </div>
-                      <Badge variant={statusVariant}>{statusLabel}</Badge>
-                    </div>
-                  </CardContent>
-                </Card>
+              <button key={r.id} type="button" onClick={() => setOpenId(r.id)} className="w-full text-left rounded-xl border bg-card px-4 py-3 flex items-center gap-3 active:bg-muted">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{baseSubject(r.subject)}</span>
+                    <span className="text-sm font-semibold">{examLabel(r)}</span>
+                    <span className={cn('text-[11px] px-1.5 py-0.5 rounded', STAGE[st].cls)}>{STAGE[st].label}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {r.actual_score != null ? <>{r.actual_score}점{d != null && d !== 0 && <span className={d > 0 ? 'text-emerald-600' : 'text-red-600'}> ({d > 0 ? `+${d}` : d})</span>}</> : '점수 없음'}
+                    {r.items.length > 0 && <> · 틀린 문항 {r.items.length}개</>}
+                    {r.pdfs.length > 0 && <> · 시험지 {r.pdfs.length}장</>}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             );
           })}
         </div>
       )}
 
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selected?.subject} 리뷰</DialogTitle>
-          </DialogHeader>
-
-          {selected ? (
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'teacher' | 'self')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="teacher">선생님 채점 결과</TabsTrigger>
-                <TabsTrigger value="self">
-                  내 자가진단 {selectedReview?.self_check_completed ? '✓' : ''}
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="teacher" className="space-y-5">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(selected.student_exam_result_photos || []).map((photo) => (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (photo.signed_url) setSelectedImage(photo.signed_url);
-                      }}
-                      className="overflow-hidden rounded-md border bg-muted/20"
-                    >
-                      {photo.signed_url ? (
-                        <img src={photo.signed_url} alt={`시험지 ${photo.sort_order + 1}`} className="aspect-[3/4] w-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="flex aspect-[3/4] items-center justify-center text-muted-foreground"><ImageIcon className="h-6 w-6" /></div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-foreground">문항별 결과</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {(selectedReview?.exam_item_reviews || []).map((item) => (
-                      <div key={item.id} className="rounded-md border border-border bg-card px-3 py-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{item.item_number}번</span>
-                          <Badge variant={item.result === 'correct' ? 'success' : item.result === 'partial' ? 'warning' : 'destructive'}>
-                            {item.result ? RESULT_LABELS[item.result] : '-'}
-                          </Badge>
-                        </div>
-                        {item.error_types.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {item.error_types.map((errorType) => <Badge key={errorType} variant="outline">{errorType}</Badge>)}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4">
-                  <h3 className="font-semibold text-foreground">전체 선생님 코멘트</h3>
-                  <p className="text-sm text-foreground whitespace-pre-wrap">{selectedReview?.overall_comment || '등록된 코멘트가 없습니다.'}</p>
-                </div>
-
-                <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4 text-sm">
-                  <div className="flex items-center gap-2 font-semibold text-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-primary" /> 오답 분석 요약
-                  </div>
-                  <p className="text-foreground">틀린 문항: {summary.wrongNumbers.length > 0 ? summary.wrongNumbers.map((n) => `${n}번`).join(', ') : '없음'}</p>
-                  <p className="text-foreground">주요 오답유형: {summary.errorTypes.length > 0 ? summary.errorTypes.join(', ') : '없음'}</p>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="self">
-                {selectedReview ? (
-                  <SelfCheckTab
-                    reviewId={selectedReview.id}
-                    items={selectedReview.exam_item_reviews || []}
-                    selfChecks={selectedReview.self_checks || []}
-                    templateErrorTypes={selectedReview.template?.error_types || []}
-                    templateItems={selectedReview.template?.items || []}
-                    photos={selected.student_exam_result_photos || []}
-                    selfCheckCompleted={!!selectedReview.self_check_completed}
-                    onCompleted={() => void load()}
-                  />
-                ) : null}
-              </TabsContent>
-            </Tabs>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      {selfCheckTarget ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/50 px-4 py-5">
-          <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-background shadow-xl">
-            <div className="bg-gradient-to-br from-primary to-info px-6 py-5 text-primary-foreground">
-              <h2 className="mb-1 text-lg font-bold">내 시험 돌아보기 🔍</h2>
-              <p className="text-sm text-primary-foreground/75">틀린 문항을 하나씩 분석해보세요. 완료하면 +15P 지급돼요!</p>
-            </div>
-            <div className="p-5">
-              <SelfCheckTab
-                reviewId={selfCheckTarget.review.id}
-                items={selfCheckTarget.review.exam_item_reviews || []}
-                selfChecks={selfCheckTarget.review.self_checks || []}
-                templateErrorTypes={selfCheckTarget.review.template?.error_types || []}
-                templateItems={selfCheckTarget.review.template?.items || []}
-                photos={selfCheckTarget.row.student_exam_result_photos || []}
-                selfCheckCompleted={!!selfCheckTarget.review.self_check_completed}
-                onCompleted={() => {
-                  setSelfCheckTarget(null);
-                  void load();
-                }}
-              />
-              <button type="button" onClick={() => setSelfCheckTarget(null)} className="mt-3 w-full rounded-lg px-4 py-2 text-sm text-muted-foreground">나중에 하기</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>시험지 원본</DialogTitle>
-          </DialogHeader>
-          {selectedImage ? <img src={selectedImage} alt="시험지 원본" className="max-h-[80vh] w-full rounded-md object-contain" /> : null}
-        </DialogContent>
-      </Dialog>
+      {selected && (
+        <ReviewSheet key={selected.id} review={selected} tags={tags.filter(t => t.subject === baseSubject(selected.subject) || t.subject === '공통')}
+          onClose={() => setOpenId(null)} onSaved={() => { setOpenId(null); void load(); }} />
+      )}
     </div>
+  );
+}
+
+function ReviewSheet({ review: r, tags, onClose, onSaved }: { review: Review; tags: Tag[]; onClose: () => void; onSaved: () => void }) {
+  const stage = stageOf(r);
+  const locked = r.locked;
+  const [draft, setDraft] = useState<Draft>(() => ({
+    wrong: new Map(r.items.map(it => [it.item_number, { reason: it.reason, memo: it.memo || '' }])),
+    reflection: r.student_reflection || '',
+    total: r.total_items || Math.max(25, ...r.items.map(it => it.item_number)),
+  }));
+  const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState<1 | 2 | 3>(r.items.length ? 2 : 1);
+  const nums = Array.from({ length: Math.min(60, draft.total) }, (_, i) => i + 1);
+  const wrongNums = [...draft.wrong.keys()].sort((a, b) => a - b);
+  const missingReason = wrongNums.filter(n => !draft.wrong.get(n)?.reason);
+  const tagLabel = (code: string | null) => tags.find(t => t.code === code)?.label || code || '';
+
+  const toggle = (n: number) => { if (locked) return; setDraft(d => { const m = new Map(d.wrong); if (m.has(n)) m.delete(n); else m.set(n, { reason: null, memo: '' }); return { ...d, wrong: m }; }); };
+  const setReason = (n: number, code: string) => { if (locked) return; setDraft(d => { const m = new Map(d.wrong); const cur = m.get(n)!; m.set(n, { ...cur, reason: cur.reason === code ? null : code }); return { ...d, wrong: m }; }); };
+  const setMemo = (n: number, memo: string) => setDraft(d => { const m = new Map(d.wrong); m.set(n, { ...m.get(n)!, memo }); return { ...d, wrong: m }; });
+
+  async function submit() {
+    if (locked) return;
+    if (wrongNums.length > 0 && missingReason.length > 0) { toast.error(`${missingReason.map(n => `${n}번`).join(', ')} 이유를 골라 주세요`); setStep(2); return; }
+    if (draft.reflection.trim().length < 5) { toast.error('"다음 시험까지 내가 할 것"을 한 줄 적어 주세요'); setStep(3); return; }
+    setSaving(true);
+    const { data, error } = await studentApi.submitExamSelfReview({
+      result_id: r.id, total_items: draft.total,
+      items: wrongNums.map(n => ({ item_number: n, reason: draft.wrong.get(n)!.reason, memo: draft.wrong.get(n)!.memo || null })),
+      reflection: draft.reflection,
+    });
+    setSaving(false);
+    if (error || !data?.success) { toast.error(error || '저장하지 못했어요. 다시 시도해 주세요'); return; }
+    toast.success('제출했어요. 선생님과 면담할 때 같이 봐요 👍');
+    onSaved();
+  }
+
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg w-[calc(100%-1rem)] max-h-[92vh] overflow-y-auto p-0 gap-0">
+        <DialogHeader className="px-4 pt-4 pb-3 border-b sticky top-0 bg-background z-10">
+          <DialogTitle className="text-base flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{baseSubject(r.subject)}</span>
+            {examLabel(r)}
+            {r.actual_score != null && <span className="text-sm font-normal text-muted-foreground">{r.actual_score}점</span>}
+            <span className={cn('text-[11px] px-1.5 py-0.5 rounded font-normal', STAGE[stage].cls)}>{STAGE[stage].label}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="p-4 space-y-5 text-sm">
+          {/* 시험지 */}
+          {r.pdfs.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {r.pdfs.map((p, i) => p.url ? (
+                <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">
+                  <FileText className="h-4 w-4 text-primary" />{p.title || `시험지 ${i + 1}`} 열기
+                </a>
+              ) : null)}
+            </div>
+          ) : (
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">시험지 PDF가 아직 안 올라왔어요. 종이 시험지를 보면서 적어도 돼요.</p>
+          )}
+
+          {/* 공개된 선생님 글 */}
+          {locked && (
+            <div className="space-y-2">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[11px] font-semibold text-emerald-800 mb-1 flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" />선생님이 보내는 글</p>
+                <p className="whitespace-pre-wrap leading-relaxed text-gray-800">{r.final_text}</p>
+              </div>
+              {r.academy_action_text && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[11px] font-semibold text-amber-800 mb-1">면담에서 정한 것 · 학원에서는</p>
+                  <p className="whitespace-pre-wrap leading-relaxed text-gray-800">{r.academy_action_text}</p>
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1"><Lock className="h-3 w-3" />공개된 뒤라 내가 적은 내용은 고칠 수 없어요.</p>
+            </div>
+          )}
+
+          {/* 단계 표시 */}
+          {!locked && (
+            <div className="grid grid-cols-3 gap-1 text-[11px]">
+              {([1, 2, 3] as const).map(s => (
+                <button key={s} type="button" onClick={() => setStep(s)} className={cn('rounded-md py-1.5 border', step === s ? 'border-primary bg-primary/10 text-primary font-semibold' : 'text-muted-foreground')}>
+                  {s === 1 ? '① 틀린 번호' : s === 2 ? `② 이유${wrongNums.length ? ` (${wrongNums.length})` : ''}` : '③ 다음 시험까지'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ① 틀린 번호 */}
+          {(locked || step === 1) && (
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">틀린 번호</span>
+                {!locked && <span className="text-xs text-muted-foreground">번호를 눌러요</span>}
+                <span className="ml-auto text-xs"><b className="text-red-600">{wrongNums.length}</b>개</span>
+              </div>
+              <div className="grid grid-cols-8 gap-1.5">
+                {nums.map(n => { const w = draft.wrong.has(n); return (
+                  <button key={n} type="button" disabled={locked} onClick={() => toggle(n)}
+                    className={cn('h-9 rounded-md border text-sm tabular-nums', w ? 'bg-red-500 text-white border-red-500' : 'bg-background', locked && 'opacity-80')}>{n}</button>); })}
+              </div>
+              {!locked && (
+                <div className="flex items-center justify-between">
+                  <button type="button" className="text-xs text-primary" onClick={() => setDraft(d => ({ ...d, total: Math.min(60, d.total + 5) }))}>번호 더 보기 (+5)</button>
+                  {wrongNums.length === 0 ? <span className="text-xs text-muted-foreground">다 맞았으면 바로 ③으로</span> : <Button size="sm" className="h-8" onClick={() => setStep(2)}>다음: 이유 고르기</Button>}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ② 이유 */}
+          {(locked || step === 2) && wrongNums.length > 0 && (
+            <section className="space-y-2">
+              <div className="font-semibold">왜 틀렸을까? <span className="text-xs font-normal text-muted-foreground">번호마다 하나씩 골라요</span></div>
+              <div className="space-y-2">
+                {wrongNums.map(n => { const it = draft.wrong.get(n)!; return (
+                  <div key={n} className={cn('rounded-lg border p-2.5 space-y-1.5', !it.reason && !locked && 'border-amber-300 bg-amber-50/40')}>
+                    <div className="flex items-center gap-2"><span className="font-bold text-red-600 tabular-nums">{n}번</span>{locked && <span className="text-xs">{tagLabel(it.reason) || '이유 없음'}</span>}</div>
+                    {!locked && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map(t => (
+                          <button key={t.code} type="button" onClick={() => setReason(n, t.code)}
+                            className={cn('rounded-full border px-2.5 py-1 text-xs', it.reason === t.code ? 'bg-amber-500 text-white border-amber-500' : 'bg-background')}>{t.label}</button>
+                        ))}
+                      </div>
+                    )}
+                    {locked ? (it.memo ? <p className="text-xs text-muted-foreground">{it.memo}</p> : null)
+                      : <Input value={it.memo} onChange={e => setMemo(n, e.target.value)} placeholder="한 줄 더 (선택) — 어떤 개념? 어떤 실수?" className="h-8 text-xs" maxLength={200} />}
+                  </div>); })}
+              </div>
+              {!locked && <div className="flex justify-between"><Button size="sm" variant="outline" className="h-8" onClick={() => setStep(1)}>이전</Button><Button size="sm" className="h-8" onClick={() => setStep(3)} disabled={missingReason.length > 0}>다음: 내가 할 것</Button></div>}
+            </section>
+          )}
+          {!locked && step === 2 && wrongNums.length === 0 && (
+            <p className="text-xs text-muted-foreground">틀린 번호가 없어요. ①에서 번호를 누르거나, 다 맞았으면 ③으로 가요.</p>
+          )}
+
+          {/* ③ 다짐 */}
+          {(locked || step === 3) && (
+            <section className="space-y-2">
+              <div className="font-semibold">다음 시험까지 내가 할 것 <span className="text-xs font-normal text-muted-foreground">한 줄이면 돼요</span></div>
+              {locked ? <p className="rounded-lg bg-muted/50 px-3 py-2 whitespace-pre-wrap">{r.student_reflection || '적지 않았어요'}</p>
+                : <Textarea value={draft.reflection} onChange={e => setDraft(d => ({ ...d, reflection: e.target.value }))} rows={3} maxLength={500}
+                    placeholder="예: 계산 실수가 3개라서, 문제 풀고 나서 답 검산을 꼭 한 번 더 하기" className="text-sm" />}
+              {!locked && (
+                <div className="flex items-center justify-between gap-2">
+                  <Button size="sm" variant="outline" className="h-9" onClick={() => setStep(wrongNums.length ? 2 : 1)}>이전</Button>
+                  <Button className="h-9 flex-1" disabled={saving} onClick={submit}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : stage === 'todo' ? <Send className="h-4 w-4 mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                    {stage === 'todo' ? '제출하기' : '고쳐서 다시 제출'}
+                  </Button>
+                </div>
+              )}
+              {!locked && stage !== 'todo' && <p className="text-[11px] text-muted-foreground">{r.student_submitted_at?.slice(0, 10)}에 제출했어요. 공개 전까지는 고칠 수 있어요.</p>}
+            </section>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

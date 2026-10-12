@@ -49,17 +49,34 @@ export type WatchPost = {
   post_url: string | null; attachments: { name: string; url: string }[]; matched_keywords: string[];
   status: 'new' | 'extracted' | 'applied' | 'ignored' | string; extracted: any | null; cycle_id: string | null; created_at: string;
 };
-/** EXAM-STUDENT-ANALYSIS-V1 */
+/** EXAM-STUDENT-ANALYSIS-V1 + EXAM-SELF-REVIEW-V1 (vault 19 §21) */
 export type StudentAnalysis = {
   id: string; result_id: string; student_id: string; subject: string; exam_year: number | null; exam_period: string | null;
   status: 'draft' | 'teacher_confirmed' | 'published'; wrong_count: number; total_items: number | null;
   final_text: string | null; academy_action_text: string | null; published_at: string | null; updated_at: string;
+  student_reflection?: string | null; student_submitted_at?: string | null; counseled_at?: string | null;
 };
 export type WrongReasonTag = { subject: string; code: string; label: string; sort_order: number };
+/** 단계는 저장 열이 아니라 시각으로 판정: 학생 제출 → 면담 완료 → 공개. (teacher_confirmed는 옛 행 호환 — 면담 완료로 취급) */
+export type AnalysisStage = 'none' | 'submitted' | 'counseled' | 'published';
+export function analysisStage(a: StudentAnalysis | null | undefined): AnalysisStage {
+  if (!a) return 'none';
+  if (a.status === 'published') return 'published';
+  if (a.counseled_at || a.status === 'teacher_confirmed') return 'counseled';
+  if (a.student_submitted_at) return 'submitted';
+  return 'none';
+}
+export const ANALYSIS_STAGE_META: Record<AnalysisStage, { label: string; cls: string }> = {
+  none: { label: '학생 제출 전', cls: 'bg-muted text-muted-foreground' },
+  submitted: { label: '학생 제출', cls: 'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200' },
+  counseled: { label: '면담 완료', cls: 'bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200' },
+  published: { label: '공개됨', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' },
+};
+/** @deprecated EXAM-SELF-REVIEW-V1부터 ANALYSIS_STAGE_META·analysisStage를 쓴다 */
 export const ANALYSIS_STATUS_META: Record<StudentAnalysis['status'], { label: string; cls: string }> = {
   draft: { label: '초안', cls: 'bg-muted text-muted-foreground' },
-  teacher_confirmed: { label: '교사 컨펌', cls: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200' },
-  published: { label: '공개됨', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' },
+  teacher_confirmed: { label: '면담 완료', cls: ANALYSIS_STAGE_META.counseled.cls },
+  published: { label: '공개됨', cls: ANALYSIS_STAGE_META.published.cls },
 };
 
 /** EXAM-PARTICIPANTS-V1: 사이클별 응시 여부. 행 없음 = 응시 */

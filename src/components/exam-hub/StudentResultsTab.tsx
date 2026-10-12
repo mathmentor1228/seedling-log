@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertTriangle, ArrowDown, ArrowUp, FileText, Loader2, Minus, Pencil, RefreshCw, Save, UserX, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
-import { ANALYSIS_STATUS_META, STATUS_META, type ResultPdf, type SheetSync, type StudentAnalysis, type StudentSubjectRow, type WrongReasonTag } from './examHubUtils';
+import { ANALYSIS_STAGE_META, analysisStage, STATUS_META, type ResultPdf, type SheetSync, type StudentAnalysis, type StudentSubjectRow, type WrongReasonTag } from './examHubUtils';
 import { StudentAnalysisPanel } from './StudentAnalysisPanel';
 
 interface Props {
@@ -336,11 +336,12 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
                     {(() => {
                       const a = r.result ? analysesByResult?.get(r.result.id) || null : null;
                       const canOpen = !!r.result && r.status === 'done';
-                      const m = a ? ANALYSIS_STATUS_META[a.status] : null;
+                      const stage = analysisStage(a);
+                      const m = a ? ANALYSIS_STAGE_META[stage] : null;
                       return (
-                        <button type="button" disabled={!canOpen} onClick={() => setAnalysisRow(r)} title={canOpen ? '틀린 문항·이유 태그·문안·컨펌' : '점수가 있어야 분석할 수 있습니다'}
+                        <button type="button" disabled={!canOpen} onClick={() => setAnalysisRow(r)} title={canOpen ? '학생 셀프 피드백 보기 · 면담 메모 · 공개' : '점수가 있어야 열 수 있습니다'}
                           className={cn('rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap', m ? m.cls : canOpen ? 'border border-dashed text-muted-foreground hover:bg-accent' : 'text-muted-foreground/40')}>
-                          {m ? `${m.label}${a!.wrong_count ? ` · 틀림 ${a!.wrong_count}` : ''}` : canOpen ? '분석 시작' : '-'}
+                          {m ? `${m.label}${a!.wrong_count ? ` · 틀림 ${a!.wrong_count}` : ''}` : canOpen ? '제출 전' : '-'}
                         </button>
                       );
                     })()}

@@ -385,12 +385,14 @@ Deno.serve(async (req) => {
     let studentAnalyses: any[] = [];
     try {
       const { data: sa } = await supabase.from("exam_student_analyses")
-        .select("id, subject, exam_year, exam_period, wrong_count, total_items, final_text, academy_action_text, published_at, student_exam_results(actual_score, previous_score, exam_type)")
+        .select("id, subject, exam_year, exam_period, wrong_count, total_items, final_text, academy_action_text, published_at, student_reflection, student_exam_results(actual_score, previous_score, exam_type)")
         .eq("student_id", studentId).eq("status", "published").order("published_at", { ascending: false }).limit(12);
       studentAnalyses = (sa || []).map((a: any) => ({
         id: a.id, subject: a.subject, exam_year: a.exam_year, exam_period: a.exam_period, exam_type: a.student_exam_results?.exam_type ?? null,
         score: a.student_exam_results?.actual_score ?? null, previous_score: a.student_exam_results?.previous_score ?? null,
         wrong_count: a.wrong_count, total_items: a.total_items, final_text: a.final_text, academy_action_text: a.academy_action_text, published_at: a.published_at,
+        // EXAM-SELF-REVIEW-V1: 아이가 스스로 적은 "다음 시험까지 내가 할 것"
+        student_reflection: a.student_reflection ?? null,
       }));
     } catch { studentAnalyses = []; }
 

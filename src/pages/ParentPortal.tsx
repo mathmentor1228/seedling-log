@@ -26,7 +26,7 @@ interface ExamPrepScheduleItem { course_id: string; subject: string; title: stri
 interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
 interface ExamTrendRow { exam_year: number; exam_period: string | null; exam_type: string | null; subject: string; score: number }
 interface AcademyAction { kind: 'comment' | 'message' | 'clinic' | 'note'; date: string; subject: string | null; text: string; by: string | null }
-interface StudentAnalysisPub { id: string; subject: string; exam_year: number | null; exam_period: string | null; exam_type: string | null; score: number | null; previous_score: number | null; wrong_count: number; total_items: number | null; final_text: string | null; academy_action_text: string | null; published_at: string | null }
+interface StudentAnalysisPub { id: string; subject: string; exam_year: number | null; exam_period: string | null; exam_type: string | null; score: number | null; previous_score: number | null; wrong_count: number; total_items: number | null; final_text: string | null; academy_action_text: string | null; published_at: string | null; student_reflection?: string | null }
 interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; exam_trend?: ExamTrendRow[]; academy_actions?: AcademyAction[]; student_analyses?: StudentAnalysisPub[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
 
 /* ═══════ Constants ═══════ */
@@ -619,6 +619,13 @@ function StudentAnalysesSection({ items, studentName }: { items: StudentAnalysis
             {open && (
               <div className="px-4 pb-4 space-y-3">
                 {a.final_text && <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{a.final_text}</p>}
+                {/* EXAM-SELF-REVIEW-V1: 아이가 직접 쓴 한 줄 — 원장 2026-10-13 승인 */}
+                {a.student_reflection && (
+                  <div className="rounded-xl bg-sky-50 border border-sky-100 p-3">
+                    <p className="text-[11px] font-semibold text-sky-800 mb-1">{studentName}이(가) 스스로 정한 것</p>
+                    <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{a.student_reflection}</p>
+                  </div>
+                )}
                 {a.academy_action_text && (
                   <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
                     <p className="text-[11px] font-semibold text-amber-800 mb-1">학원에서는</p>

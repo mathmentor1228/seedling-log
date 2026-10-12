@@ -129,6 +129,8 @@ export default function StudentDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [hideExamSchedule, setHideExamSchedule] = useState(false);
+  // EXAM-SELF-REVIEW-V1: 점수는 들어왔는데 아직 돌아보지 않은 시험 수
+  const [examSelfReviewPending, setExamSelfReviewPending] = useState(0);
 
   useEffect(() => {
     if (student?.id) {
@@ -164,6 +166,7 @@ export default function StudentDashboard() {
       if (data) {
         setTotalPoints(data.total_points);
         setHideExamSchedule(!!data.hide_exam_schedule);
+        setExamSelfReviewPending(Number(data.exam_self_review_pending) || 0);
         // Filter out expired, closed, deadline-passed, and '없음' homework
         const filteredHomework = (data.pending_homework || []).filter((hw: any) =>
           hw.check_status === 'unchecked' &&
@@ -371,6 +374,22 @@ export default function StudentDashboard() {
       {/* EXAM-DDAY-V1: Exam D-day countdown (filtered by student's school) */}
       {/* EXAM-PARTICIPANTS-V1: 이번 시험을 안 보는 학생에게는 시험 일정을 보여주지 않는다 */}
       {!hideExamSchedule && <ExamDdayBanner schoolFilter={student?.school || null} />}
+
+      {/* EXAM-SELF-REVIEW-V1 (vault 19 §21): 점수가 들어온 시험을 아직 돌아보지 않았으면 홈에서 바로 안내 */}
+      {examSelfReviewPending > 0 && (
+        <Link to="/student/exam-review" className="block">
+          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <ClipboardCheck className="h-5 w-5 text-amber-700 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">내 시험 돌아보기 {examSelfReviewPending}개</p>
+                <p className="text-xs text-muted-foreground">점수가 들어왔어요. 틀린 번호와 이유를 적으면 선생님과 면담할 때 같이 봐요.</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Exam Prep Schedule Confirmation */}
       <StudentExamPrepSchedule />

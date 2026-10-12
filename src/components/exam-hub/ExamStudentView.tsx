@@ -72,7 +72,7 @@ function useStudentTimeline(studentId: string | null, userId: string | null): Ti
         .eq('student_id', studentId).gte('lesson_date', since).order('lesson_date', { ascending: false }).limit(400),
       db.from('homework_assignments').select('assigned_date, check_status, result').eq('student_id', studentId).gte('assigned_date', hw180),
       db.from('student_action_notes').select('id, note_date, subject, text, visibility, created_by, created_by_name').eq('student_id', studentId).order('note_date', { ascending: false }).limit(200).then((r: any) => r, () => ({ data: [] })),
-      db.from('exam_student_analyses').select('subject, exam_year, exam_period, status, wrong_count, final_text, academy_action_text, published_at, updated_at').eq('student_id', studentId).limit(50).then((r: any) => r, () => ({ data: [] })),
+      db.from('exam_student_analyses').select('subject, exam_year, exam_period, status, wrong_count, final_text, academy_action_text, published_at, updated_at, student_reflection, student_submitted_at, counseled_at').eq('student_id', studentId).limit(50).then((r: any) => r, () => ({ data: [] })),
     ]);
     const events: Event[] = [];
     const clean = (t: any) => String(t || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim(); // [보충 시간…] 스탬프 제거
@@ -99,8 +99,10 @@ function useStudentTimeline(studentId: string | null, userId: string | null): Ti
     for (const n of ((nt && nt.data) || []) as any[]) events.push({ kind: 'note', scope: n.visibility === 'external' ? 'external' : 'internal', date: n.note_date, subject: n.subject, text: n.text, by: n.created_by_name, id: n.id, mine: !!userId && n.created_by === userId });
     for (const a of ((an && an.data) || []) as any[]) {
       const label = periodLabel(a.exam_year, a.exam_period, null);
-      const head = `${label} 시험 분석${a.wrong_count ? ` (틀림 ${a.wrong_count})` : ''}${a.status === 'published' ? '' : a.status === 'teacher_confirmed' ? ' · 교사 컨펌 대기→원장' : ' · 초안'}`;
-      const body = [a.final_text, a.academy_action_text ? `학원 대응: ${a.academy_action_text}` : ''].filter(Boolean).join(' / ');
+      // EXAM-SELF-REVIEW-V1: 단계 = 학생 제출 → 면담 완료 → 공개
+      const stage = a.status === 'published' ? '' : (a.counseled_at || a.status === 'teacher_confirmed') ? ' · 면담 완료 · 공개 대기' : a.student_submitted_at ? ' · 학생 제출 · 면담 전' : ' · 학생 제출 전';
+      const head = `${label} 시험 분석${a.wrong_count ? ` (틀림 ${a.wrong_count})` : ''}${stage}`;
+      const body = [a.student_reflection ? `아이 다짐: ${a.student_reflection}` : '', a.final_text, a.academy_action_text ? `면담·학원 대응: ${a.academy_action_text}` : ''].filter(Boolean).join(' / ');
       events.push({ kind: 'analysis', scope: a.status === 'published' ? 'external' : 'internal', date: (a.published_at || a.updated_at).slice(0, 10), subject: a.subject, text: body ? `${head} — ${body}` : head, by: null });
     }
     events.sort((a, b) => b.date.localeCompare(a.date));
