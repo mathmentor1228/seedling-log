@@ -1,93 +1,35 @@
-## 문제 확인
+# 내신대비 시험지 분석 자료 업로드 + 개별 피드백 연결
 
-수업일지가 3가지 경로로 생성/수정되는데, 서로 조율이 없어서 **같은 학생·같은 과목·같은 날짜에 여러 레코드가 중복 생성**되고 있어요.
+## 목표
+내신대비 > 시험지 분석 탭의 과목 카드마다 5종 자료를 올릴 수 있게 하고, 정리한 분석 내용(문항별 난도·까다로운 점·출제 포인트)이 학생 개별 피드백에 반영되도록 한다.
 
-DB 조사 결과 (2026-07-01 이후):
-- 학생 A (수학, 07-09): **4건 중복** (같은 teacher)
-- 학생 B (수학, 07-09): **2건 중복**
+## 1. 자료 5칸 (과목 카드 안)
+| 칸 | 저장 위치 |
+|---|---|
+| 원본 PDF | 기존 칸 재사용 |
+| 학생용 시험지 | 새 칸 |
+| 답안·해설지 | 기존 답안 PDF 칸 재사용 |
+| 교사용 분석지 PDF | 새 칸 |
+| 학부모용 카드뉴스 (이미지 여러 장) | 기존 카드뉴스 칸 재사용 |
 
-### 3가지 경로 현황
+- 각 칸: 올리기 / 보기 / 바꾸기 / 지우기. 채워진 칸은 체크 표시.
+- 아직 분석보고서가 없는 과목은 첫 업로드 때 자동으로 만들어짐(학교·학년·과목·시험 정보는 현재 시험에서 채움).
+- 자료실의 기존 분석보고서 편집 화면에서도 같은 2개 새 칸이 보이게 함.
 
-| 경로 | 파일 | 기존 레코드 병합 로직 |
-|---|---|---|
-| ① 수업계획 → 오늘 수업 저장 | `TodaySession.tsx` (line 787) | ✅ (teacher, student, subject, date) 조회 후 있으면 update |
-| ② 수업일지 직접 작성 | `LessonRecordForm.tsx` (line 1482) | ❌ 무조건 insert |
-| ③ 테스트 일괄 입력 | `BatchTestInputModal.tsx` (line 117) | ✅ 있으면 update, 없으면 skip (신규 생성 X) |
+## 2. 분석 내용 정리 (같은 카드에서 "분석 정리" 열기)
+- 전체: 난이도, 평균, 출제 경향 총평, "어떤 부분 위주로 출제됐는지", "까다로운 포인트".
+- 문항별 표: 번호, 배점, 단원, 난도(하/중/상/킬러), 까다로운 이유·출제 포인트 메모.
+  기존 문항 난도 표를 그대로 쓰고 메모 칸만 활용.
 
-②번이 중복의 주범입니다. 그리고 DB에 unique constraint가 없어서 어느 경로든 실수하면 중복이 쌓입니다.
+## 3. 개별 피드백 반영
+- 학생 시험 분석 생성 시, 학생이 틀린 문항 번호와 위 문항별 정보를 연결해 전달:
+  "틀린 5번 = 상 난도, 이차함수 응용, 조건 해석이 까다로움" 식으로.
+- 총평·출제 포인트·까다로운 포인트도 함께 넣어 피드백 문장에 반영.
+- 학생/학부모에게는 교사용 분석지는 보이지 않음 (내부 전용).
 
----
-
-## 수정 방향
-
-### 1. DB 레벨 — 중복 원천 차단 (마이그레이션)
-
-- `lesson_records`에 **부분 unique index** 추가
-  - 키: `(student_id, subject, lesson_date)` (teacher_id는 제외 — 같은 과목에서 담임 바뀌어도 하나의 일지)
-  - 기존 중복 데이터는 자동 병합 함수로 정리 (제출됨 우선 → 최신 updated_at 우선으로 하나 남기고 나머지는 관련 자식 레코드 이관 후 삭제)
-
-### 2. 코드 레벨 — 항상 "먼저 조회 후 upsert" 헬퍼로 통일
-
-`src/lib/lessonRecordUpsert.ts` 신규 파일:
-- `findOrCreateLessonRecord({ student_id, subject, lesson_date, defaults })` — 있으면 id 반환, 없으면 defaults로 생성
-- `upsertLessonRecord(payload, mergeStrategy)` — 있으면 지정 필드만 병합 update, 없으면 insert
-
-이 헬퍼로 3경로 모두 교체:
-- `TodaySession.tsx` (line 787-818): 기존 로직을 헬퍼로 대체 (동작 동일)
-- `LessonRecordForm.tsx` (line 1481-1485): insert 전에 항상 조회. 이미 있으면 그 id를 currentDraftId처럼 사용해 update
-- `BatchTestInputModal.tsx`: 이미 조회 로직 있으니 헬퍼로 교체하고 "없으면 skip" 대신 "없으면 최소 정보로 생성 후 테스트 필드 update"로 개선
-
-### 3. 병합 전략 (경합 시 어떤 필드가 이기나)
-
-각 경로가 채우는 필드가 겹치지 않도록 명확한 오너십:
-
-- `lesson_range`, `next_lesson_goal`, `homework_status`, `understanding_score`, `attendance_status` → **경로 ①(TodaySession) 우선**. 다른 경로에서는 비어있을 때만 채움.
-- `test_name`, `test_content`, `test_result*`, `test_slot`, `english_pass_fail` → 경로 ③(테스트 일괄)이 항상 덮어씀
-- `notes`, `lesson_types` → append/merge (배열은 union)
-- `submitted`, `submitted_at` → true가 되면 유지 (덮어쓰기 금지)
-
----
-
-## 기술 세부사항
-
-### 마이그레이션 파일 1개
-
-```sql
--- 1) 기존 중복 병합 함수 실행 (한 번만)
---    같은 (student_id, subject, lesson_date) 그룹당:
---    - submitted=true인 것 우선, 그 다음 updated_at 최신
---    - 살아남은 id로 homework_assignments.lesson_record_id, 
---      test_records, exam_reviews 등 FK 이관
---    - 나머지 삭제
--- 2) 부분 unique index
-CREATE UNIQUE INDEX lesson_records_unique_per_day
-  ON public.lesson_records (student_id, subject, lesson_date);
-```
-
-### 헬퍼 시그니처
-
-```ts
-export async function upsertLessonRecord(
-  key: { student_id: string; subject: string; lesson_date: string },
-  payload: Partial<LessonRecordRow>,
-  strategy: 'today-session' | 'form' | 'batch-test'
-): Promise<{ id: string; created: boolean }>;
-```
-
-`strategy`별로 어떤 필드를 덮어쓰고 어떤 필드를 보존할지 내부에서 결정.
-
-### 리스크 및 완화
-
-- 기존 중복 병합 시 자식 FK 이관 실패 가능 → 트랜잭션으로 롤백
-- ②경로(LessonRecordForm)에서 이미 열려있는 "수정" 화면에 다른 경로가 동시에 저장하면 stale update 발생 가능 → `updated_at` 체크 옵션은 이번 범위에서 제외 (드문 케이스)
-- 병합 후 lesson_record_id를 참조하던 `homework_assignments`가 삭제 대상 id를 가리키면 안 되므로, **자식 FK 업데이트 → 부모 DELETE** 순서 준수
-
----
-
-## 변경 파일
-
-- `supabase/migrations/<new>.sql` 신규 (중복 정리 + unique index)
-- `src/lib/lessonRecordUpsert.ts` 신규
-- `src/components/plan/TodaySession.tsx` 수정 (헬퍼 사용)
-- `src/components/lessons/LessonRecordForm.tsx` 수정 (헬퍼 사용)
-- `src/components/BatchTestInputModal.tsx` 수정 (헬퍼 사용)
+## 기술 메모
+- 마이그레이션: `exam_analysis_reports`에 `student_paper_path`, `teacher_analysis_pdf_path`, `focus_summary`, `tricky_points` 컬럼 추가.
+- 파일은 기존 `exam-analysis` 저장소, ASCII 경로(timestamp+UUID).
+- `PaperAnalysisTab`에 업로드 UI + 분석 정리 다이얼로그(다이얼로그 중첩 없음).
+- `generate-exam-student-analysis`: 문항 조회 시 `unit_name, note, question_type, points`와 리포트의 총평/포인트까지 읽어 프롬프트에 포함 → 재배포.
+- 이 작업은 GitHub main에 반영되므로, 이후 배포 절차에 마이그레이션 1개·함수 1개 재배포가 추가됨.
