@@ -40,7 +40,32 @@ function Cell({ ok, warn, children, title }: { ok: boolean; warn?: boolean; chil
 }
 
 export function ExamCloseoutReview({ cards, deepByReport, currentUserId, isAdmin, onOpen, onChanged, analysesByResult }: Props) {
+  const { user, fullName } = useAuth() as any;
   const [publishing, setPublishing] = useState<string | null>(null);
+  const [materialsOpen, setMaterialsOpen] = useState<Record<string, boolean>>({});
+  const [created, setCreated] = useState<Record<string, string>>({});
+  const [editor, setEditor] = useState<{ id: string; title: string } | null>(null);
+  const reload = () => onChanged?.();
+
+  async function ensureReport(cc: ReviewCard, subject: string): Promise<string | null> {
+    const key = `${cc.cycle.id}|${subject}`;
+    const existing = cc.reports.find(r => r.subject === subject)?.id || created[key];
+    if (existing) return existing;
+    const { data, error } = await (supabase as any).from('exam_analysis_reports').insert({
+      school_name: cc.cycle.school_name, grade: gradeLabel(cc.cycle), subject,
+      exam_type: cc.cycle.exam_type || '중간고사',
+      exam_year: cc.cycle.academic_year, exam_period: cc.cycle.semester,
+      created_by: user?.id ?? null, created_by_name: fullName ?? null,
+    }).select('id').single();
+    if (error) { toast.error('분석보고서 생성 실패: ' + error.message); return null; }
+    setCreated(c => ({ ...c, [key]: data.id }));
+    return data.id as string;
+  }
+
+  async function openEditor(cc: ReviewCard, subject: string) {
+    const id = await ensureReport(cc, subject);
+    if (id) { setEditor({ id, title: `${cc.cycle.school_name} ${gradeLabel(cc.cycle)} ${subject}` }); reload(); }
+  }
   const data = useMemo(() => cards.map(cc => {
     const byKey = new Map<string, Line>();
     for (const r of cc.rows) {
