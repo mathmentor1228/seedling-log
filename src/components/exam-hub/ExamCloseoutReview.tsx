@@ -215,7 +215,8 @@ export function ExamCloseoutReview({ cards, deepByReport, currentUserId, isAdmin
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-muted-foreground flex items-center gap-1"><ClipboardCheck className="w-3.5 h-3.5" />점수·시험지는 성적취합표(시트)와 드라이브에서 동기화된 값입니다. 학생 분석은 학생이 앱에서 틀린 번호·이유를 제출 → 담당 선생님 면담 메모 → 원장 공개 순서입니다. 분석지는 시험지 분석 탭에서 작성·공개합니다.</p>
+      <p className="text-[11px] text-muted-foreground flex items-center gap-1"><ClipboardCheck className="w-3.5 h-3.5" />점수·시험지는 성적취합표(시트)와 드라이브에서 동기화된 값입니다. 학생 분석은 학생이 앱에서 틀린 번호·이유를 제출 → 담당 선생님 면담 메모 → 원장 공개 순서입니다. 분석지는 여기 '자료 올리기' 또는 시험지 분석 탭에서 작성·공개합니다.</p>
+      <PaperAnalysisEditor open={!!editor} onOpenChange={v => { if (!v) setEditor(null); }} reportId={editor?.id ?? null} title={editor?.title ?? ''} onSaved={reload} />
     </div>
   );
 }
