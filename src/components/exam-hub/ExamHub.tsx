@@ -284,7 +284,7 @@ export function ExamHub() {
       {mode === 'student' && !data.loading && (
         <ExamStudentView students={data.students} results={data.results} pdfs={data.pdfs} links={data.links} classInfos={data.classInfos} teachers={data.teachers}
           currentUserId={user?.id ?? null} currentUserName={fullName ?? null} isAdmin={isAdmin} isTeacher={isTeacher} myStudentIds={myStudentIds}
-          selectedId={params.get('student')} onSelect={id => { const p = new URLSearchParams(params); p.set('mode', 'student'); p.set('student', id); setParams(p); }} />
+          selectedId={params.get('student')} onSelect={id => { const p = new URLSearchParams(params); p.set('mode', 'student'); p.set('student', id); setParams(p); }} reload={data.reload} />
       )}
 
       {/* ② 마감 점검 */}

@@ -49,6 +49,7 @@ interface Props {
   myStudentIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  reload?: () => void;
 }
 
 type Kind = 'prep' | 'clinic' | 'comment' | 'parent_line' | 'issue' | 'hw_note' | 'next_goal' | 'internal' | 'note' | 'analysis';
