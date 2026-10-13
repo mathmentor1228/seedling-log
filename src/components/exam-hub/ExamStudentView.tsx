@@ -392,8 +392,9 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
                       className="inline-flex items-center gap-1 hover:underline" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
                       <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
                     </button>
-                    {x.pdf.source === 'manual' && (
-                      <button type="button" onClick={() => removePaper(x.pdf)} className="text-muted-foreground hover:text-red-600" title="직접 올린 시험지 지우기"><Trash2 className="w-3 h-3" /></button>
+                    {x.pdf.source === 'student' && <span className="rounded bg-sky-100 px-1 py-0.5 text-[10px] text-sky-800">학생</span>}
+                    {(x.pdf.source === 'manual' || x.pdf.source === 'student') && (
+                      <button type="button" onClick={() => removePaper(x.pdf)} className="text-muted-foreground hover:text-red-600" title={x.pdf.source === 'student' ? '학생이 올린 시험지 지우기' : '직접 올린 시험지 지우기'}><Trash2 className="w-3 h-3" /></button>
                     )}
                   </span>
                 ))}
@@ -410,7 +411,7 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
                 onClick={() => { if (!uploadResultId) { toast.error('어느 시험의 시험지인지 먼저 골라 주세요'); return; } fileInputRef.current?.click(); }}>
                 {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileText className="w-3.5 h-3.5 mr-1" />}시험지 올리기
               </Button>
-              <span className="text-[11px] text-muted-foreground">PDF 또는 사진 · 올리면 학생 앱 돌아보기에도 보여요</span>
+              <span className="text-[11px] text-muted-foreground">PDF 또는 사진 · 학생 앱에서도 직접 올릴 수 있어요</span>
             </div>
             <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
           </div>
