@@ -1189,7 +1189,7 @@ Deno.serve(async (req) => {
         let pdfs: any[] = [], items: any[] = [], analyses: any[] = [], tags: any[] = [];
         if (ids.length) {
           const [p, it, an, tg] = await Promise.all([
-            supabase.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
+            supabase.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title, source').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
             supabase.from('exam_result_items').select('result_id, item_number, reason_tags, memo, source').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
             supabase.from('exam_student_analyses').select('result_id, status, total_items, wrong_count, student_reflection, student_submitted_at, counseled_at, published_at, final_text, academy_action_text').in('result_id', ids).then((r: any) => r, () => ({ data: [] })),
             supabase.from('exam_wrong_reason_tags').select('subject, code, label, sort_order').eq('is_active', true).order('sort_order').then((r: any) => r, () => ({ data: [] })),
@@ -1211,7 +1211,7 @@ Deno.serve(async (req) => {
             return {
               id: r.id, subject: r.subject, exam_type: r.exam_type, exam_date: r.exam_date, exam_year: r.exam_year, exam_period: r.exam_period,
               actual_score: r.actual_score, previous_score: r.previous_score, school_name: r.school_name,
-              pdfs: pdfs.filter((pf: any) => pf.result_id === r.id).map((pf: any) => ({ id: pf.id, title: pf.display_title, url: signedPdf.get(pf.id) || null })),
+              pdfs: pdfs.filter((pf: any) => pf.result_id === r.id).map((pf: any) => ({ id: pf.id, title: pf.display_title, url: signedPdf.get(pf.id) || null, source: pf.source })),
               items: items.filter((it: any) => it.result_id === r.id).map((it: any) => ({ item_number: it.item_number, reason: (it.reason_tags || [])[0] || null, memo: it.memo, source: it.source })).sort((x: any, y: any) => x.item_number - y.item_number),
               total_items: a?.total_items ?? null,
               student_reflection: a?.student_reflection ?? null,
@@ -1270,6 +1270,98 @@ Deno.serve(async (req) => {
         const { error: upErr } = await supabase.from('exam_student_analyses').upsert(payload, { onConflict: 'result_id' });
         if (upErr) throw upErr;
         result = { success: true, wrong_count: wrongNums.length };
+        break;
+      }
+
+      // EXAM-PAPER-STUDENT-V1: 학생이 자기 시험지(사진·PDF)를 직접 올린다.
+      //   버킷은 직원 전용이라 서비스 권한으로 대신 올리고, 시험 결과 행에 학생 표시(source='student')로 남긴다.
+      case 'upload_exam_paper': {
+        const { result_id, content, content_type, ext } = params as any;
+        if (!result_id || !content || !content_type) {
+          return new Response(JSON.stringify({ error: 'Missing result_id/content/content_type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const ALLOWED_PAPER_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+        if (!ALLOWED_PAPER_TYPES.includes(String(content_type))) {
+          return new Response(JSON.stringify({ error: 'PDF 또는 사진만 올릴 수 있어요' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // 자기 시험 결과에만 올릴 수 있다
+        const { data: res } = await supabase.from('student_exam_results').select('id, student_id').eq('id', result_id).maybeSingle();
+        if (!res || (res as any).student_id !== student_id) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // 공개(선생님 글 도착) 뒤에는 잠김
+        const { data: an } = await supabase.from('exam_student_analyses').select('status').eq('result_id', result_id).maybeSingle();
+        if ((an as any)?.status === 'published') {
+          return new Response(JSON.stringify({ error: '이미 공개된 시험이라 시험지를 더 올릴 수 없어요.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { count: studentPdfCount } = await supabase
+          .from('student_exam_result_pdfs').select('id', { count: 'exact', head: true }).eq('result_id', result_id).eq('source', 'student');
+        if ((studentPdfCount || 0) >= 10) {
+          return new Response(JSON.stringify({ error: '학생이 올린 시험지는 한 시험에 10장까지예요.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        let bytes: Uint8Array;
+        try {
+          const b64 = String(content).includes(',') ? String(content).split(',').pop()! : String(content);
+          const binary = atob(b64);
+          bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        } catch {
+          return new Response(JSON.stringify({ error: '파일을 읽지 못했어요. 다시 시도해 주세요' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const MAX_PAPER_BYTES = 12 * 1024 * 1024;
+        if (bytes.length > MAX_PAPER_BYTES) {
+          return new Response(JSON.stringify({ error: 'FILE_TOO_LARGE' }), { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const safeExt = String(ext || (String(content_type) === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'jpg';
+        const path = `manual/${result_id}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${safeExt}`;
+        const { error: upErr } = await supabase.storage.from('exam-results').upload(path, bytes, { contentType: String(content_type), upsert: false });
+        if (upErr) {
+          console.error('[upload_exam_paper]', upErr.message);
+          return new Response(JSON.stringify({ error: '올리지 못했어요. 다시 시도해 주세요' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: st } = await supabase.from('students').select('name').eq('id', student_id).maybeSingle();
+        const { error: insErr } = await supabase.from('student_exam_result_pdfs').insert({
+          result_id, storage_path: path,
+          display_title: `${(st as any)?.name || '학생'}가 올린 시험지`,
+          file_size: bytes.length, source: 'student', generated_by_name: (st as any)?.name || '학생',
+        });
+        if (insErr) {
+          console.error('[upload_exam_paper] insert', insErr.message);
+          await supabase.storage.from('exam-results').remove([path]);
+          return new Response(JSON.stringify({ error: '저장하지 못했어요. 다시 시도해 주세요' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        result = { success: true, path };
+        break;
+      }
+
+      // EXAM-PAPER-STUDENT-V1: 자기가 올린 시험지만 지운다 (선생님이 올린 것은 건드릴 수 없다)
+      case 'delete_exam_paper': {
+        const { pdf_id } = params as any;
+        if (!pdf_id) {
+          return new Response(JSON.stringify({ error: 'Missing pdf_id' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: pf } = await supabase.from('student_exam_result_pdfs').select('id, result_id, storage_path, source').eq('id', pdf_id).maybeSingle();
+        if (!pf) {
+          return new Response(JSON.stringify({ error: '없는 시험지예요' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: res } = await supabase.from('student_exam_results').select('student_id').eq('id', (pf as any).result_id).maybeSingle();
+        if (!res || (res as any).student_id !== student_id) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        if ((pf as any).source !== 'student') {
+          return new Response(JSON.stringify({ error: '자기가 올린 시험지만 지울 수 있어요' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { data: an } = await supabase.from('exam_student_analyses').select('status').eq('result_id', (pf as any).result_id).maybeSingle();
+        if ((an as any)?.status === 'published') {
+          return new Response(JSON.stringify({ error: '이미 공개된 시험이에요.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const { error: delErr } = await supabase.from('student_exam_result_pdfs').delete().eq('id', pdf_id);
+        if (delErr) {
+          console.error('[delete_exam_paper]', delErr.message);
+          return new Response(JSON.stringify({ error: '지우지 못했어요' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        await supabase.storage.from('exam-results').remove([(pf as any).storage_path]);
+        result = { success: true };
         break;
       }
 
