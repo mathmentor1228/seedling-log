@@ -378,21 +378,42 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
             )}
           </div>
 
-          {/* 시험지 — 결과 행에 붙은 PDF를 웹 안에서 바로 연다 (2025 노션 가져오기 포함) */}
-          {paperList.length > 0 && (
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 mb-1.5"><span className="text-sm font-semibold">시험지</span><span className="text-[11px] text-muted-foreground">{paperList.length}장 · 누르면 바로 열림</span></div>
-              <div className="flex flex-wrap gap-1.5">
+          {/* 시험지 — 결과 행에 붙은 PDF를 웹 안에서 바로 연다 (2025 노션 가져오기 포함). 동기화가 안 된 시험은 여기서 직접 올림 */}
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-sm font-semibold">시험지</span>
+              <span className="text-[11px] text-muted-foreground">{paperList.length > 0 ? `${paperList.length}장 · 누르면 바로 열림` : '아직 올라온 시험지가 없어요'}</span>
+            </div>
+            {paperList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {paperList.map(x => (
-                  <button key={x.pdf.id} type="button" onClick={() => setViewingPdf({ pdf: x.pdf, title: `${student.name} · ${x.label} ${x.subject}` })}
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
-                    <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
-                  </button>
+                  <span key={x.pdf.id} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
+                    <button type="button" onClick={() => setViewingPdf({ pdf: x.pdf, title: `${student.name} · ${x.label} ${x.subject}` })}
+                      className="inline-flex items-center gap-1 hover:underline" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
+                      <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
+                    </button>
+                    {x.pdf.source === 'manual' && (
+                      <button type="button" onClick={() => removePaper(x.pdf)} className="text-muted-foreground hover:text-red-600" title="직접 올린 시험지 지우기"><Trash2 className="w-3 h-3" /></button>
+                    )}
+                  </span>
                 ))}
               </div>
-              <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
+            )}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/30 p-2">
+              <Select value={uploadResultId} onValueChange={setUploadResultId}>
+                <SelectTrigger className="h-8 w-[220px] text-xs"><SelectValue placeholder="어느 시험의 시험지인가요?" /></SelectTrigger>
+                <SelectContent>{uploadTargets.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+              <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void uploadPaper(f); }} />
+              <Button size="sm" variant="outline" className="h-8 text-xs" disabled={uploading || uploadTargets.length === 0}
+                onClick={() => { if (!uploadResultId) { toast.error('어느 시험의 시험지인지 먼저 골라 주세요'); return; } fileInputRef.current?.click(); }}>
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileText className="w-3.5 h-3.5 mr-1" />}시험지 올리기
+              </Button>
+              <span className="text-[11px] text-muted-foreground">PDF 또는 사진 · 올리면 학생 앱 돌아보기에도 보여요</span>
             </div>
-          )}
+            <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
+          </div>
 
           {/* 학원의 조치 */}
           <div className="rounded-lg border p-3 space-y-3">
