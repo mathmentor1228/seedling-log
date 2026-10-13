@@ -2,8 +2,8 @@
 //   점수·시험지(시트·드라이브에서 온 것)를 보고 ① 틀린 번호를 누르고 ② 번호마다 이유 하나 ③ "다음 시험까지 내가 할 것" 한 줄 → 제출.
 //   제출본은 담당 선생님 면담 재료가 되고, 원장이 공개하면 선생님 글·학원 대응이 여기에도 보인다. 공개 뒤에는 잠김.
 //   옛 채점 루프(시험지 업로드→오버레이 채점→자가진단)는 2026-10-09 폐기. 이 페이지가 그 자리를 대신한다.
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { studentApi } from '@/lib/studentApi';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { studentApi, fileToBase64 } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
-import { CheckCircle2, ChevronRight, ClipboardCheck, FileText, Loader2, Lock, MessageCircle, Send } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ClipboardCheck, FileText, Loader2, Lock, MessageCircle, Send, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -95,13 +95,13 @@ export default function StudentExamReview() {
 
       {selected && (
         <ReviewSheet key={selected.id} review={selected} tags={tags.filter(t => t.subject === baseSubject(selected.subject) || t.subject === '공통')}
-          onClose={() => setOpenId(null)} onSaved={() => { setOpenId(null); void load(); }} />
+          onClose={() => setOpenId(null)} onSaved={() => { setOpenId(null); void load(); }} onUploaded={() => void load()} />
       )}
     </div>
   );
 }
 
-function ReviewSheet({ review: r, tags, onClose, onSaved }: { review: Review; tags: Tag[]; onClose: () => void; onSaved: () => void }) {
+function ReviewSheet({ review: r, tags, onClose, onSaved, onUploaded }: { review: Review; tags: Tag[]; onClose: () => void; onSaved: () => void; onUploaded: () => void }) {
   const stage = stageOf(r);
   const locked = r.locked;
   const [draft, setDraft] = useState<Draft>(() => ({

@@ -89,6 +89,13 @@ export const studentApi = {
     ext?: string;
   }) => studentApiCall<{ path: string; url: string; bucket: string }>('upload_file', params),
 
+  // EXAM-PAPER-STUDENT-V1: 학생이 자기 시험지(사진·PDF)를 올린다 — 서버가 시험지 저장소에 대신 저장한다
+  uploadExamPaper: (params: { result_id: string; content: string; content_type: string; ext?: string }) =>
+    studentApiCall<{ success: boolean; path: string }>('upload_exam_paper', params),
+
+  deleteExamPaper: (pdfId: string) =>
+    studentApiCall<{ success: boolean }>('delete_exam_paper', { pdf_id: pdfId }),
+
   signUrls: (urls: string[]) =>
     studentApiCall<{ signed: Record<string, string> }>('sign_urls', { urls }),
 
@@ -138,7 +145,7 @@ export const studentApi = {
     reviews: Array<{
       id: string; subject: string; exam_type: string | null; exam_date: string | null; exam_year: number | null; exam_period: string | null;
       actual_score: number | null; previous_score: number | null; school_name: string | null;
-      pdfs: Array<{ id: string; title: string | null; url: string | null }>;
+      pdfs: Array<{ id: string; title: string | null; url: string | null; source?: string | null }>;
       items: Array<{ item_number: number; reason: string | null; memo: string | null; source: 'student' | 'teacher' }>;
       total_items: number | null; student_reflection: string | null; student_submitted_at: string | null; counseled_at: string | null;
       published_at: string | null; final_text: string | null; academy_action_text: string | null; locked: boolean;
