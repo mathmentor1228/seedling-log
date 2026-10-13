@@ -120,6 +120,38 @@ function ReviewSheet({ review: r, tags, onClose, onSaved, onUploaded }: { review
   const setReason = (n: number, code: string) => { if (locked) return; setDraft(d => { const m = new Map(d.wrong); const cur = m.get(n)!; m.set(n, { ...cur, reason: cur.reason === code ? null : code }); return { ...d, wrong: m }; }); };
   const setMemo = (n: number, memo: string) => setDraft(d => { const m = new Map(d.wrong); m.set(n, { ...m.get(n)!, memo }); return { ...d, wrong: m }; });
 
+  // EXAM-PAPER-STUDENT-V1: 시험지(사진·PDF)를 직접 올린다 — 서버가 시험지 저장소에 대신 저장한다
+  const paperInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function uploadPapers(files: FileList | null) {
+    if (!files || files.length === 0 || locked) return;
+    const list = Array.from(files).slice(0, 5);
+    setUploading(true);
+    let ok = 0;
+    for (const f of list) {
+      if (f.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요. 다른 파일로 올려 주세요`); continue; }
+      try {
+        const content = await fileToBase64(f);
+        const ext = (f.name.split('.').pop() || (f.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+        const { error } = await studentApi.uploadExamPaper({ result_id: r.id, content, content_type: f.type || 'application/pdf', ext });
+        if (error) { toast.error(`${f.name}: ${error === 'FILE_TOO_LARGE' ? '파일이 너무 커요' : error}`); continue; }
+        ok++;
+      } catch { toast.error(`${f.name}을 올리지 못했어요`); }
+    }
+    setUploading(false);
+    if (paperInputRef.current) paperInputRef.current.value = '';
+    if (ok > 0) { toast.success(`시험지 ${ok}장 올렸어요`); onUploaded(); }
+  }
+
+  async function removePaper(pdfId: string) {
+    if (!confirm('올린 시험지를 지울까요?')) return;
+    const { error } = await studentApi.deleteExamPaper(pdfId);
+    if (error) { toast.error(error); return; }
+    toast.success('지웠어요');
+    onUploaded();
+  }
+
   async function submit() {
     if (locked) return;
     if (wrongNums.length > 0 && missingReason.length > 0) { toast.error(`${missingReason.map(n => `${n}번`).join(', ')} 이유를 골라 주세요`); setStep(2); return; }
@@ -149,18 +181,41 @@ function ReviewSheet({ review: r, tags, onClose, onSaved, onUploaded }: { review
         </DialogHeader>
 
         <div className="p-4 space-y-5 text-sm">
-          {/* 시험지 */}
-          {r.pdfs.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {r.pdfs.map((p, i) => p.url ? (
-                <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">
-                  <FileText className="h-4 w-4 text-primary" />{p.title || `시험지 ${i + 1}`} 열기
-                </a>
-              ) : null)}
-            </div>
-          ) : (
-            <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">시험지 PDF가 아직 안 올라왔어요. 종이 시험지를 보면서 적어도 돼요.</p>
-          )}
+          {/* 시험지 — 올린 걸 바로 열고, 학생도 사진·PDF를 직접 올린다 */}
+          <div className="space-y-2">
+            {r.pdfs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {r.pdfs.map((p, i) => (
+                  <span key={p.id} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium">
+                    {p.url ? (
+                      <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:underline">
+                        <FileText className="h-4 w-4 text-primary" />{p.title || `시험지 ${i + 1}`} 열기
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground"><FileText className="h-4 w-4" />{p.title || `시험지 ${i + 1}`}</span>
+                    )}
+                    {p.source === 'student' && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800">내가 올림</span>}
+                    {p.source === 'student' && !locked && (
+                      <button type="button" onClick={() => removePaper(p.id)} className="text-muted-foreground hover:text-red-600" title="지우기"><Trash2 className="h-3.5 w-3.5" /></button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!locked && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                <input ref={paperInputRef} type="file" accept="application/pdf,image/*" multiple className="hidden"
+                  onChange={e => { void uploadPapers(e.target.files); }} />
+                <Button size="sm" variant="outline" className="h-8 text-xs" disabled={uploading} onClick={() => paperInputRef.current?.click()}>
+                  {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Upload className="h-3.5 w-3.5 mr-1" />}시험지 올리기
+                </Button>
+                <span className="text-[11px] text-muted-foreground">사진이나 PDF · 여러 장도 한 번에</span>
+              </div>
+            )}
+            {r.pdfs.length === 0 && locked && (
+              <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">시험지 PDF가 아직 안 올라왔어요. 종이 시험지를 보면서 적어도 돼요.</p>
+            )}
+          </div>
 
           {/* 공개된 선생님 글 */}
           {locked && (
