@@ -1179,7 +1179,7 @@ Deno.serve(async (req) => {
           .from('student_exam_results')
           .select('id, subject, exam_type, exam_date, exam_year, exam_period, actual_score, previous_score, school_name')
           .eq('student_id', student_id)
-          .not('actual_score', 'is', null)
+          .or('actual_score.not.is.null,source.eq.student_upload')
           .order('exam_year', { ascending: false, nullsFirst: false })
           .order('exam_period', { ascending: false, nullsFirst: false })
           .order('subject', { ascending: true })
@@ -1276,13 +1276,46 @@ Deno.serve(async (req) => {
       // EXAM-PAPER-STUDENT-V1: 학생이 자기 시험지(사진·PDF)를 직접 올린다.
       //   버킷은 직원 전용이라 서비스 권한으로 대신 올리고, 시험 결과 행에 학생 표시(source='student')로 남긴다.
       case 'upload_exam_paper': {
-        const { result_id, content, content_type, ext } = params as any;
-        if (!result_id || !content || !content_type) {
-          return new Response(JSON.stringify({ error: 'Missing result_id/content/content_type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const { content, content_type, ext, subject: pickSubject, exam_year: pickYear, semester: pickSem, exam_kind: pickKind } = params as any;
+        let result_id = (params as any).result_id as string | undefined;
+        if (!content || !content_type || (!result_id && !(pickSubject && pickYear && pickSem && pickKind))) {
+          return new Response(JSON.stringify({ error: 'Missing result_id or subject/exam, content/content_type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
         const ALLOWED_PAPER_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
         if (!ALLOWED_PAPER_TYPES.includes(String(content_type))) {
           return new Response(JSON.stringify({ error: 'PDF 또는 사진만 올릴 수 있어요' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // 과목·시험만 고르고 올리는 경우: 같은 시험 결과 행을 찾고, 없으면 새로 만든다 (성적 시트 동기화와 같은 형식 YYYY / S-a|b / midterm|final)
+        if (!result_id) {
+          const SUBJECTS = ['수학', '영어', '국어', '과학'];
+          const subj = String(pickSubject);
+          const year = Number(pickYear);
+          const sem = String(pickSem);
+          const kind = String(pickKind);
+          if (!SUBJECTS.includes(subj) || !Number.isInteger(year) || year < 2020 || year > 2100 || !['1', '2'].includes(sem) || !['a', 'b'].includes(kind)) {
+            return new Response(JSON.stringify({ error: '과목과 시험을 다시 골라 주세요' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          const period = `${sem}-${kind}`;
+          const examType = kind === 'a' ? 'midterm' : 'final';
+          const base = (s: string) => s.startsWith('수학') || /대수|기하|미적분|확률/.test(s) ? '수학' : s.includes('영어') ? '영어' : s.startsWith('국어') || /화법|문학|독서/.test(s) ? '국어' : s.startsWith('과학') || /물리|화학|생명|지구|통합과학/.test(s) ? '과학' : s;
+          const { data: cands } = await supabase.from('student_exam_results').select('id, subject, exam_period')
+            .eq('student_id', student_id).eq('exam_year', year).eq('exam_type', examType).in('exam_period', [period, `${sem}학기`]);
+          const list = ((cands || []) as any[]).filter(c => base(c.subject) === subj);
+          const hit = list.find(c => c.subject === subj && c.exam_period === period) || list.find(c => c.exam_period === period) || list[0];
+          if (hit) {
+            result_id = hit.id;
+          } else {
+            const { data: stRow } = await supabase.from('students').select('school, grade').eq('id', student_id).maybeSingle();
+            const { data: ins, error: insResErr } = await supabase.from('student_exam_results').insert({
+              student_id, school_name: (stRow as any)?.school || '', subject: subj, exam_type: examType,
+              exam_year: year, exam_period: period, grade_at_exam: (stRow as any)?.grade || null, source: 'student_upload',
+            }).select('id').single();
+            if (insResErr || !ins) {
+              console.error('[upload_exam_paper] create result', insResErr?.message);
+              return new Response(JSON.stringify({ error: '저장하지 못했어요. 다시 시도해 주세요' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+            result_id = (ins as any).id;
+          }
         }
         // 자기 시험 결과에만 올릴 수 있다
         const { data: res } = await supabase.from('student_exam_results').select('id, student_id').eq('id', result_id).maybeSingle();
