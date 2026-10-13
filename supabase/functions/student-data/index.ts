@@ -1363,7 +1363,7 @@ Deno.serve(async (req) => {
           await supabase.storage.from('exam-results').remove([path]);
           return new Response(JSON.stringify({ error: '저장하지 못했어요. 다시 시도해 주세요' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
-        result = { success: true, path };
+        result = { success: true, path, result_id };
         break;
       }
 
