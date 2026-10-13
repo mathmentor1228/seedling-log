@@ -4,7 +4,7 @@
 //   · 조치 메모(student_action_notes) + 숙제 완료율. (2026-10-11 원장: 선생님들 코멘트가 다 보여야 하고 내부/외부용으로 정리)
 // 내부/외부: external = 학부모 상담에서 말해도 되는 것(학부모께 한 줄·주간 코멘트·특강·클리닉 내용·외부용 조치 메모),
 //           internal = 학원 안에서만(학습 이슈·숙제 관찰·다음 목표·내부 메모·클리닉 교사 메모·내부용 조치 메모).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ interface Props {
   myStudentIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  reload?: () => void;
 }
 
 type Kind = 'prep' | 'clinic' | 'comment' | 'parent_line' | 'issue' | 'hw_note' | 'next_goal' | 'internal' | 'note' | 'analysis';
@@ -128,8 +129,11 @@ const KIND_META: Record<Kind, { label: string; icon: React.ElementType; cls: str
 };
 const SCOPE_LABEL: Record<Scope, string> = { external: '학부모 공유 가능', internal: '내부용' };
 
-export function ExamStudentView({ students, results, pdfs = [], links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect }: Props) {
+export function ExamStudentView({ students, results, pdfs = [], links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect, reload }: Props) {
   const [viewingPdf, setViewingPdf] = useState<{ pdf: ResultPdf; title: string } | null>(null);
+  const [uploadResultId, setUploadResultId] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [q, setQ] = useState('');
   const [mineOnly, setMineOnly] = useState(isTeacher);
   const [kindFilter, setKindFilter] = useState<string>(ALL);
@@ -193,6 +197,48 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
     }
     return out.sort((a, b) => a.k - b.k || a.subject.localeCompare(b.subject, 'ko'));
   }, [pdfs, results, student, isAdmin, visibleSubjects]);
+
+  // 시험지 직접 올리기: 이 학생의 시험 결과 행(수행평가 제외) — 최근 회차부터
+  const uploadTargets = useMemo(() => {
+    if (!student) return [] as { id: string; label: string }[];
+    return results
+      .filter(r => r.student_id === student.id && r.exam_type !== 'performance' && (isAdmin || visibleSubjects.includes(baseSubject(r.subject))))
+      .map(r => ({ id: r.id, label: `${periodLabel(r.exam_year, r.exam_period, r.exam_type)} ${r.subject}${r.actual_score != null ? ` ${r.actual_score}점` : ''}`, k: periodKey(r.exam_year, r.exam_period, r.exam_type) }))
+      .sort((a, b) => b.k - a.k)
+      .map(({ id, label }) => ({ id, label }));
+  }, [results, student, isAdmin, visibleSubjects]);
+
+  async function uploadPaper(file: File) {
+    if (!uploadResultId) { toast.error('어느 시험의 시험지인지 먼저 골라 주세요'); return; }
+    if (file.size > 20 * 1024 * 1024) { toast.error('20MB 이하 파일만 올릴 수 있어요'); return; }
+    setUploading(true);
+    try {
+      const path = `manual/${uploadResultId}/${Date.now()}-${crypto.randomUUID()}.pdf`;
+      const { error: upErr } = await supabase.storage.from('exam-results').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true });
+      if (upErr) throw upErr;
+      const { error: insErr } = await db.from('student_exam_result_pdfs').insert({
+        result_id: uploadResultId, storage_path: path, display_title: file.name.replace(/\.pdf$/i, ''),
+        file_size: file.size, source: 'manual', generated_by_name: currentUserName || '직접 업로드',
+      });
+      if (insErr) throw insErr;
+      toast.success('시험지를 올렸어요');
+      reload?.();
+    } catch (e: any) {
+      toast.error('올리지 못했어요: ' + (e?.message || '다시 시도해 주세요'));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function removePaper(p: ResultPdf) {
+    if (!confirm('이 시험지를 지울까요?')) return;
+    const { error } = await db.from('student_exam_result_pdfs').delete().eq('id', p.id);
+    if (error) { toast.error('지우지 못했어요: ' + error.message); return; }
+    await supabase.storage.from('exam-results').remove([p.storage_path]);
+    toast.success('지웠어요');
+    reload?.();
+  }
 
   const visibleEvents = useMemo(() => tl.events.filter(e => {
     if (scope !== 'all' && e.scope !== scope) return false;
@@ -332,21 +378,42 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
             )}
           </div>
 
-          {/* 시험지 — 결과 행에 붙은 PDF를 웹 안에서 바로 연다 (2025 노션 가져오기 포함) */}
-          {paperList.length > 0 && (
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 mb-1.5"><span className="text-sm font-semibold">시험지</span><span className="text-[11px] text-muted-foreground">{paperList.length}장 · 누르면 바로 열림</span></div>
-              <div className="flex flex-wrap gap-1.5">
+          {/* 시험지 — 결과 행에 붙은 PDF를 웹 안에서 바로 연다 (2025 노션 가져오기 포함). 동기화가 안 된 시험은 여기서 직접 올림 */}
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-sm font-semibold">시험지</span>
+              <span className="text-[11px] text-muted-foreground">{paperList.length > 0 ? `${paperList.length}장 · 누르면 바로 열림` : '아직 올라온 시험지가 없어요'}</span>
+            </div>
+            {paperList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {paperList.map(x => (
-                  <button key={x.pdf.id} type="button" onClick={() => setViewingPdf({ pdf: x.pdf, title: `${student.name} · ${x.label} ${x.subject}` })}
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-accent" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
-                    <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
-                  </button>
+                  <span key={x.pdf.id} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs">
+                    <button type="button" onClick={() => setViewingPdf({ pdf: x.pdf, title: `${student.name} · ${x.label} ${x.subject}` })}
+                      className="inline-flex items-center gap-1 hover:underline" title={x.pdf.display_title || x.pdf.drive_file_name || ''}>
+                      <FileText className="w-3.5 h-3.5 text-primary" />{x.label} <span className="font-medium">{x.subject}</span>{x.score != null && <span className="text-muted-foreground">{x.score}점</span>}
+                    </button>
+                    {x.pdf.source === 'manual' && (
+                      <button type="button" onClick={() => removePaper(x.pdf)} className="text-muted-foreground hover:text-red-600" title="직접 올린 시험지 지우기"><Trash2 className="w-3 h-3" /></button>
+                    )}
+                  </span>
                 ))}
               </div>
-              <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
+            )}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/30 p-2">
+              <Select value={uploadResultId} onValueChange={setUploadResultId}>
+                <SelectTrigger className="h-8 w-[220px] text-xs"><SelectValue placeholder="어느 시험의 시험지인가요?" /></SelectTrigger>
+                <SelectContent>{uploadTargets.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+              <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void uploadPaper(f); }} />
+              <Button size="sm" variant="outline" className="h-8 text-xs" disabled={uploading || uploadTargets.length === 0}
+                onClick={() => { if (!uploadResultId) { toast.error('어느 시험의 시험지인지 먼저 골라 주세요'); return; } fileInputRef.current?.click(); }}>
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <FileText className="w-3.5 h-3.5 mr-1" />}시험지 올리기
+              </Button>
+              <span className="text-[11px] text-muted-foreground">PDF 또는 사진 · 올리면 학생 앱 돌아보기에도 보여요</span>
             </div>
-          )}
+            <PdfViewer pdf={viewingPdf?.pdf || null} title={viewingPdf?.title || ''} onClose={() => setViewingPdf(null)} />
+          </div>
 
           {/* 학원의 조치 */}
           <div className="rounded-lg border p-3 space-y-3">
