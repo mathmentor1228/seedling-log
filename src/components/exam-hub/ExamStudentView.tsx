@@ -4,7 +4,7 @@
 //   · 조치 메모(student_action_notes) + 숙제 완료율. (2026-10-11 원장: 선생님들 코멘트가 다 보여야 하고 내부/외부용으로 정리)
 // 내부/외부: external = 학부모 상담에서 말해도 되는 것(학부모께 한 줄·주간 코멘트·특강·클리닉 내용·외부용 조치 메모),
 //           internal = 학원 안에서만(학습 이슈·숙제 관찰·다음 목표·내부 메모·클리닉 교사 메모·내부용 조치 메모).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -129,8 +129,11 @@ const KIND_META: Record<Kind, { label: string; icon: React.ElementType; cls: str
 };
 const SCOPE_LABEL: Record<Scope, string> = { external: '학부모 공유 가능', internal: '내부용' };
 
-export function ExamStudentView({ students, results, pdfs = [], links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect }: Props) {
+export function ExamStudentView({ students, results, pdfs = [], links, classInfos, teachers, currentUserId, currentUserName, isAdmin, isTeacher, myStudentIds, selectedId, onSelect, reload }: Props) {
   const [viewingPdf, setViewingPdf] = useState<{ pdf: ResultPdf; title: string } | null>(null);
+  const [uploadResultId, setUploadResultId] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [q, setQ] = useState('');
   const [mineOnly, setMineOnly] = useState(isTeacher);
   const [kindFilter, setKindFilter] = useState<string>(ALL);
