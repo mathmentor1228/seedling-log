@@ -25,6 +25,7 @@ import {
   Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
