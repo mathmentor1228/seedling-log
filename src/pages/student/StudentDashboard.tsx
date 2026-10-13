@@ -25,6 +25,7 @@ import {
   Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
@@ -375,21 +376,25 @@ export default function StudentDashboard() {
       {/* EXAM-PARTICIPANTS-V1: 이번 시험을 안 보는 학생에게는 시험 일정을 보여주지 않는다 */}
       {!hideExamSchedule && <ExamDdayBanner schoolFilter={student?.school || null} />}
 
-      {/* EXAM-SELF-REVIEW-V1 (vault 19 §21): 점수가 들어온 시험을 아직 돌아보지 않았으면 홈에서 바로 안내 */}
-      {examSelfReviewPending > 0 && (
-        <Link to="/student/exam-review" className="block">
-          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
-            <CardContent className="py-3 px-4 flex items-center gap-3">
-              <ClipboardCheck className="h-5 w-5 text-amber-700 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">내 시험 돌아보기 {examSelfReviewPending}개</p>
-                <p className="text-xs text-muted-foreground">점수가 들어왔어요. 틀린 번호와 이유를 적으면 선생님과 면담할 때 같이 봐요.</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            </CardContent>
-          </Card>
-        </Link>
-      )}
+      {/* EXAM-SELF-REVIEW-V1 (vault 19 §21): 점수가 들어온 시험을 아직 돌아보지 않았으면 홈에서 바로 안내. 돌아볼 시험이 없어도 입구는 항상 보이게 한다 */}
+      <Link to="/student/exam-review" className="block">
+        <Card className={examSelfReviewPending > 0 ? "border-amber-300 bg-amber-50 dark:bg-amber-950/20" : ""}>
+          <CardContent className="py-3 px-4 flex items-center gap-3">
+            <ClipboardCheck className={cn("h-5 w-5 shrink-0", examSelfReviewPending > 0 ? "text-amber-700" : "text-muted-foreground")} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">
+                {examSelfReviewPending > 0 ? `내 시험 돌아보기 ${examSelfReviewPending}개` : '내 시험 돌아보기'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {examSelfReviewPending > 0
+                  ? '점수가 들어왔어요. 틀린 번호와 이유를 적으면 선생님과 면담할 때 같이 봐요.'
+                  : '시험지를 올리고 틀린 번호와 이유를 적어둘 수 있어요.'}
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Exam Prep Schedule Confirmation */}
       <StudentExamPrepSchedule />
