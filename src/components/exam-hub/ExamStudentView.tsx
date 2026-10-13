@@ -198,6 +198,48 @@ export function ExamStudentView({ students, results, pdfs = [], links, classInfo
     return out.sort((a, b) => a.k - b.k || a.subject.localeCompare(b.subject, 'ko'));
   }, [pdfs, results, student, isAdmin, visibleSubjects]);
 
+  // 시험지 직접 올리기: 이 학생의 시험 결과 행(수행평가 제외) — 최근 회차부터
+  const uploadTargets = useMemo(() => {
+    if (!student) return [] as { id: string; label: string }[];
+    return results
+      .filter(r => r.student_id === student.id && r.exam_type !== 'performance' && (isAdmin || visibleSubjects.includes(baseSubject(r.subject))))
+      .map(r => ({ id: r.id, label: `${periodLabel(r.exam_year, r.exam_period, r.exam_type)} ${r.subject}${r.actual_score != null ? ` ${r.actual_score}점` : ''}`, k: periodKey(r.exam_year, r.exam_period, r.exam_type) }))
+      .sort((a, b) => b.k - a.k)
+      .map(({ id, label }) => ({ id, label }));
+  }, [results, student, isAdmin, visibleSubjects]);
+
+  async function uploadPaper(file: File) {
+    if (!uploadResultId) { toast.error('어느 시험의 시험지인지 먼저 골라 주세요'); return; }
+    if (file.size > 20 * 1024 * 1024) { toast.error('20MB 이하 파일만 올릴 수 있어요'); return; }
+    setUploading(true);
+    try {
+      const path = `manual/${uploadResultId}/${Date.now()}-${crypto.randomUUID()}.pdf`;
+      const { error: upErr } = await supabase.storage.from('exam-results').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true });
+      if (upErr) throw upErr;
+      const { error: insErr } = await db.from('student_exam_result_pdfs').insert({
+        result_id: uploadResultId, storage_path: path, display_title: file.name.replace(/\.pdf$/i, ''),
+        file_size: file.size, source: 'manual', generated_by_name: currentUserName || '직접 업로드',
+      });
+      if (insErr) throw insErr;
+      toast.success('시험지를 올렸어요');
+      reload?.();
+    } catch (e: any) {
+      toast.error('올리지 못했어요: ' + (e?.message || '다시 시도해 주세요'));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function removePaper(p: ResultPdf) {
+    if (!confirm('이 시험지를 지울까요?')) return;
+    const { error } = await db.from('student_exam_result_pdfs').delete().eq('id', p.id);
+    if (error) { toast.error('지우지 못했어요: ' + error.message); return; }
+    await supabase.storage.from('exam-results').remove([p.storage_path]);
+    toast.success('지웠어요');
+    reload?.();
+  }
+
   const visibleEvents = useMemo(() => tl.events.filter(e => {
     if (scope !== 'all' && e.scope !== scope) return false;
     if (kindFilter !== ALL && e.kind !== kindFilter) return false;
