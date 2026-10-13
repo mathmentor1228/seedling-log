@@ -90,8 +90,8 @@ export const studentApi = {
   }) => studentApiCall<{ path: string; url: string; bucket: string }>('upload_file', params),
 
   // EXAM-PAPER-STUDENT-V1: 학생이 자기 시험지(사진·PDF)를 올린다 — 서버가 시험지 저장소에 대신 저장한다
-  uploadExamPaper: (params: { result_id: string; content: string; content_type: string; ext?: string }) =>
-    studentApiCall<{ success: boolean; path: string }>('upload_exam_paper', params),
+  uploadExamPaper: (params: { result_id?: string; subject?: string; exam_year?: number; semester?: '1' | '2'; exam_kind?: 'a' | 'b'; content: string; content_type: string; ext?: string }) =>
+    studentApiCall<{ success: boolean; path: string; result_id: string }>('upload_exam_paper', params),
 
   deleteExamPaper: (pdfId: string) =>
     studentApiCall<{ success: boolean }>('delete_exam_paper', { pdf_id: pdfId }),

@@ -63,10 +63,12 @@ export default function StudentExamReview() {
         <p className="text-sm text-muted-foreground mt-1">시험지를 보면서 틀린 번호와 이유를 적어요. 적은 내용을 가지고 선생님과 1:1로 공부 방법을 이야기해요.</p>
       </div>
 
+      <QuickPaperUpload onDone={() => void load()} />
+
       {loading ? (
         <div className="space-y-2">{[0, 1, 2].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : reviews.length === 0 ? (
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">아직 점수가 들어온 시험이 없어요. 시험이 끝나고 점수가 올라오면 여기서 돌아볼 수 있어요.</CardContent></Card>
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">아직 올라온 시험이 없어요. 위에서 시험지를 올리거나, 점수가 올라오면 여기서 돌아볼 수 있어요.</CardContent></Card>
       ) : (
         <div className="space-y-2">
           {todo.length > 0 && <p className="px-1 text-xs font-medium text-amber-700">아직 돌아보지 않은 시험 {todo.length}개</p>}
@@ -98,6 +100,92 @@ export default function StudentExamReview() {
           onClose={() => setOpenId(null)} onSaved={() => { setOpenId(null); void load(); }} onUploaded={() => void load()} />
       )}
     </div>
+  );
+}
+
+// 과목 + 어느 시험인지 고르고 → 사진·PDF 골라서 → 제출. 점수가 아직 없어도 올릴 수 있다.
+function examOptions() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const all = [
+    { key: `${y}-2-b`, label: `${y}년 2학기 기말`, year: y, semester: '2' as const, kind: 'b' as const },
+    { key: `${y}-2-a`, label: `${y}년 2학기 중간`, year: y, semester: '2' as const, kind: 'a' as const },
+    { key: `${y}-1-b`, label: `${y}년 1학기 기말`, year: y, semester: '1' as const, kind: 'b' as const },
+    { key: `${y}-1-a`, label: `${y}년 1학기 중간`, year: y, semester: '1' as const, kind: 'a' as const },
+  ];
+  // 지금 시기에 맞는 시험을 기본으로
+  const def = m >= 11 || m <= 1 ? `${y}-2-b` : m >= 8 ? `${y}-2-a` : m >= 6 ? `${y}-1-b` : `${y}-1-a`;
+  return { all, def };
+}
+
+function QuickPaperUpload({ onDone }: { onDone: () => void }) {
+  const { all, def } = useMemo(examOptions, []);
+  const [subject, setSubject] = useState<string>('');
+  const [examKey, setExamKey] = useState<string>(def);
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function submit() {
+    if (!subject) { toast.error('과목을 골라 주세요'); return; }
+    if (files.length === 0) { toast.error('시험지 사진이나 PDF를 골라 주세요'); return; }
+    const ex = all.find(e => e.key === examKey)!;
+    setBusy(true);
+    let ok = 0;
+    for (const f of files) {
+      if (f.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요`); continue; }
+      try {
+        const content = await fileToBase64(f);
+        const ext = (f.name.split('.').pop() || (f.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+        const { error } = await studentApi.uploadExamPaper({ subject, exam_year: ex.year, semester: ex.semester, exam_kind: ex.kind, content, content_type: f.type || 'image/jpeg', ext });
+        if (error) { toast.error(`${f.name}: ${error === 'FILE_TOO_LARGE' ? '파일이 너무 커요' : error}`); continue; }
+        ok++;
+      } catch { toast.error(`${f.name}을 올리지 못했어요`); }
+    }
+    setBusy(false);
+    if (ok > 0) {
+      toast.success(`${ex.label} ${subject} 시험지 ${ok}장 제출했어요`);
+      setFiles([]); if (inputRef.current) inputRef.current.value = '';
+      onDone();
+    }
+  }
+
+  return (
+    <Card className="border-primary/40">
+      <CardContent className="p-4 space-y-3">
+        <p className="font-semibold flex items-center gap-2"><Upload className="h-4 w-4 text-primary" />시험지 올리기</p>
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">① 과목</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {['수학', '영어', '국어', '과학'].map(s => (
+              <button key={s} type="button" onClick={() => setSubject(s)}
+                className={cn('h-9 rounded-md border text-sm', subject === s ? 'border-primary bg-primary text-primary-foreground font-semibold' : 'bg-background')}>{s}</button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">② 어느 시험</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {all.map(e => (
+              <button key={e.key} type="button" onClick={() => setExamKey(e.key)}
+                className={cn('h-9 rounded-md border text-xs', examKey === e.key ? 'border-primary bg-primary/10 text-primary font-semibold' : 'bg-background')}>{e.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">③ 시험지 사진·PDF (여러 장 가능)</p>
+          <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple className="hidden"
+            onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 10))} />
+          <Button type="button" variant="outline" className="w-full h-10" onClick={() => inputRef.current?.click()}>
+            <FileText className="h-4 w-4 mr-1" />{files.length ? `${files.length}개 골랐어요 (다시 고르기)` : '파일 고르기 / 사진 찍기'}
+          </Button>
+        </div>
+        <Button className="w-full h-10" disabled={busy || !subject || files.length === 0} onClick={submit}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}제출하기
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
