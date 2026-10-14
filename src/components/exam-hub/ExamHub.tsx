@@ -347,7 +347,7 @@ export function ExamHub() {
 
       {/* 응시 확인 — 한 줄로 접힘, 펼치면 학생별 응시/미응시 */}
       {mode === 'schedule' && !data.loading && (isAdmin || isTeacher) && confirmCells.length > 0 && (
-        <div className="rounded-lg border border-amber-300/60">
+        <div className="rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/10">
           <button type="button" onClick={() => setConfirmOpen(v => !v)} className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm">
             <AlertTriangle className="w-4 h-4 text-amber-700" />
             <span className="font-medium">응시 확인 필요 {confirmCells.length}명</span>
@@ -374,10 +374,10 @@ export function ExamHub() {
             const after = cc.st.kind === 'after';
             return (
               <button key={c.id} onClick={() => select(c)}
-                className={cn('shrink-0 w-[230px] rounded-lg border p-3 text-left transition-colors hover:bg-accent/50',
+                className={cn('shrink-0 w-[260px] rounded-xl border bg-card p-3.5 text-left shadow-sm transition-colors hover:bg-accent/50',
                   active && 'border-primary ring-1 ring-primary bg-primary/5')}>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-sm truncate">{c.school_name} {gradeLabel(c)}</span>
+                  <span className="font-semibold text-base truncate">{c.school_name} {gradeLabel(c)}</span>
                   <span className="flex-1" />
                   <Badge variant={urgent ? 'destructive' : after ? 'outline' : 'secondary'} className="text-[11px] shrink-0">{c.virtual ? `${c.academic_year}년 기록` : ddayLabel(cc.st)}</Badge>
                 </div>
