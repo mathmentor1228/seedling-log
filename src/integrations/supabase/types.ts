@@ -1474,6 +1474,7 @@ export type Database = {
           decided_at: string
           decided_by: string | null
           id: string
+          not_taking_subjects: string[]
           reason: string | null
           status: string
           student_id: string
@@ -1485,6 +1486,7 @@ export type Database = {
           decided_at?: string
           decided_by?: string | null
           id?: string
+          not_taking_subjects?: string[]
           reason?: string | null
           status: string
           student_id: string
@@ -1496,6 +1498,7 @@ export type Database = {
           decided_at?: string
           decided_by?: string | null
           id?: string
+          not_taking_subjects?: string[]
           reason?: string | null
           status?: string
           student_id?: string
