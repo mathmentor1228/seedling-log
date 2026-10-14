@@ -82,7 +82,7 @@ export const ANALYSIS_STATUS_META: Record<StudentAnalysis['status'], { label: st
 };
 
 /** EXAM-PARTICIPANTS-V1: 사이클별 응시 여부. 행 없음 = 응시 */
-export type Participant = { cycle_id: string; student_id: string; status: 'taking' | 'not_taking'; reason: string | null; decided_at: string };
+export type Participant = { cycle_id: string; student_id: string; status: 'taking' | 'not_taking'; reason: string | null; decided_at: string; not_taking_subjects?: string[] };
 export type ParticipantView = 'taking' | 'not_taking' | 'confirm';
 
 export type ArchiveRow = {
@@ -264,6 +264,8 @@ export function buildStudentSubjectRows(args: {
   results: ExamResult[]; cycleSubjects: string[];
   /** EXAM-PARTICIPANTS-V1: 미응시로 확정된 학생은 행을 만들지 않는다 */
   excludedStudentIds?: Set<string>;
+  /** 과목별 응시 확인: 학생별로 응시하지 않는 과목 */
+  excludedSubjects?: Map<string, Set<string>>;
   /** EXAM-SHEET-SYNC-V1: 드라이브에서 복사된 시험지 */
   pdfs?: ResultPdf[];
 }): StudentSubjectRow[] {
@@ -298,6 +300,7 @@ export function buildStudentSubjectRows(args: {
     const subj = subjectsByStudent.get(s.id);
     if (!subj) continue;
     for (const [subject, teacherId] of subj) {
+      if (args.excludedSubjects?.get(s.id)?.has(subject)) continue;
       const hasResultHere = (resultsByStudent.get(s.id) || []).some(r => r.subject === subject && r.exam_year === key.year && r.exam_period === key.period);
       if (cycleSubjects.length > 0 && !cycleSubjects.includes(subject) && !hasResultHere) continue;
       const mine = (resultsByStudent.get(s.id) || []).filter(r => r.subject === subject && r.exam_type !== 'performance');

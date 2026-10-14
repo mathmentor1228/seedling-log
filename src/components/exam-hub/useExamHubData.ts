@@ -38,6 +38,7 @@ export type ExamHubData = {
   participants: Participant[];
   recentActiveIds: Set<string>;
   setParticipant: (cycleId: string, studentId: string, status: 'taking' | 'not_taking' | null, reason?: string | null) => Promise<string | null>;
+  setParticipantSubjects: (cycleId: string, studentId: string, notTakingSubjects: string[]) => Promise<string | null>;
   /** EXAM-SHEET-SYNC-V1 */
   pdfs: ResultPdf[];
   syncs: SheetSync[];
@@ -65,6 +66,8 @@ export function useExamHubData(): ExamHubData {
   const [archives, setArchives] = useState<ArchiveRow[]>([]);
   const [posts, setPosts] = useState<WatchPost[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const participantsRef = useRef<Participant[]>([]);
+  participantsRef.current = participants;
   const [recentActiveIds, setRecentActiveIds] = useState<Set<string>>(new Set());
   const [pdfs, setPdfs] = useState<ResultPdf[]>([]);
   const [syncs, setSyncs] = useState<SheetSync[]>([]);
@@ -94,7 +97,7 @@ export function useExamHubData(): ExamHubData {
           .select('school_name, grade_year, academic_year, semester, exam_type, subject, performance_assessment_info, textbook_publisher, exam_scope, status'),
         db.from('school_watch_log').select('*').order('created_at', { ascending: false }).limit(80),
         // 테이블이 아직 없으면(마이그레이션 전) 빈 배열로
-        db.from('exam_cycle_participants').select('cycle_id, student_id, status, reason, decided_at').then((r: any) => r, () => ({ data: [] })),
+        db.from('exam_cycle_participants').select('cycle_id, student_id, status, reason, decided_at, not_taking_subjects').then((r: any) => r, () => ({ data: [] })),
         db.from('lesson_records').select('student_id').eq('submitted', true).gte('lesson_date', since),
         // EXAM-SHEET-SYNC-V1 (마이그레이션 전이면 빈 배열)
         db.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title, source, drive_file_name, drive_modified_at').then((r: any) => r, () => ({ data: [] })),
@@ -149,13 +152,26 @@ export function useExamHubData(): ExamHubData {
       setParticipants(prev => prev.filter(p => !(p.cycle_id === cycleId && p.student_id === studentId)));
       return null;
     }
-    const row = { cycle_id: cycleId, student_id: studentId, status, reason, decided_by: auth.user?.id ?? null, decided_at: new Date().toISOString() };
+    const prevRow = participantsRef.current.find(p => p.cycle_id === cycleId && p.student_id === studentId);
+    const keepSubs = status === 'taking' ? (prevRow?.not_taking_subjects || []) : [];
+    const row = { cycle_id: cycleId, student_id: studentId, status, reason, not_taking_subjects: keepSubs, decided_by: auth.user?.id ?? null, decided_at: new Date().toISOString() };
     const { error } = await db.from('exam_cycle_participants').upsert(row, { onConflict: 'cycle_id,student_id' });
     if (error) return error.message.includes('exam_cycle_participants') ? '응시 여부 테이블이 아직 없습니다. Lovable에서 마이그레이션을 먼저 적용해 주세요.' : error.message;
-    setParticipants(prev => [...prev.filter(p => !(p.cycle_id === cycleId && p.student_id === studentId)), { cycle_id: cycleId, student_id: studentId, status, reason, decided_at: row.decided_at }]);
+    setParticipants(prev => [...prev.filter(p => !(p.cycle_id === cycleId && p.student_id === studentId)), { cycle_id: cycleId, student_id: studentId, status, reason, decided_at: row.decided_at, not_taking_subjects: keepSubs }]);
+    return null;
+  }, []);
+
+  /** 과목별 응시: 응시하지 않는 과목 목록 저장 (학생 자체는 응시로 확정) */
+  const setParticipantSubjects = useCallback(async (cycleId: string, studentId: string, notTakingSubjects: string[]) => {
+    const { data: auth } = await supabase.auth.getUser();
+    const prevRow = participantsRef.current.find(p => p.cycle_id === cycleId && p.student_id === studentId);
+    const row = { cycle_id: cycleId, student_id: studentId, status: 'taking' as const, reason: prevRow?.status === 'taking' ? prevRow.reason : null, not_taking_subjects: notTakingSubjects, decided_by: auth.user?.id ?? null, decided_at: new Date().toISOString() };
+    const { error } = await db.from('exam_cycle_participants').upsert(row, { onConflict: 'cycle_id,student_id' });
+    if (error) return error.message;
+    setParticipants(prev => [...prev.filter(p => !(p.cycle_id === cycleId && p.student_id === studentId)), { cycle_id: cycleId, student_id: studentId, status: 'taking', reason: row.reason, decided_at: row.decided_at, not_taking_subjects: notTakingSubjects }]);
     return null;
   }, []);
 
   return {
-    loading, error, cycles, virtualCycles, allStudents, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, posts, participants, recentActiveIds, setParticipant, analysesByResult, reasonTags, pdfs, syncs, reload };
+    loading, error, cycles, virtualCycles, allStudents, subjectsByCycle, students, classInfos, links, teachers, results, reports, deepByReport, itemCountByReport, textbooks, archives, posts, participants, recentActiveIds, setParticipant, setParticipantSubjects, analysesByResult, reasonTags, pdfs, syncs, reload };
 }
