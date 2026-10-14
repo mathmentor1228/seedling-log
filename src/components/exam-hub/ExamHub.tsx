@@ -94,12 +94,19 @@ export function ExamHub() {
     data.participants.forEach(p => m.set(`${p.cycle_id}|${p.student_id}`, p));
     return m;
   }, [data.participants]);
-  const subjectsOf = useMemo(() => {
-    const m = new Map<string, number>();
-    data.classInfos.forEach(ci => { if (ci.subject) m.set(ci.student_id, (m.get(ci.student_id) || 0) + 1); });
-    data.links.forEach(l => { if (l.subject) m.set(l.student_id, (m.get(l.student_id) || 0) + 1); });
+  // 학생별 수강 과목 목록 (과목별 응시 확인용)
+  const subjectListOf = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    const add = (sid: string, sub: string | null) => { if (!sub) return; (m.get(sid) || m.set(sid, new Set()).get(sid))!.add(sub); };
+    data.classInfos.forEach(ci => add(ci.student_id, ci.subject));
+    data.links.forEach(l => add(l.student_id, l.subject));
     return m;
   }, [data.classInfos, data.links]);
+  const subjectsOf = useMemo(() => {
+    const m = new Map<string, number>();
+    subjectListOf.forEach((v, k) => m.set(k, v.size));
+    return m;
+  }, [subjectListOf]);
 
   const cycleCards = useMemo(() => {
     // 직전 사이클(같은 학교·학년, 더 이른 시작일) 미응시 여부
@@ -120,13 +127,15 @@ export function ExamHub() {
         const row = participantByKey.get(`${c.id}|${s.id}`) || null;
         const priorNotTaking = !!prev && participantByKey.get(`${prev.id}|${s.id}`)?.status === 'not_taking';
         const reasons = c.virtual ? [] : ambiguityReasons({ student: s, cycle: c, recentActiveIds: data.recentActiveIds, hasSubjects: (subjectsOf.get(s.id) || 0) > 0, priorNotTaking });
-        return { student: s, cycle: c, row, reasons };
+        return { student: s, cycle: c, row, reasons, subjects: [...(subjectListOf.get(s.id) || [])].sort((a, b) => a.localeCompare(b, 'ko')) };
       });
       const excluded = new Set(cells.filter(x => x.row?.status === 'not_taking').map(x => x.student.id));
+      const excludedSubjects = new Map<string, Set<string>>();
+      cells.forEach(x => { const ns = x.row?.not_taking_subjects || []; if (x.row?.status !== 'not_taking' && ns.length) excludedSubjects.set(x.student.id, new Set(ns)); });
       const needConfirm = cells.filter(x => x.row === null && x.reasons.length > 0);
       const rows = buildStudentSubjectRows({
         cycle: c, key, students: pool, classInfos: data.classInfos, links: data.links, teachers: data.teachers,
-        results: data.results, cycleSubjects, excludedStudentIds: excluded, pdfs: data.pdfs,
+        results: data.results, cycleSubjects, excludedStudentIds: excluded, excludedSubjects, pdfs: data.pdfs,
       });
       const reports = data.reports.filter(r => reportInCycle(r, c, key));
       const targets = allTargets.filter(s => !excluded.has(s.id));
@@ -141,7 +150,7 @@ export function ExamHub() {
       const pdfCount = rows.filter(r => r.pdf).length;
       return { cycle: c, key, subs, cycleSubjects, rows, reports, targets, allTargets, cells, excluded, needConfirm, mine, st, expected, done, missing, scoped, newPosts, tracked, pdfCount };
     });
-  }, [data, myStudentIds, today, participantByKey, subjectsOf]);
+  }, [data, myStudentIds, today, participantByKey, subjectsOf, subjectListOf]);
 
   const visibleCards = useMemo(() => {
     const q = query.trim();
@@ -345,7 +354,7 @@ export function ExamHub() {
             <span className="text-xs text-muted-foreground truncate">{Array.from(new Set(confirmCells.map(c => c.student.name))).slice(0, 6).join(', ')}{confirmCells.length > 6 ? ' …' : ''}</span>
             <span className="ml-auto text-xs text-primary">{confirmOpen ? '접기' : '펼쳐서 확정'}</span>
           </button>
-          {confirmOpen && <div className="px-3 pb-3"><ParticipantsConfirmPanel cells={confirmCells} onSet={data.setParticipant} onSelectCycle={c => select(c)} /></div>}
+          {confirmOpen && <div className="px-3 pb-3"><ParticipantsConfirmPanel cells={confirmCells} onSet={data.setParticipant} onSetSubjects={data.setParticipantSubjects} onSelectCycle={c => select(c)} /></div>}
         </div>
       )}
 
@@ -414,7 +423,7 @@ export function ExamHub() {
             )}
           </div>
           {manageOpen && (isAdmin || isTeacher) && (
-            <div className="px-4 pt-2"><ParticipantsManageList cells={selected.cells} onSet={data.setParticipant} /></div>
+            <div className="px-4 pt-2"><ParticipantsManageList cells={selected.cells} onSet={data.setParticipant} onSetSubjects={data.setParticipantSubjects} /></div>
           )}
           <Tabs value={tab} onValueChange={setTab} className="px-4 pb-4">
             <TabsList className="mt-3 h-9">

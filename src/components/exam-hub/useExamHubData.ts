@@ -1,5 +1,5 @@
 // EXAM-HUB-A: 내신대비 통합 화면 데이터 — 전부 읽기 전용 (점수 원본은 구글시트, 웹은 복제본)
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeSchool } from '@/components/exam-board/cycleUtils';
