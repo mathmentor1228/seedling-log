@@ -202,7 +202,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
         <TableBody>
           {items.length === 0 && <TableRow><TableCell colSpan={6} className="text-xs text-muted-foreground text-center">대상 없음</TableCell></TableRow>}
           {items.map(a => (
-            <TableRow key={a.key}>
+            <TableRow key={a.key} onClick={() => onSelect(a.key)} className={cn('cursor-pointer hover:bg-accent/60', activeKey === a.key && 'bg-accent')}>
               <TableCell className="text-sm">{a.key}</TableCell>
               <TableCell className="text-right text-sm">{a.done}/{a.total}</TableCell>
               <TableCell className={cn('text-right text-sm', a.missing > 0 && 'text-amber-700 font-medium')}>{a.missing}</TableCell>
@@ -263,8 +263,8 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <SummaryTable title="과목별" items={summary.bySubject} />
-        <SummaryTable title="선생님별" items={summary.byTeacher} />
+        <SummaryTable title="과목별" items={summary.bySubject} activeKey={teacher === 'all' && subject !== 'all' ? subject : null} onSelect={selectSubjectRow} />
+        <SummaryTable title="선생님별" items={summary.byTeacher} activeKey={teacher !== 'all' ? `${teacher} · ${subject}` : null} onSelect={selectTeacherRow} />
       </div>
 
       <div className="overflow-x-auto rounded-md border">
