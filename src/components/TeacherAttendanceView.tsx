@@ -37,6 +37,8 @@ interface StudentAttendance {
   status: AttendanceStatus;
   /** 상태 판정 원천: 'lesson' = 수업일지 수업출결(교사 판단), 'log' = 출입 태그 입실 로그 */
   statusSource?: 'lesson' | 'log' | 'none';
+  /** 일지 상태: 'none' = 미작성, 'draft' = 작성중(초안 있음), 'submitted' = 작성완료. 내신특강은 undefined(표시 안 함) */
+  journalStatus?: 'none' | 'draft' | 'submitted';
   checkedInAt?: string | null;
   isEarly?: boolean;
   /** 같은 시간대 정규 반에 합류한 보충수업 학생 */
@@ -111,6 +113,21 @@ function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, 
           {student.isSupplementary && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
               보충수업
+            </span>
+          )}
+          {student.journalStatus === 'submitted' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30" title="일지가 저장(마감)되었습니다">
+              ✓ 일지 작성완료
+            </span>
+          )}
+          {student.journalStatus === 'draft' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30" title="일지 초안이 있습니다 — 아직 마감 전입니다">
+              ✎ 일지 작성중
+            </span>
+          )}
+          {student.journalStatus === 'none' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-muted text-muted-foreground border border-border" title="아직 일지가 없습니다">
+              일지 미작성
             </span>
           )}
           {student.isEarly && (
@@ -387,13 +404,13 @@ export function TeacherAttendanceView() {
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
-        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
+        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status, submitted').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
         : Promise.resolve({ data: [] as any[] });
 
       // 보충수업 출결 (class_id = NULL, 학생별로 별도 record)
       const suppLessonQuery = suppIds.length > 0
         ? supabase.from('lesson_records')
-            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .select('id, student_id, attendance_status, submitted, lesson_types, class_id')
             .in('student_id', suppIds)
             .eq('lesson_date', today)
             .is('class_id', null)
@@ -403,7 +420,7 @@ export function TeacherAttendanceView() {
       // SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 출결
       const signupLessonQuery = signupIds.length > 0
         ? supabase.from('lesson_records')
-            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .select('id, student_id, attendance_status, submitted, lesson_types, class_id')
             .in('student_id', signupIds)
             .eq('lesson_date', today)
             .contains('lesson_types', ['선착순수강신청'])
@@ -428,23 +445,24 @@ export function TeacherAttendanceView() {
         }
       });
 
-      const lessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const lessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((lessonRes as any).data ?? []).forEach((record: any) => {
         lessonMap.set(`${record.student_id}:${record.class_id}`, {
           attendance_status: record.attendance_status ?? null,
+          submitted: record.submitted ?? null,
         });
       });
 
-      const suppLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const suppLessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((suppLessonRes as any).data ?? []).forEach((record: any) => {
         if (!record.student_id) return;
-        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null, submitted: record.submitted ?? null });
       });
 
-      const signupLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const signupLessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((signupLessonRes as any).data ?? []).forEach((record: any) => {
         if (!record.student_id) return;
-        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null, submitted: record.submitted ?? null });
       });
 
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
@@ -499,6 +517,11 @@ export function TeacherAttendanceView() {
               grade: student.grade,
               status,
               statusSource,
+              journalStatus: slot.isExamPrep
+                ? undefined
+                : lesson
+                  ? (lesson.submitted ? 'submitted' as const : 'draft' as const)
+                  : 'none' as const,
               checkedInAt: log?.checked_in_at ?? null,
               isEarly,
               isSupplementary: isSuppStudent,
@@ -554,7 +577,7 @@ export function TeacherAttendanceView() {
     const ch = supabase.channel('teacher-att-shared')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_sessions' }, () => { fetchSchedule().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_enrollments' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
