@@ -37,6 +37,8 @@ interface StudentAttendance {
   status: AttendanceStatus;
   /** 상태 판정 원천: 'lesson' = 수업일지 수업출결(교사 판단), 'log' = 출입 태그 입실 로그 */
   statusSource?: 'lesson' | 'log' | 'none';
+  /** 일지 상태: 'none' = 미작성, 'draft' = 작성중(초안 있음), 'submitted' = 작성완료. 내신특강은 undefined(표시 안 함) */
+  journalStatus?: 'none' | 'draft' | 'submitted';
   checkedInAt?: string | null;
   isEarly?: boolean;
   /** 같은 시간대 정규 반에 합류한 보충수업 학생 */
@@ -111,6 +113,21 @@ function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, 
           {student.isSupplementary && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30">
               보충수업
+            </span>
+          )}
+          {student.journalStatus === 'submitted' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30" title="일지가 저장(마감)되었습니다">
+              ✓ 일지 작성완료
+            </span>
+          )}
+          {student.journalStatus === 'draft' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30" title="일지 초안이 있습니다 — 아직 마감 전입니다">
+              ✎ 일지 작성중
+            </span>
+          )}
+          {student.journalStatus === 'none' && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-muted text-muted-foreground border border-border" title="아직 일지가 없습니다">
+              일지 미작성
             </span>
           )}
           {student.isEarly && (
