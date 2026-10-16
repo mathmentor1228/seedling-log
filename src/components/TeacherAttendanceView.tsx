@@ -404,13 +404,13 @@ export function TeacherAttendanceView() {
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
-        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
+        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status, submitted').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
         : Promise.resolve({ data: [] as any[] });
 
       // 보충수업 출결 (class_id = NULL, 학생별로 별도 record)
       const suppLessonQuery = suppIds.length > 0
         ? supabase.from('lesson_records')
-            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .select('id, student_id, attendance_status, submitted, lesson_types, class_id')
             .in('student_id', suppIds)
             .eq('lesson_date', today)
             .is('class_id', null)
@@ -420,7 +420,7 @@ export function TeacherAttendanceView() {
       // SIGNUP-ATT-V1: 선착순 수강신청 확정 수업 출결
       const signupLessonQuery = signupIds.length > 0
         ? supabase.from('lesson_records')
-            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .select('id, student_id, attendance_status, submitted, lesson_types, class_id')
             .in('student_id', signupIds)
             .eq('lesson_date', today)
             .contains('lesson_types', ['선착순수강신청'])
@@ -445,23 +445,24 @@ export function TeacherAttendanceView() {
         }
       });
 
-      const lessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const lessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((lessonRes as any).data ?? []).forEach((record: any) => {
         lessonMap.set(`${record.student_id}:${record.class_id}`, {
           attendance_status: record.attendance_status ?? null,
+          submitted: record.submitted ?? null,
         });
       });
 
-      const suppLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const suppLessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((suppLessonRes as any).data ?? []).forEach((record: any) => {
         if (!record.student_id) return;
-        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null, submitted: record.submitted ?? null });
       });
 
-      const signupLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      const signupLessonMap = new Map<string, { attendance_status: string[] | null; submitted: boolean | null }>();
       ((signupLessonRes as any).data ?? []).forEach((record: any) => {
         if (!record.student_id) return;
-        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+        signupLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null, submitted: record.submitted ?? null });
       });
 
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
