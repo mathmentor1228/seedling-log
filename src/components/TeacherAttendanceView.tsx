@@ -517,6 +517,11 @@ export function TeacherAttendanceView() {
               grade: student.grade,
               status,
               statusSource,
+              journalStatus: slot.isExamPrep
+                ? undefined
+                : lesson
+                  ? (lesson.submitted ? 'submitted' as const : 'draft' as const)
+                  : 'none' as const,
               checkedInAt: log?.checked_in_at ?? null,
               isEarly,
               isSupplementary: isSuppStudent,
@@ -572,7 +577,7 @@ export function TeacherAttendanceView() {
     const ch = supabase.channel('teacher-att-shared')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_sessions' }, () => { fetchSchedule().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_enrollments' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
