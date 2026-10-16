@@ -5,10 +5,11 @@ export async function compressImage(
   file: File,
   maxWidth = 1200,
   maxHeight = 1200,
-  quality = 0.7
+  quality = 0.7,
+  enforceDimensions = false
 ): Promise<File> {
   // If file is already small enough (< 500KB), skip compression
-  if (file.size < 500 * 1024 && file.type === 'image/jpeg') {
+  if (!enforceDimensions && file.size < 500 * 1024 && file.type === 'image/jpeg') {
     return file;
   }
 
@@ -51,7 +52,7 @@ export async function compressImage(
     }
 
     // If compressed is larger than original, return original
-    if (blob.size >= file.size && file.type === 'image/jpeg') {
+    if (blob.size >= file.size && file.type === 'image/jpeg' && (!enforceDimensions || (bitmap.width <= maxWidth && bitmap.height <= maxHeight))) {
       return file;
     }
 

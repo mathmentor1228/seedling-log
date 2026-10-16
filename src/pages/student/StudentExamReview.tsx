@@ -4,6 +4,7 @@
 //   옛 채점 루프(시험지 업로드→오버레이 채점→자가진단)는 2026-10-09 폐기. 이 페이지가 그 자리를 대신한다.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { studentApi, fileToBase64 } from '@/lib/studentApi';
+import { prepareExamPaperUpload } from '@/lib/examPaperUpload';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -130,18 +131,20 @@ function QuickPaperUpload({ onDone }: { onDone: () => void }) {
   async function submit() {
     if (!subject) { toast.error('과목을 골라 주세요'); return; }
     if (files.length === 0) { toast.error('시험지 사진이나 PDF를 골라 주세요'); return; }
-    const ex = all.find(e => e.key === examKey)!;
+    const ex = all.find(e => e.key === examKey);
+    if (!ex) return;
     setBusy(true);
     let ok = 0;
     for (const f of files) {
-      if (f.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요`); continue; }
       try {
-        const content = await fileToBase64(f);
-        const ext = (f.name.split('.').pop() || (f.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
-        const { error } = await studentApi.uploadExamPaper({ subject, exam_year: ex.year, semester: ex.semester, exam_kind: ex.kind, content, content_type: f.type || 'image/jpeg', ext });
+        const prepared = await prepareExamPaperUpload(f);
+        if (prepared.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요`); continue; }
+        const content = await fileToBase64(prepared);
+        const ext = (prepared.name.split('.').pop() || (prepared.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+        const { error } = await studentApi.uploadExamPaper({ subject, exam_year: ex.year, semester: ex.semester, exam_kind: ex.kind, content, content_type: prepared.type || 'image/jpeg', ext });
         if (error) { toast.error(`${f.name}: ${error === 'FILE_TOO_LARGE' ? '파일이 너무 커요' : error}`); continue; }
         ok++;
-      } catch { toast.error(`${f.name}을 올리지 못했어요`); }
+      } catch (error) { toast.error(error instanceof Error ? error.message : `${f.name}을 올리지 못했어요`); }
     }
     setBusy(false);
     if (ok > 0) {
@@ -175,9 +178,9 @@ function QuickPaperUpload({ onDone }: { onDone: () => void }) {
         </div>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">③ 시험지 사진·PDF (여러 장 가능)</p>
-          <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple className="hidden"
+          <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple className="hidden" disabled={busy}
             onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 10))} />
-          <Button type="button" variant="outline" className="w-full h-10" onClick={() => inputRef.current?.click()}>
+          <Button type="button" variant="outline" className="w-full h-10" disabled={busy} onClick={() => inputRef.current?.click()}>
             <FileText className="h-4 w-4 mr-1" />{files.length ? `${files.length}개 골랐어요 (다시 고르기)` : '파일 고르기 / 사진 찍기'}
           </Button>
         </div>
@@ -218,14 +221,15 @@ function ReviewSheet({ review: r, tags, onClose, onSaved, onUploaded }: { review
     setUploading(true);
     let ok = 0;
     for (const f of list) {
-      if (f.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요. 다른 파일로 올려 주세요`); continue; }
       try {
-        const content = await fileToBase64(f);
-        const ext = (f.name.split('.').pop() || (f.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
-        const { error } = await studentApi.uploadExamPaper({ result_id: r.id, content, content_type: f.type || 'application/pdf', ext });
+        const prepared = await prepareExamPaperUpload(f);
+        if (prepared.size > 12 * 1024 * 1024) { toast.error(`${f.name}은 12MB가 넘어요. 다른 파일로 올려 주세요`); continue; }
+        const content = await fileToBase64(prepared);
+        const ext = (prepared.name.split('.').pop() || (prepared.type === 'application/pdf' ? 'pdf' : 'jpg')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+        const { error } = await studentApi.uploadExamPaper({ result_id: r.id, content, content_type: prepared.type || 'application/pdf', ext });
         if (error) { toast.error(`${f.name}: ${error === 'FILE_TOO_LARGE' ? '파일이 너무 커요' : error}`); continue; }
         ok++;
-      } catch { toast.error(`${f.name}을 올리지 못했어요`); }
+      } catch (error) { toast.error(error instanceof Error ? error.message : `${f.name}을 올리지 못했어요`); }
     }
     setUploading(false);
     if (paperInputRef.current) paperInputRef.current.value = '';
