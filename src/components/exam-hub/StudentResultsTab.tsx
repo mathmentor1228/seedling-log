@@ -172,9 +172,22 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
   const missingTotal = rows.filter(r => r.status === 'missing' || r.status === 'score_empty').length;
   const noPdf = rows.filter(r => r.status === 'done' && !r.pdf).length;
 
-  const SummaryTable = ({ title, items }: { title: string; items: typeof summary.bySubject }) => (
+  // 요약 표 행 클릭 → 아래 상세 표 필터링 (다시 누르면 해제)
+  const selectSubjectRow = (key: string) => {
+    if (subject === key && teacher === 'all') { setSubject('all'); return; }
+    setSubject(key); setTeacher('all');
+  };
+  const selectTeacherRow = (key: string) => {
+    const i = key.lastIndexOf(' · ');
+    const t = i >= 0 ? key.slice(0, i) : key;
+    const s = i >= 0 ? key.slice(i + 3) : '';
+    if (teacher === t && subject === s) { setTeacher('all'); setSubject('all'); return; }
+    setTeacher(t); setSubject(s || 'all');
+  };
+
+  const SummaryTable = ({ title, items, activeKey, onSelect }: { title: string; items: typeof summary.bySubject; activeKey: string | null; onSelect: (key: string) => void }) => (
     <div className="rounded-md border">
-      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">{title}</div>
+      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">{title}<span className="ml-1 font-normal">· 행을 누르면 아래에 상세 결과</span></div>
       <Table>
         <TableHeader>
           <TableRow>
@@ -189,7 +202,7 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
         <TableBody>
           {items.length === 0 && <TableRow><TableCell colSpan={6} className="text-xs text-muted-foreground text-center">대상 없음</TableCell></TableRow>}
           {items.map(a => (
-            <TableRow key={a.key}>
+            <TableRow key={a.key} onClick={() => onSelect(a.key)} className={cn('cursor-pointer hover:bg-accent/60', activeKey === a.key && 'bg-accent')}>
               <TableCell className="text-sm">{a.key}</TableCell>
               <TableCell className="text-right text-sm">{a.done}/{a.total}</TableCell>
               <TableCell className={cn('text-right text-sm', a.missing > 0 && 'text-amber-700 font-medium')}>{a.missing}</TableCell>
@@ -250,8 +263,8 @@ export function StudentResultsTab({ rows, examLabel, isTeacher, currentUserId, s
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <SummaryTable title="과목별" items={summary.bySubject} />
-        <SummaryTable title="선생님별" items={summary.byTeacher} />
+        <SummaryTable title="과목별" items={summary.bySubject} activeKey={teacher === 'all' && subject !== 'all' ? subject : null} onSelect={selectSubjectRow} />
+        <SummaryTable title="선생님별" items={summary.byTeacher} activeKey={teacher !== 'all' ? `${teacher} · ${subject}` : null} onSelect={selectTeacherRow} />
       </div>
 
       <div className="overflow-x-auto rounded-md border">
