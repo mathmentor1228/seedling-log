@@ -72,6 +72,80 @@ Deno.serve(async (req) => {
   const students = (studentsRaw ?? []) as Student[];
   const now = new Date().toISOString();
 
+  // ── paper_status: 읽기 전용. 시트 행별 시험지 제출 여부(웹 학생 업로드 / 드라이브 / 기타) ──
+  //    body.exam = {year, semester, type}, body.rows = [{ row_no, school, grade, name, subject }]  (행별 exam 덮어쓰기 가능)
+  //    아무것도 생성·수정·기록하지 않는다. 매칭 실패·동명이인·조회 오류는 'needs_check' (미제출로 처리하지 않음)
+  if (body.action === 'paper_status') {
+    const rows = (Array.isArray(body.rows) ? body.rows : []) as (SheetRow & { exam?: ExamKey })[];
+    if (rows.length > 2000) return json({ error: 'rows max 2000' }, 400);
+    const baseOf = (s: string) => {
+      const t = (s || '').replace(/\s+/g, '');
+      if (/수학|대수|기하|미적|확률|확통/.test(t)) return '수학';
+      if (/영어/.test(t)) return '영어';
+      if (/국어|화법|화작|언어|언매|문학|독서/.test(t)) return '국어';
+      if (/과학|물리|화학|생명|생물|지구|통과|통합과학/.test(t)) return '과학';
+      return t;
+    };
+    const BASES = ['수학', '영어', '국어', '과학'];
+    const subjMatch = (q: string, r: string) => {
+      const a = (q || '').replace(/\s+/g, ''), b = (r || '').replace(/\s+/g, '');
+      if (a === b) return true;
+      if (baseOf(a) !== baseOf(b)) return false;
+      return BASES.includes(a) || BASES.includes(b); // 기본 과목 ↔ 세부 과목만 묶음(미적분↔확통은 따로)
+    };
+    // 필요한 학생·시험의 결과 행을 한 번에 조회
+    const prepared = rows.map(r => {
+      const key = (r.exam || body.exam) as ExamKey | undefined;
+      const subject = (r.subject || '').toString().trim();
+      const base = { row_no: r.row_no ?? null, school: r.school ?? null, grade: r.grade ?? null, name: r.name ?? null, subject };
+      if (!key?.year || !key.semester || !key.type) return { base, err: '시험(연도·학기·중간/기말) 정보 없음' };
+      if (!subject) return { base, err: '과목 비어 있음' };
+      const m = matchStudent(students, (r.school || '').toString(), (r.grade ?? null) as any, (r.name || '').toString());
+      if (!m.student) return { base, err: m.reason || '학생 매칭 실패' };
+      return { base, key: { year: Number(key.year), semester: String(key.semester) as '1' | '2', type: key.type }, student: m.student, warning: m.reason };
+    });
+    const ids = [...new Set(prepared.filter(p => p.student).map(p => p.student!.id))];
+    const years = [...new Set(prepared.filter(p => p.key).map(p => p.key!.year))];
+    let results: any[] = []; let pdfs: any[] = []; let queryError: string | null = null;
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await admin.from('student_exam_results').select('id, student_id, subject, exam_type, exam_year, exam_period')
+          .in('student_id', ids.slice(i, i + 200)).in('exam_year', years.length ? years : [0]);
+        if (error) throw error;
+        results.push(...(data ?? []));
+      }
+      const rids = results.map(r => r.id);
+      for (let i = 0; i < rids.length; i += 300) {
+        const { data, error } = await admin.from('student_exam_result_pdfs').select('id, result_id, source').in('result_id', rids.slice(i, i + 300));
+        if (error) throw error;
+        pdfs.push(...(data ?? []));
+      }
+    } catch (e: any) { queryError = e.message || String(e); results = []; pdfs = []; }
+    const pdfsByResult = new Map<string, any[]>();
+    for (const p of pdfs) (pdfsByResult.get(p.result_id) || pdfsByResult.set(p.result_id, []).get(p.result_id))!.push(p);
+
+    const out = prepared.map(p => {
+      if (!p.student) return { ...p.base, status: 'needs_check', reason: p.err, web_files: null, drive_files: null, other_files: null, total_files: null };
+      if (queryError) return { ...p.base, status: 'needs_check', reason: '조회 실패: ' + queryError, student_id: p.student.id, web_files: null, drive_files: null, other_files: null, total_files: null };
+      const k = p.key!; const period = examKeyToPeriod(k); const type = examKeyToType(k);
+      const hits = results.filter(r => r.student_id === p.student!.id && r.exam_year === k.year && r.exam_type === type
+        && (r.exam_period === period || r.exam_period === `${k.semester}학기`) && subjMatch(p.base.subject, r.subject));
+      let web = 0, drive = 0, other = 0;
+      const by_subject = hits.map(h => {
+        const list = pdfsByResult.get(h.id) || [];
+        const w = list.filter(x => x.source === 'student').length, d = list.filter(x => x.source === 'drive').length, o = list.length - w - d;
+        web += w; drive += d; other += o;
+        return { subject: h.subject, result_id: h.id, web_files: w, drive_files: d, other_files: o };
+      });
+      const total = web + drive + other;
+      const status = p.warning ? 'needs_check' : total > 0 ? 'submitted' : 'not_submitted';
+      return { ...p.base, status, reason: p.warning || null, student_id: p.student.id, matched_name: p.student.name, matched_school: p.student.school, matched_grade_year: p.student.grade_year,
+        web_files: web, drive_files: drive, other_files: other, total_files: total, by_subject };
+    });
+    const count = (s: string) => out.filter(o => o.status === s).length;
+    return json({ ok: true, read_only: true, summary: { total: out.length, submitted: count('submitted'), not_submitted: count('not_submitted'), needs_check: count('needs_check') }, rows: out });
+  }
+
   // ── rows: 성적입력 탭 ─────────────────────────────────────────
   if (body.action === 'rows') {
     const key = body.exam as ExamKey | undefined;
