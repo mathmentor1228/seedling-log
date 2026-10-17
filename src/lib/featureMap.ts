@@ -69,7 +69,8 @@ export const FEATURE_MAP: FeatureEntry[] = [
   { href: '/school-analysis', label: '학교분석·상담자료', description: '학교알리미 공개 통계(정적 데이터) 기반 상담자료·인쇄', tier: 'asNeeded', roles: ['admin', 'teacher'], hasEntryPoint: true },
   { href: '/admin/mentor-map', label: '멘토맵 상담관리', description: '신규 상담 신청(리드) 관리·맞춤 학습방향 제안서 인쇄', tier: 'asNeeded', roles: ['admin', 'teacher'], hasEntryPoint: true },
   { href: '/admin/parent-learning-feedback', label: '학부모 설문', description: '학습정보 전달 설문 발송·응답 확인', tier: 'asNeeded', roles: ['admin'], hasEntryPoint: true, signalTable: 'parent_learning_feedback', signalColumn: 'submitted_at', audit: { c90: 0, lastAt: null }, note: '응답 0건이지만 최근 도입한 발송 기능 · 삭제 검토 대상 아님(재확인 필요)' },
-  { href: '/private-channel', label: '영어팀 채널', description: '영어팀 전용 메시지 채널', tier: 'archive', roles: ['admin'], hasEntryPoint: true, signalTable: 'private_messages', signalColumn: 'created_at', audit: { c90: 0, lastAt: null }, note: '메시지 0건', accessPath: '/private-channel 직접 URL 유지', supersededBy: { href: '/admin/office', label: '행정 업무' } },
+  { href: '/share', label: '자료·전달', description: '직원 자료 공유·전달 채널 (파일·링크·태그·댓글·읽음) · 카톡·드라이브 대체', tier: 'core', roles: ['admin', 'teacher', 'assistant'], hasEntryPoint: true, signalTable: 'share_posts', signalColumn: 'created_at', note: 'SHARE-CHANNEL-V1 (2026-10-17) · 과목 자료실·팀 메모·영어팀 채널의 후속 대표 화면' },
+  { href: '/private-channel', label: '영어팀 채널', description: '영어팀 전용 메시지 채널', tier: 'archive', roles: ['admin'], hasEntryPoint: true, signalTable: 'private_messages', signalColumn: 'created_at', audit: { c90: 0, lastAt: null }, note: '메시지 0건', accessPath: '/private-channel 직접 URL 유지', supersededBy: { href: '/share', label: '자료·전달' } },
 
   // ── 시험·자료 ───────────────────────────────────────────
   { href: '/exam', label: '내신대비', description: '시험 사이클별 시험 정보·특강·학생 결과·시험지 분석 통합 화면 (2026-10 개편)', tier: 'core', roles: ['admin', 'teacher'], hasEntryPoint: true, signalTable: 'exam_cycles', signalColumn: 'updated_at' },

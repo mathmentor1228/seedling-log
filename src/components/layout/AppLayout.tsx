@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
+import { useShareUnread } from '@/hooks/useShareUnread';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -40,6 +41,7 @@ import {
   X as XIcon,
   CalendarPlus,
   CalendarClock,
+  Share2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -101,6 +103,15 @@ const TEACHER_MULTI_SUBJECT_MAP: Record<string, string[]> = {
   '함유빈': ['수학'],
 };
 
+// SHARE-CHANNEL-V1: 자료·전달 채널 — 모든 직원 메뉴의 대시보드 바로 아래
+const SHARE_NAV_ITEM: NavItem = {
+  label: '자료·전달',
+  href: '/share',
+  icon: <Share2 className="w-4 h-4" />,
+  description: '선생님·조교·원장 자료 공유·전달 한 채널 (파일·링크·태그·댓글·읽음)',
+  allowedRoles: ['admin', 'teacher', 'assistant'],
+};
+
 const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null, fullName: string | null): NavEntry[] => {
   const dashboardHref = getDefaultDashboardPath(role);
   const allSubjects = [
@@ -147,6 +158,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
   if (role === 'teacher') {
     return [
       { label: '오늘 수업', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" />, description: '선택한 수업일 마감 + 오늘 실시간 출결' },
+      SHARE_NAV_ITEM,
       { label: '수업 마감', href: '/lessons/close', icon: <ClipboardCheck className="w-4 h-4" />, description: '출결·이해도·숙제를 한 번에 마감' },
       { label: '수업 기록 조회', href: '/lessons', icon: <ClipboardList className="w-4 h-4" />, description: '저장된 수업일지 조회 · 학생 카르테 진입' },
       { label: '리포트 발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, description: '주간 리포트 작성·발송 확인' },
@@ -188,6 +200,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
   return [
 
     { label: '대시보드', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" />, description: '오늘 조치가 필요한 항목 우선 표시' },
+    SHARE_NAV_ITEM,
     { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
     {
       label: '오늘 운영',
@@ -276,6 +289,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, role, assignedSubject, fullName, signOut } = useAuth();
+  const { unread: shareUnread } = useShareUnread(role === 'admin' || role === 'teacher' || role === 'assistant');
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -409,6 +423,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const renderNavItem = (item: NavItem, indent = false) => {
     const isActive = location.pathname === item.href;
+    const badgeCount = item.href === SHARE_NAV_ITEM.href ? shareUnread : 0;
     return (
       <Link
         key={item.href}
@@ -416,7 +431,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         onClick={() => setSidebarOpen(false)}
         title={sidebarCollapsed ? item.label : item.description}
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+          "relative flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
           indent && !sidebarCollapsed && "pl-8",
           sidebarCollapsed && "justify-center px-2",
           isActive
@@ -425,7 +440,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
       >
         {item.icon}
-        {!sidebarCollapsed && <span>{item.label}</span>}
+        {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+        {badgeCount > 0 && (sidebarCollapsed ? (
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-label={`새 글 ${badgeCount}건`} />
+        ) : (
+          <span className="ml-auto min-w-[1.25rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-primary-foreground">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        ))}
       </Link>
     );
   };
