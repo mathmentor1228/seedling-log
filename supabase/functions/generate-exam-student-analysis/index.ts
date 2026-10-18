@@ -90,10 +90,10 @@ Deno.serve(async (req) => {
     admin.from('students').select('id, name, school, grade_year').eq('id', r.student_id).maybeSingle(),
     admin.from('exam_result_items').select('item_number, is_wrong, reason_tags, memo, source').eq('result_id', resultId).eq('is_wrong', true).order('item_number'),
     admin.from('exam_wrong_reason_tags').select('subject, code, label'),
-    admin.from('exam_student_analyses').select('id, total_items, academy_action_text, final_text, status, student_reflection, student_submitted_at').eq('result_id', resultId).maybeSingle(),
+    admin.from('exam_student_analyses').select('id, total_items, academy_action_text, final_text, status, student_reflection, student_submitted_at, feedback_method, feedback_items').eq('result_id', resultId).maybeSingle(),
   ]);
   if (!st) return json({ error: 'student_not_found' }, 404);
-  const wrong = (items || []) as { item_number: number; reason_tags: string[]; memo: string | null; source?: string | null }[];
+  const wrong = (an?.feedback_method === 'items' && Array.isArray(an.feedback_items) ? an.feedback_items : items || []) as { item_number: number; reason_tags: string[]; memo: string | null; source?: string | null }[];
   if (wrong.length === 0) return json({ error: 'no_wrong_items', message: '틀린 문항이 아직 없습니다. 학생이 앱에서 셀프 피드백을 제출하거나, 패널에서 대신 표시해 주세요.' }, 400);
   // EXAM-SELF-REVIEW-V1: 학생이 직접 적은 것인지(셀프 피드백) 교사가 대신 표시한 것인지 재료에 밝힌다
   const byStudent = wrong.some(w => w.source === 'student');
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
   const tagLabel = new Map(((tags || []) as any[]).map(t => [`${t.subject}|${t.code}`, t.label]));
   const subj = baseSubject(r.subject);
   const label = (code: string) => tagLabel.get(`${subj}|${code}`) || tagLabel.get(`공통|${code}`) || code;
-  if (!wrong.some(w => (w.reason_tags || []).length > 0)) return json({ error: 'no_tags', message: '틀린 문항에 이유 태그를 하나 이상 붙여 주세요.' }, 400);
+  if (!wrong.some(w => (w.reason_tags || []).length > 0 || w.memo?.trim())) return json({ error: 'no_tags', message: '틀린 문항에 이유를 선택하거나 적어주세요.' }, 400);
 
   // 분석지 문항 난도 (같은 학교·학년·과목·회차)
   let diffByItem = new Map<number, string>(); let examDifficulty: string | null = null;

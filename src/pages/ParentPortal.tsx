@@ -26,7 +26,7 @@ interface ExamPrepScheduleItem { course_id: string; subject: string; title: stri
 interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
 interface ExamTrendRow { exam_year: number; exam_period: string | null; exam_type: string | null; subject: string; score: number }
 interface AcademyAction { kind: 'comment' | 'message' | 'clinic' | 'note'; date: string; subject: string | null; text: string; by: string | null }
-interface StudentAnalysisPub { id: string; subject: string; exam_year: number | null; exam_period: string | null; exam_type: string | null; score: number | null; previous_score: number | null; wrong_count: number; total_items: number | null; final_text: string | null; academy_action_text: string | null; published_at: string | null; student_reflection?: string | null }
+interface StudentAnalysisPub { id: string; subject: string; exam_year: number | null; exam_period: string | null; exam_type: string | null; score: number | null; previous_score: number | null; wrong_count: number; total_items: number | null; final_text: string | null; academy_action_text: string | null; published_at: string | null; student_reflection?: string | null; feedback_method?: "items" | "comment" | null; feedback_items?: Array<{ item_number: number; reasons: string[]; memo: string | null }> }
 interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; exam_trend?: ExamTrendRow[]; academy_actions?: AcademyAction[]; student_analyses?: StudentAnalysisPub[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
 
 /* ═══════ Constants ═══════ */
@@ -194,7 +194,7 @@ export default function ParentPortal() {
         {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}
 
         {/* EXAM-STUDENT-ANALYSIS-V1: 원장 컨펌으로 공개된 내 아이 시험 분석 */}
-        {data.student_analyses && data.student_analyses.length > 0 && <StudentAnalysesSection items={data.student_analyses} studentName={student.name} />}
+        {data.student_analyses && data.student_analyses.length > 0 && <StudentAnalysesSection items={data.student_analyses} studentName={student.name} reports={data.published_analysis_reports || []} />}
 
         {/* PARENT-EXAM-TREND-V1: 시험 점수 흐름 + 학원의 조치 (학원 기록·학생 화면의 '학부모 공유 가능' 항목) */}
         {data.exam_trend && data.exam_trend.length > 0 && <ExamTrendSection rows={data.exam_trend} studentName={student.name} />}
@@ -575,7 +575,7 @@ function LearningTrendChart({ lessons }: { lessons: LessonRecord[] }) {
   if (chartData.length < 2) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-card rounded-lg border overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
         <TrendingUp className="w-4 h-4 text-blue-500" />
         <span className="text-xs font-bold text-gray-700">학습 추이</span>
@@ -596,7 +596,7 @@ function LearningTrendChart({ lessons }: { lessons: LessonRecord[] }) {
 }
 
 /* ═══════ Student analyses (EXAM-STUDENT-ANALYSIS-V1) ═══════ */
-function StudentAnalysesSection({ items, studentName }: { items: StudentAnalysisPub[]; studentName: string }) {
+function StudentAnalysesSection({ items, studentName, reports }: { items: StudentAnalysisPub[]; studentName: string; reports: PublishedReportLite[] }) {
   const [openId, setOpenId] = useState<string | null>(items[0]?.id ?? null);
   return (
     <section className="space-y-2">
@@ -606,6 +606,7 @@ function StudentAnalysesSection({ items, studentName }: { items: StudentAnalysis
         <Badge variant="outline" className="text-[10px]">{items.length}건</Badge>
       </div>
       {items.map(a => {
+        const matchingReports = reports.filter(report => report.exam_year === a.exam_year && baseSubject(report.subject) === baseSubject(a.subject) && periodKey(report.exam_year, report.exam_period, report.exam_type) === periodKey(a.exam_year, a.exam_period, a.exam_type));
         const open = openId === a.id; const d = a.score != null && a.previous_score != null ? a.score - a.previous_score : null;
         return (
           <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
@@ -618,6 +619,9 @@ function StudentAnalysesSection({ items, studentName }: { items: StudentAnalysis
             </button>
             {open && (
               <div className="px-4 pb-4 space-y-3">
+                {matchingReports.map(report => <PublishedReportCard key={report.id} report={report} audience="parent" collapsible={false} />)}
+                <p className="text-xs font-semibold text-primary">담당 선생님 개별 분석</p>
+                {a.feedback_method === 'items' && <div className="space-y-2 text-sm">{a.feedback_items?.length ? a.feedback_items.map(item => <p key={item.item_number}><b>{item.item_number}번</b> · {[...item.reasons, item.memo].filter(Boolean).join(' · ')}</p>) : <p>틀린 문항이 없습니다.</p>}</div>}
                 {a.final_text && <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{a.final_text}</p>}
                 {/* EXAM-SELF-REVIEW-V1: 아이가 직접 쓴 한 줄 — 원장 2026-10-13 승인 */}
                 {a.student_reflection && (
