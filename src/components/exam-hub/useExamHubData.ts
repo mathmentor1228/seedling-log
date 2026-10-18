@@ -102,7 +102,7 @@ export function useExamHubData(): ExamHubData {
         // EXAM-SHEET-SYNC-V1 (마이그레이션 전이면 빈 배열)
         db.from('student_exam_result_pdfs').select('id, result_id, storage_path, display_title, source, drive_file_name, drive_modified_at').then((r: any) => r, () => ({ data: [] })),
         db.from('exam_sheet_syncs').select('id, kind, spreadsheet_name, exam_year, exam_period, received_at, rows_total, rows_matched, unmatched, files_total, files_matched, errors').order('received_at', { ascending: false }).limit(300).then((r: any) => r, () => ({ data: [] })),
-        db.from('exam_student_analyses').select('id, result_id, student_id, subject, exam_year, exam_period, status, wrong_count, total_items, final_text, academy_action_text, published_at, updated_at, student_reflection, student_submitted_at, counseled_at, feedback_method').then((r: any) => r, () => ({ data: [] })),
+        db.from('exam_student_analyses').select('id, result_id, student_id, subject, exam_year, exam_period, status, wrong_count, total_items, final_text, academy_action_text, published_at, updated_at, student_reflection, student_submitted_at, counseled_at, feedback_method, feedback_items').then((r: any) => r, () => ({ data: [] })),
         db.from('exam_wrong_reason_tags').select('subject, code, label, sort_order').eq('is_active', true).order('sort_order').then((r: any) => r, () => ({ data: [] })),
       ]);
       if (cy.error) throw new Error(cy.error.message.includes('exam_cycles') ? '시험 사이클 테이블이 없습니다. Lovable에서 2026-09-15 마이그레이션을 먼저 적용해 주세요.' : cy.error.message);

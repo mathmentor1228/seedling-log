@@ -26,6 +26,9 @@ export interface PublishedReportLite {
   parent_message: string | null;
   published_at: string | null;
   updated_at: string;
+  materials?: Array<{ label: string; url: string }>;
+  focus_summary?: string | null;
+  tricky_points?: string | null;
 }
 
 interface Props {
@@ -178,6 +181,10 @@ export function PublishedReportCard({ report, audience, studentId, logView = tru
           </div>
         ) : null}
 
+        {report.overall_review && <div className="text-sm whitespace-pre-wrap leading-relaxed"><p className="font-semibold mb-1">학원 과목 분석</p>{report.overall_review}</div>}
+        {report.focus_summary && <div className="text-sm whitespace-pre-wrap"><p className="font-semibold">출제 포인트</p>{report.focus_summary}</div>}
+        {report.tricky_points && <div className="text-sm whitespace-pre-wrap"><p className="font-semibold">까다로운 부분</p>{report.tricky_points}</div>}
+        {report.materials?.map(material => <Button key={material.url} asChild variant="outline" size="sm"><a href={material.url} target="_blank" rel="noopener noreferrer">{material.label}</a></Button>)}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {report.exam_scope ? (
             <div className="rounded-lg border bg-card px-3 py-2">

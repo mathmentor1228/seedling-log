@@ -385,7 +385,7 @@ Deno.serve(async (req) => {
     let studentAnalyses: any[] = [];
     try {
       const { data: sa } = await supabase.from("exam_student_analyses")
-        .select("id, subject, exam_year, exam_period, wrong_count, total_items, final_text, academy_action_text, published_at, student_reflection, student_exam_results(actual_score, previous_score, exam_type)")
+        .select("id, subject, exam_year, exam_period, wrong_count, total_items, final_text, academy_action_text, published_at, student_reflection, feedback_method, feedback_items, student_exam_results(actual_score, previous_score, exam_type)")
         .eq("student_id", studentId).eq("status", "published").order("published_at", { ascending: false }).limit(12);
       studentAnalyses = (sa || []).map((a: any) => ({
         id: a.id, subject: a.subject, exam_year: a.exam_year, exam_period: a.exam_period, exam_type: a.student_exam_results?.exam_type ?? null,
@@ -393,8 +393,26 @@ Deno.serve(async (req) => {
         wrong_count: a.wrong_count, total_items: a.total_items, final_text: a.final_text, academy_action_text: a.academy_action_text, published_at: a.published_at,
         // EXAM-SELF-REVIEW-V1: 아이가 스스로 적은 "다음 시험까지 내가 할 것"
         student_reflection: a.student_reflection ?? null,
+        feedback_method: a.feedback_method,
+        feedback_items: a.feedback_method === "items" && Array.isArray(a.feedback_items) ? a.feedback_items : [],
       }));
     } catch { studentAnalyses = []; }
+
+    const { data: reasonTags } = await supabase.from("exam_wrong_reason_tags").select("subject, code, label");
+    const baseSubject = (s: string) => /수학|대수|기하|미적분|확률/.test(s) ? "수학" : /영어/.test(s) ? "영어" : /국어|화법|문학|독서/.test(s) ? "국어" : /과학|물리|화학|생명|지구/.test(s) ? "과학" : s;
+    for (const a of studentAnalyses) a.feedback_items = a.feedback_items.map((item: any) => ({
+      item_number: item.item_number, memo: item.memo,
+      reasons: (item.reason_tags || []).map((code: string) => (reasonTags || []).find((tag: any) => tag.code === code && tag.subject === baseSubject(a.subject))?.label || (reasonTags || []).find((tag: any) => tag.code === code && tag.subject === "공통")?.label || code),
+    }));
+    const parentMaterials: Record<string, any[]> = {};
+    for (const report of publishedAnalysisRes.data || []) {
+      const materials = [];
+      if (report.student_paper_path) {
+        const { data: signed } = await supabase.storage.from("exam-analysis").createSignedUrl(report.student_paper_path, 3600);
+        if (signed?.signedUrl) materials.push({ label: "학생용 시험지", url: signed.signedUrl });
+      }
+      parentMaterials[report.id] = materials;
+    }
 
     // Map lessons
     const lessons = rawLessons.map((l: any) => ({
@@ -475,6 +493,9 @@ Deno.serve(async (req) => {
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
         published_analysis_reports: (publishedAnalysisRes.data || []).map((r: any) => ({
           id: r.id,
+          materials: parentMaterials[r.id] || [],
+          focus_summary: r.focus_summary,
+          tricky_points: r.tricky_points,
           school_name: r.school_name,
           grade: r.grade,
           subject: r.subject,

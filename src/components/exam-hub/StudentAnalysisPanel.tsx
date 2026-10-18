@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { feedbackError, feedbackText, type FeedbackMethod } from '@/lib/examFeedback';
+import { feedbackError, type FeedbackMethod } from '@/lib/examFeedback';
 import { Loader2, Sparkles, Send, Save, Undo2, AlertTriangle, User, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -65,7 +65,7 @@ export function StudentAnalysisPanel({ row, examLabel, analysis, tags, defaultTo
       for (const it of savedItems as any[]) if (it.is_wrong) m.set(it.item_number, { reason: (it.reason_tags || [])[0] || null, memo: it.memo || null, source: it.source === 'student' ? 'student' : 'teacher' });
       setItems(m); setItemsDirty(false); setFallback(false); setMethod(analysis?.feedback_method || (m.size ? 'items' : 'comment'));
       setTotal(analysis?.total_items || defaultTotalItems || Math.max(25, ...[...m.keys()]));
-      setFinalText(analysis?.feedback_method === 'items' ? '' : analysis?.final_text || ''); setActionText(analysis?.academy_action_text || ''); setViolations([]); setRejectedDraft(null);
+      setFinalText(analysis?.final_text || ''); setActionText(analysis?.academy_action_text || ''); setViolations([]); setRejectedDraft(null);
       if (r.pdf) { const u = await getCachedSignedUrl('exam-results', (r.pdf as ResultPdf).storage_path, 3600); if (!cancelled) setPdfUrl(u || null); } else setPdfUrl(null);
       setLoading(false);
     })();
@@ -117,7 +117,7 @@ export function StudentAnalysisPanel({ row, examLabel, analysis, tags, defaultTo
     const { data: u } = await supabase.auth.getUser();
     const uid = u.user?.id ?? null;
     const payload = basePayload();
-    payload.final_text = mode === 'save' || mode === 'unpublish' ? finalText.trim() || null : feedbackText(method, finalText, selectedItems, code => tagLabel(code)); payload.academy_action_text = actionText.trim() || null;
+    payload.final_text = finalText.trim() || null; payload.academy_action_text = actionText.trim() || null;
     if (!analysis) { payload.created_by = uid; payload.status = 'draft'; }
     if (mode !== 'unpublish' && actionText.trim().length >= 5 && !analysis?.counseled_at) { payload.counseled_at = new Date().toISOString(); payload.counseled_by = uid; }
     if (mode === 'submit') { payload.status = 'teacher_confirmed'; payload.teacher_confirmed_by = uid; payload.teacher_confirmed_at = new Date().toISOString(); }
