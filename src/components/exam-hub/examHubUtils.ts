@@ -57,6 +57,7 @@ export type StudentAnalysis = {
   status: 'draft' | 'teacher_confirmed' | 'published'; wrong_count: number; total_items: number | null;
   final_text: string | null; academy_action_text: string | null; published_at: string | null; updated_at: string;
   student_reflection?: string | null; student_submitted_at?: string | null; counseled_at?: string | null;
+  feedback_method?: 'items' | 'comment' | null;
 };
 export type WrongReasonTag = { subject: string; code: string; label: string; sort_order: number };
 /** 단계는 저장 열이 아니라 시각으로 판정: 학생 제출 → 면담 완료 → 공개. (teacher_confirmed는 옛 행 호환 — 면담 완료로 취급) */
