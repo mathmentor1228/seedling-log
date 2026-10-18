@@ -2331,6 +2331,7 @@ export type Database = {
           created_by: string | null
           exam_period: string | null
           exam_year: number | null
+          feedback_method: string | null
           final_text: string | null
           id: string
           principal_confirmed_at: string | null
@@ -2357,6 +2358,7 @@ export type Database = {
           created_by?: string | null
           exam_period?: string | null
           exam_year?: number | null
+          feedback_method?: string | null
           final_text?: string | null
           id?: string
           principal_confirmed_at?: string | null
@@ -2383,6 +2385,7 @@ export type Database = {
           created_by?: string | null
           exam_period?: string | null
           exam_year?: number | null
+          feedback_method?: string | null
           final_text?: string | null
           id?: string
           principal_confirmed_at?: string | null
