@@ -111,7 +111,6 @@ export function StudentAnalysisPanel({ row, examLabel, analysis, tags, defaultTo
   /** 저장 = 면담 완료(학원 대응 5자↑이면 counseled_at 찍힘). publish = 원장 공개. unpublish = 공개 취소(원장). */
   async function save(mode: 'save' | 'submit' | 'publish' | 'unpublish') {
     if (!r?.result) return;
-    if (itemsDirty) { const ok = await saveItems(true); if (!ok) return; }
     if ((mode === 'publish' || mode === 'submit') && submissionError) { toast.error(submissionError); return; }
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
