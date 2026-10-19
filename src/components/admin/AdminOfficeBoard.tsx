@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText, Check, ChevronsUpDown, CalendarDays, RefreshCw } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText, Check, ChevronsUpDown, CalendarDays, RefreshCw, Pencil, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
@@ -84,6 +84,11 @@ export function AdminOfficeBoard() {
   const [lastClassDate, setLastClassDate] = useState('');
   const [withdrawReason, setWithdrawReason] = useState('');
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editAssignee, setEditAssignee] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -227,9 +232,41 @@ export function AdminOfficeBoard() {
   };
 
   const handleOpenTask = (task: Task) => {
+    setEditing(false);
     setSelectedTask(task);
     setCommentText('');
     fetchComments(task.id);
+  };
+
+  const startEditing = (task: Task) => {
+    setEditTitle(task.title);
+    setEditDescription(task.description || '');
+    setEditAssignee(task.assignee_name || '');
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    if (!selectedTask || savingEdit) return;
+    if (!editTitle.trim()) { toast.error('제목을 입력해주세요'); return; }
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase.from('admin_office_tasks').update({
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        assignee_name: editAssignee.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', selectedTask.id).select('*').single();
+      if (error) throw error;
+      const saved = data as Task;
+      setTasks(previous => previous.map(task => task.id === saved.id ? saved : task));
+      setSelectedTask(saved);
+      setEditing(false);
+      toast.success('업무 내용을 수정했습니다');
+    } catch {
+      toast.error('수정 내용을 저장하지 못했습니다. 다시 시도해주세요');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleAddComment = async () => {
@@ -489,7 +526,7 @@ export function AdminOfficeBoard() {
       </div>
 
       {/* Task detail dialog */}
-      <Dialog open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+      <Dialog open={!!selectedTask} onOpenChange={(open) => { if (!open && !savingEdit) { setSelectedTask(null); setEditing(false); } }}>
         <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
           {selectedTask && (
             <>
@@ -502,7 +539,28 @@ export function AdminOfficeBoard() {
                 <DialogTitle className="text-left mt-2">{selectedTask.title}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 flex-1 overflow-y-auto">
-                {selectedTask.description && (
+                {editing ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="office-edit-title" className="text-sm font-medium">제목 *</label>
+                      <Input id="office-edit-title" value={editTitle} onChange={e => setEditTitle(e.target.value)} disabled={savingEdit} />
+                    </div>
+                    <div>
+                      <label htmlFor="office-edit-description" className="text-sm font-medium">상세 내용</label>
+                      <Textarea id="office-edit-description" value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={10} disabled={savingEdit} />
+                    </div>
+                    <div>
+                      <label htmlFor="office-edit-assignee" className="text-sm font-medium">담당자</label>
+                      <Input id="office-edit-assignee" value={editAssignee} onChange={e => setEditAssignee(e.target.value)} disabled={savingEdit} />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={savingEdit}>취소</Button>
+                      <Button size="sm" onClick={saveEdit} disabled={savingEdit} className="gap-1.5">
+                        {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}저장
+                      </Button>
+                    </div>
+                  </div>
+                ) : selectedTask.description && (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selectedTask.description}</p>
                 )}
                 {selectedTask.student_sync_note && (
@@ -523,9 +581,14 @@ export function AdminOfficeBoard() {
                 </div>
 
                 {/* Status change buttons */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {!editing && selectedTask.category === '신규생 정보' && (
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => startEditing(selectedTask)}>
+                      <Pencil className="w-3.5 h-3.5" />수정
+                    </Button>
+                  )}
                   {STATUSES.filter(s => s !== selectedTask.status).map(s => (
-                    <Button key={s} variant="outline" size="sm" onClick={() => { updateStatus(selectedTask, s); setSelectedTask({ ...selectedTask, status: s }); }}>
+                    <Button key={s} variant="outline" size="sm" disabled={editing} onClick={() => { updateStatus(selectedTask, s); setSelectedTask({ ...selectedTask, status: s }); }}>
                       {s}(으)로 변경
                     </Button>
                   ))}
@@ -534,7 +597,7 @@ export function AdminOfficeBoard() {
                       <RefreshCw className="w-3.5 h-3.5" />지금 반영
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" className="ml-auto h-8 w-8 text-destructive" onClick={() => deleteTask(selectedTask.id)}>
+                  <Button variant="ghost" size="icon" disabled={editing} className="ml-auto h-8 w-8 text-destructive" onClick={() => deleteTask(selectedTask.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
