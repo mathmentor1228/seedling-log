@@ -75,18 +75,42 @@ export function TuitionCalendarDashboard() {
     const studentIds = studentList.map(s => s.id);
     let courseFees: Record<string, number> = {};
     if (studentIds.length > 0) {
-      const { data: courses } = await supabase
-        .from('student_courses')
-        .select('student_id, custom_monthly_fee, course_policies(monthly_fee)')
-        .in('student_id', studentIds)
-        .eq('is_active', true);
-      if (courses) {
-        for (const c of courses as any[]) {
-          // custom_monthly_fee가 있으면 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
-          const customFee = (c as any).custom_monthly_fee;
-          const fee = customFee != null ? Number(customFee) : Number((c as any).course_policies?.monthly_fee || 0);
-          courseFees[c.student_id] = (courseFees[c.student_id] || 0) + fee;
+      const [{ data: courses }, { data: sibs }] = await Promise.all([
+        supabase
+          .from('student_courses')
+          .select('student_id, custom_monthly_fee, course_policies(monthly_fee, subject)')
+          .in('student_id', studentIds)
+          .eq('is_active', true),
+        supabase
+          .from('students')
+          .select('id, sibling_group_id')
+          .in('enrollment_status', ['재학', '재등원'])
+          .not('sibling_group_id', 'is', null),
+      ]);
+      const groupCount = new Map<number, number>();
+      const groupOf = new Map<string, number>();
+      for (const s of (sibs || []) as any[]) {
+        groupCount.set(s.sibling_group_id, (groupCount.get(s.sibling_group_id) || 0) + 1);
+        groupOf.set(s.id, s.sibling_group_id);
+      }
+      const MULTI: Record<number, number> = { 1: 0, 2: 50000, 3: 80000, 4: 100000 };
+      const byStudent = new Map<string, any[]>();
+      for (const c of (courses || []) as any[]) {
+        if (!byStudent.has(c.student_id)) byStudent.set(c.student_id, []);
+        byStudent.get(c.student_id)!.push(c);
+      }
+      for (const [sid, list] of byStudent) {
+        // custom_monthly_fee가 있으면 할인 반영된 실제 금액이므로 그대로 사용
+        const hasCustom = list.some(c => c.custom_monthly_fee != null);
+        const gross = list.reduce((sum, c) => sum + (c.custom_monthly_fee != null ? Number(c.custom_monthly_fee) : Number(c.course_policies?.monthly_fee || 0)), 0);
+        let discount = 0;
+        if (!hasCustom) {
+          const subjects = new Set(list.map(c => c.course_policies?.subject).filter(Boolean)).size;
+          discount += MULTI[Math.min(subjects, 4)] || 0;
+          const g = groupOf.get(sid);
+          if (g != null && (groupCount.get(g) || 0) > 1) discount += 10000;
         }
+        courseFees[sid] = Math.max(0, gross - discount);
       }
     }
 
