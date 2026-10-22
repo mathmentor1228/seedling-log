@@ -595,6 +595,19 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
             )}
 
+            {!navQuery && pinnedItems.length > 0 && (
+              <div className="pb-2 mb-1 border-b border-sidebar-border/50">
+                {!sidebarCollapsed && (
+                  <p className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold tracking-wider text-sidebar-foreground/50">
+                    <Pin className="w-3 h-3" /> 내 고정 메뉴
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {pinnedItems.map(item => renderNavItem(item, false, 'pin-'))}
+                </div>
+              </div>
+            )}
+
             {!navQuery && filteredEntries.map((entry) => {
               if (isGroup(entry)) {
                 const open = isGroupOpen(entry);
