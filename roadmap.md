@@ -1,4 +1,7 @@
 # Current task
+- [ ] Implement tuition ledger shared month/fee rules and one-row-per-student billing generation.
+- [ ] Add student payment details, receipts/bulk print, and review queue.
+- [ ] Add receipt numbering and verify historical backfill, October paid status, and November generation.
 - [x] Add inline title, description, and assignee correction to new-registration office task details.
 - [x] Verify correction save/cancel and reload readback on a real registration task with unchanged contents; only task fields are updated.
 - [x] Allow choosing question-by-question analysis or overall teacher comment for individual exam submission.
