@@ -1,0 +1,22 @@
+:root { --tuition-teal: 172 66% 34%; --receipt-paper: 0 0% 100%; --receipt-ink: 0 0% 10%; --receipt-line: 0 0% 25%; }
+.dark { --tuition-teal: 172 56% 48%; }
+.source-kiosk { background: hsl(var(--success) / .12); color: hsl(var(--success)); border-color: hsl(var(--success) / .3); }
+.source-payssam { background: hsl(var(--info) / .12); color: hsl(var(--info)); border-color: hsl(var(--info) / .3); }
+.source-coding { background: hsl(var(--tuition-teal) / .12); color: hsl(var(--tuition-teal)); border-color: hsl(var(--tuition-teal) / .3); }
+.source-bank { background: hsl(var(--warn) / .12); color: hsl(var(--warn)); border-color: hsl(var(--warn) / .3); }
+.receipt-sheet { background: hsl(var(--receipt-paper)); color: hsl(var(--receipt-ink)); padding: 8mm; width: 100%; max-width: 194mm; margin: auto; font-size: 12px; letter-spacing: 0; }
+.receipt-copy { border: 1px solid hsl(var(--receipt-line)); padding: 5mm; min-height: 120mm; break-inside: avoid; }
+.receipt-copy + .receipt-copy { margin-top: 8mm; }
+.receipt-copy h2 { color: hsl(var(--receipt-ink)); font-size: 20px; text-align:center; margin-bottom: 5mm; }
+.receipt-copy table { width:100%; border-collapse:collapse; margin: 3mm 0; }
+.receipt-copy td, .receipt-copy th { border:1px solid hsl(var(--receipt-line)); padding: 2mm; text-align:left; word-break:break-word; }
+.receipt-copy th { width:24%; font-weight:500; }
+.receipt-copy footer { border-top:1px solid hsl(var(--receipt-line)); padding-top:3mm; font-size:10px; margin-top:4mm; }
+#tuition-print-root { display:none; }
+@media print {
+  @page { size:A4; margin:8mm; }
+  body > *:not(#tuition-print-root) { display:none !important; }
+  #tuition-print-root { display:block !important; }
+  .receipt-sheet { max-width:none; padding:0; break-after:page; }
+  .receipt-sheet:last-child { break-after:auto; }
+}
