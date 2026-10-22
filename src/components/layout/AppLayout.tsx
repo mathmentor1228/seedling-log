@@ -43,6 +43,7 @@ import {
   CalendarClock,
   Share2,
 } from 'lucide-react';
+import { Pin, PinOff } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -403,6 +404,24 @@ export function AppLayout({ children }: AppLayoutProps) {
     });
   }, [searchableItems, normalizedQuery]);
 
+  // PINNED-NAV-V1: 선생님별 자주 쓰는 메뉴를 상단에 고정 (계정별, 이 기기에 저장)
+  const pinKey = user?.id ? `pinned-nav:${user.id}` : null;
+  const [pinned, setPinned] = useState<string[]>([]);
+  useEffect(() => {
+    if (!pinKey) return;
+    try { setPinned(JSON.parse(localStorage.getItem(pinKey) || '[]')); } catch { setPinned([]); }
+  }, [pinKey]);
+  const togglePin = (href: string) => {
+    setPinned(prev => {
+      const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
+      if (pinKey) localStorage.setItem(pinKey, JSON.stringify(next));
+      return next;
+    });
+  };
+  const pinnedItems = pinned
+    .map(h => searchableItems.find(i => i.href === h))
+    .filter(Boolean) as NavItem[];
+
   // Check if a group contains the active route (for auto-open)
   const groupContainsActive = (group: NavGroup) =>
     group.items.some(item => location.pathname === item.href);
@@ -421,18 +440,20 @@ export function AppLayout({ children }: AppLayoutProps) {
     location.pathname === '/timetable' ||
     location.pathname === '/admin/tuition';
 
-  const renderNavItem = (item: NavItem, indent = false) => {
+  const renderNavItem = (item: NavItem, indent = false, keyPrefix = '') => {
     const isActive = location.pathname === item.href;
     const badgeCount = item.href === SHARE_NAV_ITEM.href ? shareUnread : 0;
+    const isPinned = pinned.includes(item.href);
     return (
+      <div key={keyPrefix + item.href} className="group relative">
       <Link
-        key={item.href}
         to={item.href}
         onClick={() => setSidebarOpen(false)}
         title={sidebarCollapsed ? item.label : item.description}
         className={cn(
           "relative flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
           indent && !sidebarCollapsed && "pl-8",
+          !sidebarCollapsed && "pr-8",
           sidebarCollapsed && "justify-center px-2",
           isActive
             ? "bg-sidebar-accent text-sidebar-foreground font-medium"
@@ -449,6 +470,21 @@ export function AppLayout({ children }: AppLayoutProps) {
           </span>
         ))}
       </Link>
+      {!sidebarCollapsed && (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(item.href); }}
+          title={isPinned ? '상단 고정 해제' : '상단에 고정'}
+          aria-label={isPinned ? `${item.label} 상단 고정 해제` : `${item.label} 상단에 고정`}
+          className={cn(
+            "absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-sidebar-foreground/50 hover:text-primary hover:bg-sidebar-accent transition-opacity",
+            isPinned ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+          )}
+        >
+          {isPinned && keyPrefix ? <PinOff className="w-3.5 h-3.5" /> : <Pin className={cn("w-3.5 h-3.5", isPinned && "fill-current")} />}
+        </button>
+      )}
+      </div>
     );
   };
 
@@ -556,6 +592,19 @@ export function AppLayout({ children }: AppLayoutProps) {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {!navQuery && pinnedItems.length > 0 && (
+              <div className="pb-2 mb-1 border-b border-sidebar-border/50">
+                {!sidebarCollapsed && (
+                  <p className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold tracking-wider text-sidebar-foreground/50">
+                    <Pin className="w-3 h-3" /> 내 고정 메뉴
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {pinnedItems.map(item => renderNavItem(item, false, 'pin-'))}
+                </div>
               </div>
             )}
 
