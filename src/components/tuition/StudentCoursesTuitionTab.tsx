@@ -15,6 +15,9 @@ import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent,
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { buildTeacherChangeNote } from '@/lib/teacherChangeLog';
+import { monthlyFees } from '@/lib/tuitionLedgerApi';
+import { currentTuitionMonth } from './LedgerControls';
+import { paymentMonth } from '@/lib/tuitionLedger';
 
 
 interface Props {
@@ -45,6 +48,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [coursePolicies, setCoursePolicies] = useState<CoursePolicy[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [monthlyNet, setMonthlyNet] = useState<number | null>(null);
   const [siblingCount, setSiblingCount] = useState(0);
 
   const [showAddCourse, setShowAddCourse] = useState(false);
@@ -75,6 +79,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
 
   const loadAll = async () => {
     setLoading(true);
+    setMonthlyNet(null);
     const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes, changesRes] = await Promise.all([
       supabase.from('student_courses')
         .select('*, custom_monthly_fee, course_policies(course_name, subject, grade_target, monthly_fee)')
@@ -128,6 +133,8 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
       setSiblingCount(0);
     }
 
+    try { setMonthlyNet((await monthlyFees([studentId], currentTuitionMonth()))[studentId]); }
+    catch { toast.error('월 원비를 불러오지 못했습니다'); }
     setLoading(false);
   };
 
@@ -142,7 +149,8 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   }, [coursePolicies]);
 
   // Discount calculation
-  const activeCourses = courses.filter(c => c.is_active);
+  const feeMonth = currentTuitionMonth();
+  const activeCourses = courses.filter(c => c.is_active && c.enrollment_date <= `${feeMonth}-31` && (!c.end_date || c.end_date >= `${feeMonth}-01`));
   const uniqueSubjects = new Set(activeCourses.map(c => (c as any).course_policies?.subject).filter(Boolean));
   const subjectCount = uniqueSubjects.size;
   const multiSubjectDiscount = MULTI_SUBJECT_DISCOUNT[Math.min(subjectCount, 4)] || (subjectCount > 4 ? 100000 : 0);
@@ -158,7 +166,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const monthlyGross = activeCourses.reduce((sum, c) => sum + courseFee(c), 0);
   // custom 금액은 이미 할인 반영된 값이므로 추가 할인 적용하지 않음
   const totalDiscount = hasAnyCustomFee ? 0 : (multiSubjectDiscount + siblingDiscount);
-  const monthlyNet = Math.max(0, monthlyGross - totalDiscount);
+
 
   const unpaidCount = billings.filter(b => b.status === 'pending' || b.status === 'overdue').length;
 
@@ -316,7 +324,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         </CardContent></Card>
         <Card><CardContent className="p-3">
           <p className="text-xs text-muted-foreground">월 수강료</p>
-          <p className="text-lg font-bold">{monthlyNet.toLocaleString()}원</p>
+          <p className="text-lg font-bold">{monthlyNet == null ? '확인 필요' : `${monthlyNet.toLocaleString()}원`}</p>
           {totalDiscount > 0 && (
             <p className="text-[10px] text-green-600">-{totalDiscount.toLocaleString()}원 할인</p>
           )}
@@ -693,7 +701,7 @@ function BillingView({ billings, payments }: { billings: any[]; payments: any[] 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>납부일</TableHead>
+                <TableHead>납부일</TableHead><TableHead>청구월</TableHead>
                 <TableHead className="text-right">금액</TableHead>
                 <TableHead>방법</TableHead>
                 <TableHead>메모</TableHead>
@@ -702,7 +710,7 @@ function BillingView({ billings, payments }: { billings: any[]; payments: any[] 
             <TableBody>
               {payments.map(p => (
                 <TableRow key={p.id}>
-                  <TableCell>{p.paid_date}</TableCell>
+                  <TableCell>{p.paid_date}</TableCell><TableCell>{paymentMonth(p) || '확인 필요'}{p.canceled_at && ' · 취소'}</TableCell>
                   <TableCell className="text-right font-medium">{Number(p.amount).toLocaleString()}원</TableCell>
                   <TableCell>{p.payment_method}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.memo || '-'}</TableCell>

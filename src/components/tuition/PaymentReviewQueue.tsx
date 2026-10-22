@@ -27,7 +27,15 @@ export function PaymentReviewQueue(){
    else {const {error}=await supabase.from('payment_records').update({student_id:studentId,billing_schedule_id:null,matched_by:'manual',needs_review:false}).eq('id',active.id);if(error)throw error;}
    persisted=true;
    if(mode==='assign') {const month=paymentMonth(active);if(month){try {await syncStudentBilling(active.student_id,month);await syncStudentBilling(studentId,month);}catch{toast.warning('학생 지정은 저장됐지만 청구 상태 확인이 필요합니다');}}}
-   if(saveAlias){const {error}=await supabase.from('deposit_aliases').upsert({alias_name:alias.trim(),student_id:mode==='assign'?studentId:null,is_ignore:mode==='ignore',confidence:'원장확인',note:note||null},{onConflict:'alias_name'});if(error)throw new Error('처리는 완료됐지만 별칭을 저장하지 못했습니다');}
+   if(saveAlias){
+    let lookup=supabase.from('deposit_aliases').select('id').eq('alias_name',alias.trim());
+    lookup=mode==='assign'?lookup.eq('student_id',studentId):lookup.is('student_id',null);
+    const {data:existing,error:lookupError}=await lookup;
+    if(lookupError)throw new Error('처리는 완료됐지만 별칭을 확인하지 못했습니다');
+    const payload={alias_name:alias.trim(),student_id:mode==='assign'?studentId:null,is_ignore:mode==='ignore',confidence:'원장확인',note:note||null};
+    const result=existing?.length?await supabase.from('deposit_aliases').update(payload).eq('id',existing[0].id):await supabase.from('deposit_aliases').insert(payload);
+    if(result.error)throw new Error('처리는 완료됐지만 별칭을 저장하지 못했습니다');
+   }
    toast.success(mode==='assign'?'학생 지정 완료':'원비 아님 처리 완료');setActive(null);changed();
   } catch(e:any){toast.error(e.message||'처리 실패');if(persisted){setActive(null);changed();}}
   finally{setSaving(false);}
