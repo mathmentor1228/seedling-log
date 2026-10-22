@@ -5,7 +5,7 @@ import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@
 import {Button} from '@/components/ui/button';
 import {Loader2,Printer} from 'lucide-react';
 import {allRows} from '@/lib/tuitionLedgerApi';
-import {paymentMonth,paymentReference} from '@/lib/tuitionLedger';
+import {paymentMonth,paymentReference,receiptCourseNames} from '@/lib/tuitionLedger';
 import './tuition.css';
 
 function ReceiptCopy({payment,student,academy,courses,original}:{payment:any;student:any;academy:any;courses:string;original:boolean}) {
@@ -13,7 +13,7 @@ function ReceiptCopy({payment,student,academy,courses,original}:{payment:any;stu
   <h2>{original?'교습비등 영수증 원부':'교습비등 영수증'}</h2>
   <div className="flex justify-between"><span>일련번호 {payment.receipt_number || '번호 미부여'}</span><span>연월 {paymentMonth(payment)||'확인 필요'}</span></div>
   <table><tbody>
-   <tr><th>납부자 등록번호(학반)</th><td>{student?.student_code||''}</td></tr>
+   <tr><th>납부자 등록번호(학반)</th><td>{student?.student_code||student?.classNames||''}</td></tr>
    <tr><th>성명</th><td>{student?.name||'미지정'}</td></tr>
    <tr><th>생년월일</th><td>　</td></tr>
    <tr><th>교습과목</th><td>{courses}</td></tr>
@@ -34,21 +34,22 @@ export function TuitionReceipt({payments,onClose,originalOnly=false}:{payments:a
  useEffect(()=>{ if(!payments) return; let alive=true; setData(null);setError('');
   (async()=>{
    const ids=[...new Set(payments.map(p=>p.student_id))];
-   const [academyRes,students,courses]=await Promise.all([
+   const [academyRes,students,courses,classes]=await Promise.all([
     supabase.from('academy_profile').select('academy_name,registration_no,representative,address').eq('id',1).single(),
     allRows(()=>supabase.from('students').select('id,name,student_code').in('id',ids).order('id')),
     allRows(()=>supabase.from('student_courses').select('student_id,enrollment_date,end_date,is_active,course_policies(subject,course_name)').in('student_id',ids).order('id')),
+    allRows(()=>supabase.from('class_students').select('student_id,classes(name)').in('student_id',ids).order('id')),
    ]);
    if(academyRes.error)throw academyRes.error;
    const byStudent:Record<string,any[]>={}; for(const c of courses)byStudent[c.student_id]=[...(byStudent[c.student_id]||[]),c];
-   if(alive)setData({academy:academyRes.data,students:Object.fromEntries(students.map(s=>[s.id,s])),courses:byStudent});
+   if(alive)setData({academy:academyRes.data,students:Object.fromEntries(students.map(s=>[s.id,{...s,classNames:[...new Set(classes.filter(c=>c.student_id===s.id).map(c=>c.classes?.name).filter(Boolean))].join(', ')}])),courses:byStudent});
   })().catch(()=>{if(alive)setError('영수증 정보를 불러오지 못했습니다');});
   return ()=>{alive=false;};
  },[payments]);
  const sheets=data && payments?payments.map(p=>{
   const month=paymentMonth(p)||p.paid_date.slice(0,7);
-  const names=(data.courses[p.student_id]||[]).filter(c=>c.enrollment_date<=`${month}-31` && (!c.end_date||c.end_date>=`${month}-01`)).map(c=>c.course_policies?`${c.course_policies.subject} · ${c.course_policies.course_name}`:'').filter(Boolean);
-  return <article className="receipt-sheet" key={p.id}><ReceiptCopy payment={p} student={data.students[p.student_id]} academy={data.academy} courses={[...new Set(names)].join(', ')} original/>{!originalOnly&&<ReceiptCopy payment={p} student={data.students[p.student_id]} academy={data.academy} courses={[...new Set(names)].join(', ')} original={false}/>}</article>;
+  const names=receiptCourseNames(data.courses[p.student_id]||[],month);
+  return <article className="receipt-sheet" key={p.id}><ReceiptCopy payment={p} student={data.students[p.student_id]} academy={data.academy} courses={names} original/>{!originalOnly&&<ReceiptCopy payment={p} student={data.students[p.student_id]} academy={data.academy} courses={names} original={false}/>}</article>;
  }):null;
  return <>
   <Dialog open={!!payments} onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{originalOnly?'기간 일괄 출력':'교습비등 영수증'}</DialogTitle><DialogDescription>{payments?.length||0}건 · 별지 제24호서식</DialogDescription></DialogHeader>

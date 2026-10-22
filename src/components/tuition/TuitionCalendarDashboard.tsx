@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { dueDate } from '@/lib/tuitionLedger';
 import { MonthInput } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
@@ -84,7 +85,7 @@ export function TuitionCalendarDashboard() {
   const dayData = useMemo(() => {
     const map: Record<number, { due: number; paid: number; count: number; paidCount: number }> = {};
     for (const s of students) {
-      const day = s.payment_due_day;
+      const day = Number(dueDate(monthStr,s.payment_due_day).slice(-2));
       if (!map[day]) map[day] = { due: 0, paid: 0, count: 0, paidCount: 0 };
       map[day].due += s.totalFee;
       map[day].paid += s.paidAmount;
@@ -92,12 +93,12 @@ export function TuitionCalendarDashboard() {
       if (s.isPaid) map[day].paidCount += 1;
     }
     return map;
-  }, [students]);
+  }, [students, monthStr]);
 
   const selectedStudents = useMemo(() => {
     if (selectedDay === null) return students;
-    return students.filter(s => s.payment_due_day === selectedDay);
-  }, [students, selectedDay]);
+    return students.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
+  }, [students, selectedDay, monthStr]);
 
   // Summary stats
   const totalDue = students.reduce((s, st) => s + st.totalFee, 0);
@@ -357,7 +358,7 @@ export function TuitionCalendarDashboard() {
                   </span>
                   <span className="text-muted-foreground">
                     잔액: <span className="font-medium text-destructive">
-                      {Math.max(0, selectedStudents.reduce((s, st) => s + st.totalFee - st.paidAmount, 0)).toLocaleString()}원
+                      {selectedStudents.reduce((s, st) => s + Math.max(0,st.totalFee - st.paidAmount), 0).toLocaleString()}원
                     </span>
                   </span>
                 </div>

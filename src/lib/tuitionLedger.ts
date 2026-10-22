@@ -19,10 +19,15 @@ export function billingDisplayStatus(row: { status: string; due_date: string }, 
 export function paymentReference(p: { raw_text?: string | null; memo?: string | null; external_id?: string | null }) {
   const text = `${p.raw_text || ''}\n${p.memo || ''}`;
   const approval = text.match(/승인(?:번호)?\s*[:：]?\s*([A-Za-z0-9-]+)/);
-  const depositor = text.match(/(?:입금자(?:명)?|보낸분|보낸사람)\s*[:：]?\s*([^\n,|]+)/);
+  const depositor = text.match(/(?:입금자(?:명)?|보낸분|보낸사람)\s*[:：]?\s*([^\n,|·]+)/);
   if (approval) return `승인번호 ${approval[1]}`;
   if (depositor) return `입금자 ${depositor[1].trim()}`;
   return p.external_id ? `외부번호 ${p.external_id}` : '';
+}
+export function receiptCourseNames(courses: {is_active:boolean;enrollment_date:string;end_date?:string|null;course_policies?:{subject:string;course_name:string}|null}[], month:string): string {
+  const lastDate=dueDate(month,31);
+  const names=courses.filter(c=>c.is_active && c.enrollment_date<=lastDate && (!c.end_date||c.end_date>=`${month}-01`)).map(c=>c.course_policies?`${c.course_policies.subject} · ${c.course_policies.course_name}`:'').filter(Boolean);
+  return [...new Set(names)].join(', ');
 }
 export function buildStudentBillings(students: {id:string;payment_due_day:number}[], fees: Record<string,number>, existingStudentIds: Set<string>, month: string, intensive: Record<string,{fee:number;memo:string}> = {}) {
   if (month < LEDGER_START) throw new Error('2026년 10월부터 청구를 생성할 수 있습니다');

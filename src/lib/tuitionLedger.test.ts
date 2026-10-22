@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,paymentReference} from './tuitionLedger';
+import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,paymentReference,receiptCourseNames} from './tuitionLedger';
 describe('원비 장부 규칙',()=>{
   it('납부일이 10월이어도 9월 청구는 10월 완납에 포함하지 않는다',()=>{expect(paidForMonth([{student_id:'a',amount:330000,billing_month:'2026-09'}],'a','2026-10')).toBe(0);});
   it('취소된 납부는 합산하지 않는다',()=>{expect(paidForMonth([{student_id:'a',amount:330000,billing_month:'2026-10',canceled_at:'2026-10-23'}],'a','2026-10')).toBe(0);});
@@ -14,4 +14,6 @@ describe('원비 장부 규칙',()=>{
   it('월말로 납입일을 제한한다',()=>{expect(dueDate('2026-11',31)).toBe('2026-11-30');});
   it('기한이 지난 대기는 표시상 미납이고 당일은 대기다',()=>{expect(billingDisplayStatus({status:'pending',due_date:'2026-10-22'},'2026-10-23')).toBe('overdue');expect(billingDisplayStatus({status:'pending',due_date:'2026-10-23'},'2026-10-23')).toBe('pending');});
   it('외부 식별자보다 실제 카드 승인번호를 표시한다',()=>{expect(paymentReference({external_id:'4035571',raw_text:'키오스크 승인 09001410'})).toBe('승인번호 09001410');});
+  it('입금자명 뒤의 다른 수납 메모는 이름에서 제외한다',()=>{expect(paymentReference({raw_text:'입금자 허승무 · 이코딩 수기 #4087953'})).toBe('입금자 허승무');});
+  it('영수증에는 해당 월 활성 과정만 포함한다',()=>{const policy={subject:'수학',course_name:'고등기본수학'};expect(receiptCourseNames([{is_active:true,enrollment_date:'2026-10-01',course_policies:policy},{is_active:false,enrollment_date:'2026-10-01',course_policies:{subject:'영어',course_name:'고등영어'}},{is_active:true,enrollment_date:'2026-12-01',course_policies:{subject:'국어',course_name:'고등국어'}}],'2026-11')).toBe('수학 · 고등기본수학');});
 });

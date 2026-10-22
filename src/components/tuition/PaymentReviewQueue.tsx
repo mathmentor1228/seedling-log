@@ -24,7 +24,7 @@ export function PaymentReviewQueue(){
   let persisted=false;
   try {
    if(mode==='ignore') {const warning=await cancelPayment(active,note);if(warning)toast.warning(warning);}
-   else {const {error}=await supabase.from('payment_records').update({student_id:studentId,billing_schedule_id:null,matched_by:'manual',needs_review:false}).eq('id',active.id);if(error)throw error;}
+   else {const {error}=await supabase.from('payment_records').update({student_id:studentId,billing_month:paymentMonth(active),billing_schedule_id:null,matched_by:'manual',needs_review:false}).eq('id',active.id);if(error)throw error;}
    persisted=true;
    if(mode==='assign') {const month=paymentMonth(active);if(month){try {await syncStudentBilling(active.student_id,month);await syncStudentBilling(studentId,month);}catch{toast.warning('학생 지정은 저장됐지만 청구 상태 확인이 필요합니다');}}}
    if(saveAlias){

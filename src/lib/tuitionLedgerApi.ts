@@ -52,8 +52,9 @@ export async function recordManualPayment(input:{student_id:string;billing_month
   try { await syncStudentBilling(input.student_id,input.billing_month); return null; } catch { return '납부는 저장됐지만 청구 상태 확인이 필요합니다'; }
 }
 export async function cancelPayment(p:any,note?:string) {
-  const {error}=await supabase.from('payment_records').update({canceled_at:new Date().toISOString(),...(note?{review_note:note}:{})}).eq('id',p.id).is('canceled_at',null);
+  const {data,error}=await supabase.from('payment_records').update({canceled_at:new Date().toISOString(),...(note?{review_note:note}:{})}).eq('id',p.id).is('canceled_at',null).select('id').maybeSingle();
   if(error) throw error;
+  if(!data) throw new Error('이미 취소되었거나 취소할 수 없는 납부입니다');
   const month=paymentMonth(p);
   if(month) { try {await syncStudentBilling(p.student_id,month);} catch {return '취소는 저장됐지만 청구 상태 확인이 필요합니다';} }
   return null;
