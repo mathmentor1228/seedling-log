@@ -10,7 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
+import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { MonthInput } from './LedgerControls';
+import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
+import { SourceBadge } from './LedgerControls';
 import {
   ChevronLeft, ChevronRight, Loader2, Check, Wallet, Users,
   CalendarDays, TrendingUp, AlertTriangle
@@ -33,7 +37,11 @@ interface StudentDue {
 }
 
 export function TuitionCalendarDashboard() {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(getKSTDateObject());
+  const { revision, changed } = useTuitionLedger();
+  const [loadError, setLoadError] = useState('');
+  const [payBillingMonth, setPayBillingMonth] = useState('');
+  const [payDate, setPayDate] = useState(getTodayKST());
   const [students, setStudents] = useState<StudentDue[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,91 +60,17 @@ export function TuitionCalendarDashboard() {
 
   useEffect(() => {
     loadData();
-  }, [monthStr]);
+  }, [monthStr, revision]);
 
   const loadData = async () => {
     setLoading(true);
-    const [studentsRes, paymentsRes] = await Promise.all([
-      supabase.from('students')
-        .select('id, name, payment_due_day, school, grade, parent_phone, tuition_memo')
-        .in('enrollment_status', ['재학', '재등원'])
-        .not('payment_due_day', 'is', null)
-        .order('name'),
-      supabase.from('payment_records')
-        .select('*')
-        .gte('paid_date', `${monthStr}-01`)
-        .lte('paid_date', `${monthStr}-31`)
-    ]);
-
-    const studentList = (studentsRes.data || []) as any[];
-    const paymentList = (paymentsRes.data || []) as any[];
-
-    // Get course fees for each student
-    const studentIds = studentList.map(s => s.id);
-    let courseFees: Record<string, number> = {};
-    if (studentIds.length > 0) {
-      const [{ data: courses }, { data: sibs }] = await Promise.all([
-        supabase
-          .from('student_courses')
-          .select('student_id, custom_monthly_fee, course_policies(monthly_fee, subject)')
-          .in('student_id', studentIds)
-          .eq('is_active', true),
-        supabase
-          .from('students')
-          .select('id, sibling_group_id')
-          .in('enrollment_status', ['재학', '재등원'])
-          .not('sibling_group_id', 'is', null),
-      ]);
-      const groupCount = new Map<number, number>();
-      const groupOf = new Map<string, number>();
-      for (const s of (sibs || []) as any[]) {
-        groupCount.set(s.sibling_group_id, (groupCount.get(s.sibling_group_id) || 0) + 1);
-        groupOf.set(s.id, s.sibling_group_id);
-      }
-      const MULTI: Record<number, number> = { 1: 0, 2: 50000, 3: 80000, 4: 100000 };
-      const byStudent = new Map<string, any[]>();
-      for (const c of (courses || []) as any[]) {
-        if (!byStudent.has(c.student_id)) byStudent.set(c.student_id, []);
-        byStudent.get(c.student_id)!.push(c);
-      }
-      for (const [sid, list] of byStudent) {
-        // custom_monthly_fee가 있으면 할인 반영된 실제 금액이므로 그대로 사용
-        const hasCustom = list.some(c => c.custom_monthly_fee != null);
-        const gross = list.reduce((sum, c) => sum + (c.custom_monthly_fee != null ? Number(c.custom_monthly_fee) : Number(c.course_policies?.monthly_fee || 0)), 0);
-        let discount = 0;
-        if (!hasCustom) {
-          const subjects = new Set(list.map(c => c.course_policies?.subject).filter(Boolean)).size;
-          discount += MULTI[Math.min(subjects, 4)] || 0;
-          const g = groupOf.get(sid);
-          if (g != null && (groupCount.get(g) || 0) > 1) discount += 10000;
-        }
-        courseFees[sid] = Math.max(0, gross - discount);
-      }
-    }
-
-    // Build student due list with payment status
-    const merged: StudentDue[] = studentList.map(s => {
-      const studentPayments = paymentList.filter(p => p.student_id === s.id);
-      const paidAmount = studentPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-      const totalFee = courseFees[s.id] || 0;
-      return {
-        id: s.id,
-        name: s.name,
-        payment_due_day: s.payment_due_day,
-        school: s.school,
-        grade: s.grade,
-        parent_phone: s.parent_phone,
-        tuition_memo: s.tuition_memo,
-        totalFee,
-        isPaid: paidAmount >= totalFee && totalFee > 0,
-        paidAmount,
-        paymentId: studentPayments[0]?.id,
-      };
-    });
-
-    setStudents(merged);
-    setPayments(paymentList);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const ledger = await loadMonthLedger(monthStr);
+      setStudents(ledger.students);
+      setPayments(ledger.payments.filter(p => !p.canceled_at));
+    } catch { setLoadError('수납 정보를 불러오지 못했습니다'); }
+    finally { setLoading(false); }
   };
 
   // Calendar data
@@ -161,7 +95,7 @@ export function TuitionCalendarDashboard() {
   }, [students]);
 
   const selectedStudents = useMemo(() => {
-    if (selectedDay === null) return [];
+    if (selectedDay === null) return students;
     return students.filter(s => s.payment_due_day === selectedDay);
   }, [students, selectedDay]);
 
@@ -174,20 +108,13 @@ export function TuitionCalendarDashboard() {
   const handlePay = async () => {
     if (!payModalStudent) return;
     const amount = Number(payAmount);
+    if (!payDate || !payBillingMonth) { toast.error('납부일과 청구월을 입력해주세요'); return; }
     if (!amount || amount <= 0) { toast.error('금액을 입력해주세요'); return; }
     setSaving(true);
     try {
-      const dueDay = payModalStudent.payment_due_day;
-      const paidDate = `${monthStr}-${String(dueDay).padStart(2, '0')}`;
-      const { error } = await supabase.from('payment_records').insert({
-        student_id: payModalStudent.id,
-        amount,
-        paid_date: paidDate,
-        payment_method: payMethod,
-        memo: payMemo || null,
-      } as any);
-      if (error) throw error;
-      toast.success(`${payModalStudent.name} 수납 완료`);
+      const warning = await recordManualPayment({student_id:payModalStudent.id, billing_month:payBillingMonth, amount, paid_date:payDate, payment_method:payMethod, memo:payMemo || null});
+      if(warning) toast.warning(warning); else toast.success(`${payModalStudent.name} 납부 기록 완료`);
+      changed();
       setPayModalStudent(null);
       setPayAmount('');
       setPayMemo('');
@@ -201,15 +128,18 @@ export function TuitionCalendarDashboard() {
 
   const openPayModal = (student: StudentDue) => {
     setPayModalStudent(student);
-    setPayAmount(String(student.totalFee));
+    setPayAmount(String(Math.max(0, student.totalFee - student.paidAmount)));
+    setPayBillingMonth(monthStr);
+    setPayDate(getTodayKST());
     setPayMethod('계좌이체');
     setPayMemo('');
   };
 
   const firstDayOfWeek = getDay(startOfMonth(currentMonth));
-  const today = new Date();
+  const today = getKSTDateObject();
   const todayDay = today.getFullYear() === year && today.getMonth() + 1 === month ? today.getDate() : -1;
 
+  if (loadError) return <div role="alert" className="py-8 text-destructive">{loadError}<Button variant="outline" onClick={loadData} className="ml-3">다시 불러오기</Button></div>;
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
 
   return (
@@ -229,7 +159,7 @@ export function TuitionCalendarDashboard() {
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
               <TrendingUp className="w-3.5 h-3.5" />수납 완료
             </div>
-            <p className="text-xl font-bold text-emerald-600">{totalPaid.toLocaleString()}원</p>
+            <p className="text-xl font-bold text-success">{totalPaid.toLocaleString()}원</p>
             <p className="text-[10px] text-muted-foreground">{paidStudents.length}명 완료</p>
           </CardContent>
         </Card>
@@ -239,7 +169,7 @@ export function TuitionCalendarDashboard() {
               <AlertTriangle className="w-3.5 h-3.5" />미납 잔액
             </div>
             <p className={cn("text-xl font-bold", (totalDue - totalPaid) > 0 ? "text-destructive" : "")}>
-              {Math.max(0, totalDue - totalPaid).toLocaleString()}원
+              {students.reduce((sum, s) => sum + Math.max(0, s.totalFee - s.paidAmount), 0).toLocaleString()}원
             </p>
             <p className="text-[10px] text-muted-foreground">{unpaidStudents.length}명 미납</p>
           </CardContent>
@@ -261,13 +191,13 @@ export function TuitionCalendarDashboard() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <Button variant="ghost" size="icon" aria-label="이전 달" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <CardTitle className="text-lg">
               {format(currentMonth, 'yyyy년 M월', { locale: ko })}
             </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <Button variant="ghost" size="icon" aria-label="다음 달" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
@@ -307,7 +237,7 @@ export function TuitionCalendarDashboard() {
                     "text-xs font-medium mb-1",
                     isToday && "text-primary font-bold",
                     getDay(day) === 0 && "text-destructive",
-                    getDay(day) === 6 && "text-blue-500"
+                    getDay(day) === 6 && "text-info"
                   )}>
                     {dayNum}
                   </div>
@@ -320,12 +250,12 @@ export function TuitionCalendarDashboard() {
                         {(data.due / 10000).toFixed(0)}만
                       </div>
                       {data.paid > 0 && (
-                        <div className="text-[10px] text-emerald-600 font-medium">
+                        <div className="text-[10px] text-success font-medium">
                           ✓{(data.paid / 10000).toFixed(0)}만
                         </div>
                       )}
                       {allPaid ? (
-                        <Badge variant="default" className="text-[8px] px-1 py-0 h-3.5 bg-emerald-500">완납</Badge>
+                        <Badge variant="default" className="text-[8px] px-1 py-0 h-3.5 bg-success">완납</Badge>
                       ) : data.paidCount > 0 ? (
                         <Badge variant="secondary" className="text-[8px] px-1 py-0 h-3.5">{data.paidCount}/{data.count}</Badge>
                       ) : null}
@@ -339,12 +269,12 @@ export function TuitionCalendarDashboard() {
       </Card>
 
       {/* Selected Day Students */}
-      {selectedDay !== null && (
+      {(
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <CalendarDays className="w-4 h-4" />
-              {month}월 {selectedDay}일 납부 대상
+              {month}월 {selectedDay === null ? '전체 납부 대상' : `${selectedDay}일 납부 대상`}
               <Badge variant="outline" className="ml-auto">
                 {selectedStudents.length}명
               </Badge>
@@ -363,14 +293,14 @@ export function TuitionCalendarDashboard() {
                       <TableHead className="text-right">수강료</TableHead>
                       <TableHead className="text-right">납부액</TableHead>
                       <TableHead>상태</TableHead>
-                      <TableHead>메모</TableHead>
+                      <TableHead>출처</TableHead><TableHead>메모</TableHead>
                       <TableHead className="text-center">수납</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedStudents.map(s => (
                       <TableRow key={s.id} className={cn(s.isPaid && "opacity-60")}>
-                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell className="font-medium"><StudentPaymentLink id={s.id} name={s.name} /></TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {s.school || '-'} {s.grade || ''}
                         </TableCell>
@@ -379,14 +309,14 @@ export function TuitionCalendarDashboard() {
                         </TableCell>
                         <TableCell className="text-right">
                           {s.paidAmount > 0 ? (
-                            <span className="text-emerald-600 font-medium">{s.paidAmount.toLocaleString()}원</span>
+                            <span className="text-success font-medium">{s.paidAmount.toLocaleString()}원</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {s.isPaid ? (
-                            <Badge className="bg-emerald-500 text-[10px]">완납</Badge>
+                            <Badge className="bg-success text-[10px]">완납</Badge>
                           ) : s.paidAmount > 0 ? (
                             <Badge variant="secondary" className="text-[10px]">부분납</Badge>
                           ) : s.totalFee > 0 ? (
@@ -395,6 +325,7 @@ export function TuitionCalendarDashboard() {
                             <Badge variant="outline" className="text-[10px]">과정없음</Badge>
                           )}
                         </TableCell>
+                        <TableCell><div className="flex gap-1 flex-wrap">{[...new Set(payments.filter(p=>p.student_id===s.id).map(p=>p.source))].map(source=><SourceBadge key={source} source={source}/>)}</div></TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
                           {s.tuition_memo || '-'}
                         </TableCell>
@@ -409,7 +340,7 @@ export function TuitionCalendarDashboard() {
                               <Check className="w-3 h-3" />수납
                             </Button>
                           ) : s.isPaid ? (
-                            <Check className="w-4 h-4 text-emerald-500 mx-auto" />
+                            <Check className="w-4 h-4 text-success mx-auto" />
                           ) : null}
                         </TableCell>
                       </TableRow>
@@ -422,7 +353,7 @@ export function TuitionCalendarDashboard() {
                     청구: <span className="font-medium text-foreground">{selectedStudents.reduce((s, st) => s + st.totalFee, 0).toLocaleString()}원</span>
                   </span>
                   <span className="text-muted-foreground">
-                    수납: <span className="font-medium text-emerald-600">{selectedStudents.reduce((s, st) => s + st.paidAmount, 0).toLocaleString()}원</span>
+                    수납: <span className="font-medium text-success">{selectedStudents.reduce((s, st) => s + st.paidAmount, 0).toLocaleString()}원</span>
                   </span>
                   <span className="text-muted-foreground">
                     잔액: <span className="font-medium text-destructive">
@@ -452,7 +383,7 @@ export function TuitionCalendarDashboard() {
                 {payModalStudent.paidAmount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">기납부액</span>
-                    <span className="text-emerald-600">{payModalStudent.paidAmount.toLocaleString()}원</span>
+                    <span className="text-success">{payModalStudent.paidAmount.toLocaleString()}원</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t pt-1">
@@ -463,6 +394,8 @@ export function TuitionCalendarDashboard() {
                 </div>
               </div>
 
+              <div><Label>청구월</Label><MonthInput value={payBillingMonth} onChange={setPayBillingMonth}/></div>
+              <div><Label htmlFor="calendar-paid-date">실제 납부일</Label><Input id="calendar-paid-date" type="date" value={payDate} onChange={e=>setPayDate(e.target.value)}/></div>
               <div>
                 <Label className="text-sm">납부 금액 *</Label>
                 <Input

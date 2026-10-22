@@ -12,6 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Loader2, Plus, Zap, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
+import { getTodayKST } from '@/lib/utils';
+import { allRows, monthlyFees } from '@/lib/tuitionLedgerApi';
+import { buildStudentBillings, billingDisplayStatus, LEDGER_START } from '@/lib/tuitionLedger';
+import { currentTuitionMonth, MonthInput } from './LedgerControls';
+import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: '대기', variant: 'secondary' },
@@ -22,7 +27,9 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
 
 export function BillingGenerator() {
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(format(now, 'yyyy-MM'));
+  const [selectedMonth, setSelectedMonth] = useState(currentTuitionMonth());
+  const { revision } = useTuitionLedger();
+  const [loadError, setLoadError] = useState('');
   const [billings, setBillings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -34,113 +41,36 @@ export function BillingGenerator() {
   const [editLateFee, setEditLateFee] = useState('0');
   const [editStatus, setEditStatus] = useState('pending');
 
-  const months = Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i - 2, 1);
-    return format(d, 'yyyy-MM');
-  });
-
-  useEffect(() => { loadBillings(); }, [selectedMonth]);
+  useEffect(() => { loadBillings(); }, [selectedMonth, revision]);
 
   const loadBillings = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('billing_schedules')
-      .select('*, students(name, payment_due_day)')
-      .eq('billing_month', selectedMonth)
-      .order('due_date');
-    setBillings(data || []);
-    setLoading(false);
+    setLoading(true); setLoadError('');
+    try { setBillings(await allRows(() => supabase.from('billing_schedules').select('*, students(name, payment_due_day)').eq('billing_month', selectedMonth).order('due_date').order('id'))); }
+    catch { setLoadError('청구 목록을 불러오지 못했습니다'); }
+    finally { setLoading(false); }
   };
-
   const generateBillings = async () => {
+    if (selectedMonth < LEDGER_START) { toast.error('2026년 10월부터 생성할 수 있습니다'); return; }
     setGenerating(true);
     try {
-      // Get all active student_courses with course_policies
-      const { data: courses } = await supabase
-        .from('student_courses')
-        .select('id, student_id, course_policy_id, custom_monthly_fee, course_policies(monthly_fee, course_name)')
-        .eq('is_active', true);
-
-      if (!courses || courses.length === 0) {
-        toast.info('활성 수강 중인 학생이 없습니다');
-        setGenerating(false);
-        return;
+      const [students, existing, intensiveApps] = await Promise.all([
+        allRows(() => supabase.from('students').select('id,payment_due_day').in('enrollment_status',['재학','재등원']).order('id')),
+        allRows(() => supabase.from('billing_schedules').select('student_id').eq('billing_month', selectedMonth).order('id')),
+        allRows(() => supabase.from('intensive_applications').select('student_id,fee,child_name').eq('billed_month',selectedMonth).not('student_id','is',null).order('id')),
+      ]);
+      const fees = await monthlyFees(students.map(s => s.id), selectedMonth);
+      const intensive: Record<string,{fee:number;memo:string}> = {};
+      for (const app of intensiveApps) {
+        const fee=(intensive[app.student_id]?.fee || 0)+Number(app.fee || 0);
+        intensive[app.student_id]={fee,memo:`특강료 ${fee.toLocaleString()}원`};
       }
-
-      // Get students' payment_due_day
-      const studentIds = [...new Set(courses.map(c => c.student_id))];
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, payment_due_day')
-        .in('id', studentIds);
-      const studentMap = Object.fromEntries((students || []).map(s => [s.id, s]));
-
-      // Check existing billings for this month
-      const { data: existing } = await supabase
-        .from('billing_schedules')
-        .select('student_id, student_course_id')
-        .eq('billing_month', selectedMonth);
-      const existingSet = new Set((existing || []).map(e => `${e.student_id}-${e.student_course_id}`));
-
-      // 해당 월에 학생별로 연결된 특강 신청료 합산
-      const { data: intensiveApps } = await (supabase as any)
-        .from('intensive_applications')
-        .select('student_id, fee, child_name')
-        .eq('billed_month', selectedMonth)
-        .not('student_id', 'is', null);
-      const intensiveByStudent = new Map<string, { fee: number; names: string[] }>();
-      (intensiveApps || []).forEach((a: any) => {
-        const prev = intensiveByStudent.get(a.student_id) || { fee: 0, names: [] };
-        prev.fee += Number(a.fee || 0);
-        prev.names.push(a.child_name);
-        intensiveByStudent.set(a.student_id, prev);
-      });
-
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const inserts = courses
-        .filter(c => !existingSet.has(`${c.student_id}-${c.id}`))
-        .map(c => {
-          // custom_monthly_fee가 있으면 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
-          const customFee = (c as any).custom_monthly_fee;
-          const fee = customFee != null ? Number(customFee) : Number((c as any).course_policies?.monthly_fee || 0);
-          const dueDay = studentMap[c.student_id]?.payment_due_day || 1;
-          const lastDay = new Date(year, month, 0).getDate();
-          const adjustedDay = Math.min(dueDay, lastDay);
-          const dueDate = `${year}-${String(month).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
-
-          const intensive = intensiveByStudent.get(c.student_id);
-          const extra = intensive?.fee || 0;
-          const extraMemo = intensive ? `여름특강료 ${intensive.fee.toLocaleString()}원` : null;
-
-          return {
-            student_id: c.student_id,
-            student_course_id: c.id,
-            billing_month: selectedMonth,
-            base_amount: fee,
-            discount_amount: 0,
-            extra_amount: extra,
-            extra_memo: extraMemo,
-            final_amount: fee + extra,
-            due_date: dueDate,
-            status: 'pending',
-          };
-        });
-
-      if (inserts.length === 0) {
-        toast.info('이미 모든 청구가 생성되어 있습니다');
-        setGenerating(false);
-        return;
-      }
-
-      const { error } = await supabase.from('billing_schedules').insert(inserts as any);
-      if (error) throw error;
-      toast.success(`${inserts.length}건 청구 생성 완료`);
-      loadBillings();
-    } catch (err: any) {
-      toast.error(err.message || '청구 생성 실패');
-    } finally {
-      setGenerating(false);
-    }
+      const inserts=buildStudentBillings(students,fees,new Set(existing.map(b=>b.student_id)),selectedMonth,intensive);
+      if (!inserts.length) { toast.info('추가로 생성할 청구가 없습니다'); return; }
+      const {error}=await supabase.from('billing_schedules').insert(inserts);
+      if(error) throw error;
+      toast.success(`${inserts.length}건 청구 생성 완료`); await loadBillings();
+    } catch(err:any) { toast.error(err.message || '청구 생성 실패'); }
+    finally { setGenerating(false); }
   };
 
   const openEdit = (item: any) => {
@@ -182,13 +112,8 @@ export function BillingGenerator() {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {months.map(m => <SelectItem key={m} value={m}>{m.replace('-', '년 ')}월</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button onClick={generateBillings} disabled={generating} className="gap-1.5">
+        <MonthInput value={selectedMonth} onChange={setSelectedMonth} />
+        <Button onClick={generateBillings} disabled={generating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           자동 청구 생성
         </Button>
@@ -199,7 +124,7 @@ export function BillingGenerator() {
           <CardTitle className="text-sm">{selectedMonth.replace('-', '년 ')}월 청구 목록 ({billings.length}건)</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {loading ? (
+          {loadError ? <div role="alert" className="p-8 text-destructive">{loadError}</div> : loading ? (
             <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
           ) : billings.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">청구 내역이 없습니다. 자동 청구 생성을 눌러주세요.</div>
@@ -221,23 +146,23 @@ export function BillingGenerator() {
                 </TableHeader>
                 <TableBody>
                   {billings.map(b => {
-                    const badge = STATUS_BADGE[b.status] || STATUS_BADGE.pending;
+                    const badge = STATUS_BADGE[billingDisplayStatus(b, getTodayKST())] || STATUS_BADGE.pending;
                     const extra = Number((b as any).extra_amount || 0);
                     return (
                       <TableRow key={b.id}>
-                        <TableCell className="font-medium">{(b as any).students?.name || '-'}</TableCell>
+                        <TableCell className="font-medium"><StudentPaymentLink id={b.student_id} name={b.students?.name || '미지정'} /></TableCell>
                         <TableCell className="text-right">{Number(b.base_amount).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{Number(b.discount_amount) > 0 ? `-${Number(b.discount_amount).toLocaleString()}` : '-'}</TableCell>
                         <TableCell className="text-right">
                           {extra > 0 ? (
                             <div className="flex flex-col items-end">
-                              <span className="text-amber-600 font-medium">+{extra.toLocaleString()}</span>
+                              <span className="text-warn font-medium">+{extra.toLocaleString()}</span>
                               {(b as any).extra_memo && <span className="text-[10px] text-muted-foreground">{(b as any).extra_memo}</span>}
                             </div>
                           ) : '-'}
                         </TableCell>
                         <TableCell className="text-right font-semibold">{Number(b.final_amount).toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-red-600">{Number(b.late_fee) > 0 ? Number(b.late_fee).toLocaleString() : '-'}</TableCell>
+                        <TableCell className="text-right text-destructive">{Number(b.late_fee) > 0 ? Number(b.late_fee).toLocaleString() : '-'}</TableCell>
                         <TableCell>{b.due_date}</TableCell>
                         <TableCell><Badge variant={badge.variant}>{badge.label}</Badge></TableCell>
                         <TableCell>

@@ -1,5 +1,3 @@
-:root { --tuition-teal: 172 66% 34%; --receipt-paper: 0 0% 100%; --receipt-ink: 0 0% 10%; --receipt-line: 0 0% 25%; }
-.dark { --tuition-teal: 172 56% 48%; }
 .source-kiosk { background: hsl(var(--success) / .12); color: hsl(var(--success)); border-color: hsl(var(--success) / .3); }
 .source-payssam { background: hsl(var(--info) / .12); color: hsl(var(--info)); border-color: hsl(var(--info) / .3); }
 .source-coding { background: hsl(var(--tuition-teal) / .12); color: hsl(var(--tuition-teal)); border-color: hsl(var(--tuition-teal) / .3); }
