@@ -1,168 +1,18 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import { AlertTriangle, RefreshCw, Calculator } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
-
-const DEFAULT_LATE_FEE_RATE = 0.05; // 5% per month
-
-export function OverdueList() {
-  const [overdue, setOverdue] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lateFeeRate, setLateFeeRate] = useState('5');
-
-  useEffect(() => { loadOverdue(); }, []);
-
-  const loadOverdue = async () => {
-    setLoading(true);
-    const today = format(new Date(), 'yyyy-MM-dd');
-
-    // Get pending billings where due_date < today
-    const { data } = await supabase
-      .from('billing_schedules')
-      .select('*, students(name, parent_phone, phone)')
-      .in('status', ['pending', 'overdue'])
-      .lt('due_date', today)
-      .order('due_date');
-
-    setOverdue(data || []);
-    setLoading(false);
-  };
-
-  const markOverdueAll = async () => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const pendingIds = overdue.filter(b => b.status === 'pending').map(b => b.id);
-    if (pendingIds.length === 0) { toast.info('이미 모두 미납 처리되었습니다'); return; }
-
-    const { error } = await supabase
-      .from('billing_schedules')
-      .update({ status: 'overdue' } as any)
-      .in('id', pendingIds);
-
-    if (error) { toast.error('상태 변경 실패'); return; }
-    toast.success(`${pendingIds.length}건 미납 처리 완료`);
-    loadOverdue();
-  };
-
-  const calculateLateFees = async () => {
-    const rate = Number(lateFeeRate) / 100;
-    const today = new Date();
-    let updated = 0;
-
-    for (const b of overdue) {
-      const dueDate = new Date(b.due_date);
-      const daysLate = differenceInDays(today, dueDate);
-      const monthsLate = Math.max(1, Math.ceil(daysLate / 30));
-      const lateFee = Math.round(Number(b.final_amount) * rate * monthsLate);
-
-      if (lateFee !== Number(b.late_fee)) {
-        await supabase
-          .from('billing_schedules')
-          .update({ late_fee: lateFee, status: 'overdue' } as any)
-          .eq('id', b.id);
-        updated++;
-      }
-    }
-
-    toast.success(`${updated}건 연체료 계산 완료`);
-    loadOverdue();
-  };
-
-  const totalOverdueAmount = overdue.reduce((s, b) => s + Number(b.final_amount), 0);
-  const totalLateFee = overdue.reduce((s, b) => s + Number(b.late_fee), 0);
-
-  return (
-    <div className="space-y-4 mt-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button size="sm" variant="outline" onClick={loadOverdue} className="gap-1.5">
-          <RefreshCw className="w-3.5 h-3.5" />새로고침
-        </Button>
-        <Button size="sm" variant="destructive" onClick={markOverdueAll} className="gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5" />미납 일괄 처리
-        </Button>
-        <div className="flex items-center gap-1.5 ml-auto">
-          <Label className="text-xs whitespace-nowrap">월 연체율(%)</Label>
-          <Input type="number" value={lateFeeRate} onChange={e => setLateFeeRate(e.target.value)} className="h-8 w-16" />
-          <Button size="sm" variant="secondary" onClick={calculateLateFees} className="gap-1">
-            <Calculator className="w-3.5 h-3.5" />연체료 계산
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">총 미납 금액</p>
-            <p className="text-xl font-bold text-red-600">{totalOverdueAmount.toLocaleString()}원</p>
-            <p className="text-xs text-muted-foreground">{overdue.length}건</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">누적 연체료</p>
-            <p className="text-xl font-bold text-orange-600">{totalLateFee.toLocaleString()}원</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            미납자 목록 ({overdue.length}명)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
-          ) : overdue.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">🎉 미납자가 없습니다</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>학생</TableHead>
-                    <TableHead>청구월</TableHead>
-                    <TableHead className="text-right">미납금액</TableHead>
-                    <TableHead className="text-right">연체료</TableHead>
-                    <TableHead>납부기한</TableHead>
-                    <TableHead>연체일수</TableHead>
-                    <TableHead>연락처</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {overdue.map(b => {
-                    const daysLate = differenceInDays(new Date(), new Date(b.due_date));
-                    const student = (b as any).students;
-                    return (
-                      <TableRow key={b.id}>
-                        <TableCell className="font-medium">{student?.name || '-'}</TableCell>
-                        <TableCell>{b.billing_month}</TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">{Number(b.final_amount).toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-orange-600">
-                          {Number(b.late_fee) > 0 ? Number(b.late_fee).toLocaleString() : '-'}
-                        </TableCell>
-                        <TableCell>{b.due_date}</TableCell>
-                        <TableCell>
-                          <Badge variant={daysLate > 30 ? 'destructive' : 'secondary'}>{daysLate}일</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{student?.parent_phone || student?.phone || '-'}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+import {useState,useEffect} from 'react';
+import {Button} from '@/components/ui/button';
+import {Badge} from '@/components/ui/badge';
+import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/components/ui/table';
+import {Loader2,RefreshCw} from 'lucide-react';
+import {loadMonthLedger} from '@/lib/tuitionLedgerApi';
+import {dueDate,LEDGER_START} from '@/lib/tuitionLedger';
+import {getTodayKST} from '@/lib/utils';
+import {currentTuitionMonth,MonthInput} from './LedgerControls';
+import {StudentPaymentLink,useTuitionLedger} from './TuitionLedgerContext';
+export function OverdueList(){
+ const {revision}=useTuitionLedger();const [month,setMonth]=useState(currentTuitionMonth());const [rows,setRows]=useState<any[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');
+ async function load(){setLoading(true);setError('');try{const {students}=await loadMonthLedger(month);setRows(students.filter(s=>s.paidAmount<s.totalFee));}catch{setError('미납 목록을 불러오지 못했습니다');}finally{setLoading(false);}}
+ useEffect(()=>{load();},[month,revision]);
+ return <div className="space-y-4 mt-4"><div className="flex gap-2 items-center"><MonthInput min={LEDGER_START} value={month} onChange={v=>{if(v>=LEDGER_START)setMonth(v);}}/><Button variant="outline" size="icon" aria-label="미납 새로고침" onClick={load}><RefreshCw className="w-4 h-4"/></Button><span className="text-muted-foreground text-sm">미납 {rows.filter(s=>s.paidAmount===0).length}명 · 부분납 {rows.filter(s=>s.paidAmount>0).length}명</span></div><p className="font-bold text-lg">미납 잔액 <span className="text-destructive">{rows.reduce((sum,s)=>sum+s.totalFee-s.paidAmount,0).toLocaleString()}원</span></p>
+ {loading?<Loader2 className="animate-spin mx-auto"/>:error?<p role="alert" className="text-destructive">{error}</p>:<div className="overflow-x-auto border rounded-lg"><Table><TableHeader><TableRow>{['학생','청구월','원비','납부액','잔액','상태','납부기한','보호자 연락처'].map(h=><TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.map(s=><TableRow key={s.id}><TableCell><StudentPaymentLink id={s.id} name={s.name}/></TableCell><TableCell>{month}</TableCell><TableCell>{s.totalFee.toLocaleString()}원</TableCell><TableCell>{s.paidAmount.toLocaleString()}원</TableCell><TableCell className="text-destructive font-semibold">{(s.totalFee-s.paidAmount).toLocaleString()}원</TableCell><TableCell><Badge variant={s.paidAmount>0?'secondary':'destructive'}>{s.paidAmount>0?'부분납':'미납'}</Badge>{dueDate(month,s.payment_due_day)>=getTodayKST()&&<span className="block text-xs text-muted-foreground">기한 전</span>}</TableCell><TableCell>{dueDate(month,s.payment_due_day)}</TableCell><TableCell>{s.parent_phone||'—'}</TableCell></TableRow>)}</TableBody></Table>{!rows.length&&<p className="p-8 text-center text-muted-foreground">미납자가 없습니다</p>}</div>}
+ </div>;
 }
