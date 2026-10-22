@@ -65,6 +65,48 @@ export type Database = {
         }
         Relationships: []
       }
+      academy_profile: {
+        Row: {
+          academy_name: string
+          address: string
+          bank_account: string
+          bank_holder: string
+          bank_name: string
+          id: number
+          payssam_merchant: string
+          phone: string | null
+          registration_no: string
+          representative: string
+          updated_at: string
+        }
+        Insert: {
+          academy_name: string
+          address: string
+          bank_account: string
+          bank_holder: string
+          bank_name: string
+          id?: number
+          payssam_merchant: string
+          phone?: string | null
+          registration_no: string
+          representative: string
+          updated_at?: string
+        }
+        Update: {
+          academy_name?: string
+          address?: string
+          bank_account?: string
+          bank_holder?: string
+          bank_name?: string
+          id?: number
+          payssam_merchant?: string
+          phone?: string | null
+          registration_no?: string
+          representative?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       academy_schools: {
         Row: {
           aliases: string[]
@@ -1160,6 +1202,47 @@ export type Database = {
           record_count?: number
         }
         Relationships: []
+      }
+      deposit_aliases: {
+        Row: {
+          alias_name: string
+          confidence: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_ignore: boolean
+          note: string | null
+          student_id: string | null
+        }
+        Insert: {
+          alias_name: string
+          confidence?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_ignore?: boolean
+          note?: string | null
+          student_id?: string | null
+        }
+        Update: {
+          alias_name?: string
+          confidence?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_ignore?: boolean
+          note?: string | null
+          student_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deposit_aliases_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       event_acks: {
         Row: {
@@ -4113,38 +4196,62 @@ export type Database = {
       payment_records: {
         Row: {
           amount: number
+          billing_month: string | null
           billing_schedule_id: string | null
+          canceled_at: string | null
           created_at: string
+          external_id: string | null
           id: string
+          matched_by: string | null
           memo: string | null
+          needs_review: boolean
           paid_date: string
           payment_method: string
+          raw_text: string | null
           receipt_number: string | null
           recorded_by: string | null
+          review_note: string | null
+          source: string
           student_id: string
         }
         Insert: {
           amount: number
+          billing_month?: string | null
           billing_schedule_id?: string | null
+          canceled_at?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
+          matched_by?: string | null
           memo?: string | null
+          needs_review?: boolean
           paid_date: string
           payment_method?: string
+          raw_text?: string | null
           receipt_number?: string | null
           recorded_by?: string | null
+          review_note?: string | null
+          source?: string
           student_id: string
         }
         Update: {
           amount?: number
+          billing_month?: string | null
           billing_schedule_id?: string | null
+          canceled_at?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
+          matched_by?: string | null
           memo?: string | null
+          needs_review?: boolean
           paid_date?: string
           payment_method?: string
+          raw_text?: string | null
           receipt_number?: string | null
           recorded_by?: string | null
+          review_note?: string | null
+          source?: string
           student_id?: string
         }
         Relationships: [
@@ -8531,6 +8638,47 @@ export type Database = {
         }
         Relationships: []
       }
+      tuition_reminders: {
+        Row: {
+          billing_month: string
+          channel: string
+          created_at: string
+          id: string
+          result: string | null
+          sent_at: string
+          stage: number
+          student_id: string
+        }
+        Insert: {
+          billing_month: string
+          channel?: string
+          created_at?: string
+          id?: string
+          result?: string | null
+          sent_at?: string
+          stage: number
+          student_id: string
+        }
+        Update: {
+          billing_month?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          result?: string | null
+          sent_at?: string
+          stage?: number
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tuition_reminders_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -9699,6 +9847,10 @@ export type Database = {
       resolve_teacher_display_name_for_record: {
         Args: { _record_date?: string; _teacher_id: string }
         Returns: string
+      }
+      student_monthly_fee: {
+        Args: { _month: string; _student_id: string }
+        Returns: number
       }
       teacher_owns_student: {
         Args: { _student_id: string; _teacher_id: string }

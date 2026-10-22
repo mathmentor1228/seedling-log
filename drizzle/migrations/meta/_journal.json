@@ -162,6 +162,13 @@
       "when": 1792348772599,
       "tag": "0022_exam_teacher_feedback_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792691073024,
+      "tag": "0023_tuition_ledger_v1",
+      "breakpoints": true
     }
   ]
 }
