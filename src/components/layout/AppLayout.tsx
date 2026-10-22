@@ -43,6 +43,7 @@ import {
   CalendarClock,
   Share2,
 } from 'lucide-react';
+import { Pin, PinOff } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
