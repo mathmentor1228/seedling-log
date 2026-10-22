@@ -169,6 +169,13 @@
       "when": 1792691073024,
       "tag": "0023_tuition_ledger_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792696549520,
+      "tag": "0024_tuition_receipt_numbering",
+      "breakpoints": true
     }
   ]
 }

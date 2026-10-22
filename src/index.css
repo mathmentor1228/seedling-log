@@ -8,6 +8,10 @@
   :root {
     /* Light theme — kept for non-dashboard pages */
     --background: 210 40% 98%;
+    --tuition-teal: 172 66% 34%;
+    --receipt-paper: 0 0% 100%;
+    --receipt-ink: 0 0% 10%;
+    --receipt-line: 0 0% 25%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -123,6 +127,7 @@
   .dark {
     /* ──── Dark theme: #0A0A0F base ──── */
     --background: 240 33% 5%;
+    --tuition-teal: 172 56% 48%;
     --foreground: 240 5% 90%;
 
     --card: 240 13% 9%;

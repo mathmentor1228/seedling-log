@@ -1,4 +1,8 @@
 # Current task
+- [x] Implement tuition ledger shared month/fee rules and one-row-per-student billing generation.
+- [x] Add student payment details, receipts/bulk print, and review queue.
+- [x] Add receipt numbering and verify historical backfill, October paid status, and November generation (87 student rows; no 휴학 students).
+- [ ] Resolve 유나린 November fee mismatch — monthly fee function currently returns 525,000, but user specified 600,000; changing fee data is outside the attachment's receipt-only database scope.
 - [x] Add inline title, description, and assignee correction to new-registration office task details.
 - [x] Verify correction save/cancel and reload readback on a real registration task with unchanged contents; only task fields are updated.
 - [x] Allow choosing question-by-question analysis or overall teacher comment for individual exam submission.
