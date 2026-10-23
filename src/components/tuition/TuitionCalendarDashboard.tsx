@@ -358,7 +358,7 @@ export function TuitionCalendarDashboard() {
               <p className="text-sm text-muted-foreground text-center py-4">{search || statusFilter !== 'all' ? '조건에 맞는 학생이 없습니다' : '해당일 납부 대상 학생이 없습니다'}</p>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[980px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>이름</TableHead>
@@ -375,7 +375,7 @@ export function TuitionCalendarDashboard() {
                     {selectedStudents.map(s => (
                       <TableRow key={s.id} className={cn(s.isPaid && "opacity-60")}>
                         <TableCell className="font-medium"><StudentPaymentLink id={s.id} name={s.name} /></TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {s.school || '-'} {s.grade || ''}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs tabular-nums">
