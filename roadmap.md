@@ -1,4 +1,5 @@
 # Current task
+- [x] Add tuition main-tab student search, payment-status filters, and reset; verified 87 live students (44 unpaid/partial, 43 paid), detail opening, and narrow-screen display without changing payment data.
 - [x] Implement tuition ledger shared month/fee rules and one-row-per-student billing generation.
 - [x] Add student payment details, receipts/bulk print, and review queue.
 - [x] Add receipt numbering and verify historical backfill, October paid status, and November generation (87 student rows; no 휴학 students).
