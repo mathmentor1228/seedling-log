@@ -37,6 +37,10 @@ const sortableStudents = [
 ];
 
 describe('검색·필터 후 원비 목록 정렬', () => {
+  it('표시된 저장 청구기한을 현재 납입일보다 우선해 정렬한다', () => {
+    const rows = [{...sortableStudents[0], scheduledDueDate: '2026-10-02'}, {...sortableStudents[1], scheduledDueDate: '2026-10-24'}];
+    expect(sortTuitionStudents(rows, '2026-10', 'due_date', 'asc').map(s => s.id)).toEqual(['c', 'b']);
+  });
   it('등록된 납부 예정일을 오름차순·내림차순으로 정렬하고 같은 날짜는 이름순으로 표시한다', () => {
     expect(sortTuitionStudents(sortableStudents, '2026-10', 'due_date', 'asc').map(s => s.id)).toEqual(['a', 'b', 'c']);
     expect(sortTuitionStudents(sortableStudents, '2026-10', 'due_date', 'desc').map(s => s.id)).toEqual(['c', 'a', 'b']);

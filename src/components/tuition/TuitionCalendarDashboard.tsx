@@ -11,8 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
-import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { allRows, loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { supabase } from '@/integrations/supabase/client';
 import { dueDate } from '@/lib/tuitionLedger';
+import { scheduledPaymentDate, studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
+import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
@@ -28,6 +31,8 @@ interface StudentDue {
   id: string;
   name: string;
   payment_due_day: number;
+  scheduledDueDate?: string | null;
+  dueDateBasis?: 'billing' | 'current' | 'unknown';
   school: string | null;
   grade: string | null;
   parent_phone: string | null;
@@ -46,6 +51,7 @@ export function TuitionCalendarDashboard() {
   const [payDate, setPayDate] = useState(getTodayKST());
   const [students, setStudents] = useState<StudentDue[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<PaymentSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -72,8 +78,15 @@ export function TuitionCalendarDashboard() {
     setLoading(true);
     setLoadError('');
     try {
-      const ledger = await loadMonthLedger(monthStr);
-      setStudents(ledger.students);
+      const [ledger, billings] = await Promise.all([
+        loadMonthLedger(monthStr),
+        allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month', monthStr).order('id')),
+      ]);
+      setSchedules(billings);
+      setStudents(ledger.students.map(student => {
+        const scheduled = scheduledPaymentDate(student.id, monthStr, billings, student.payment_due_day);
+        return {...student, scheduledDueDate: scheduled.date, dueDateBasis: scheduled.basis};
+      }));
       setPayments(ledger.payments.filter(p => !p.canceled_at));
     } catch { setLoadError('수납 정보를 불러오지 못했습니다'); }
     finally { setLoading(false); }
@@ -95,7 +108,8 @@ export function TuitionCalendarDashboard() {
   const dayData = useMemo(() => {
     const map: Record<number, { due: number; paid: number; count: number; paidCount: number }> = {};
     for (const s of filteredStudents) {
-      const day = Number(dueDate(monthStr,s.payment_due_day).slice(-2));
+      if (!s.scheduledDueDate) continue;
+      const day = Number(s.scheduledDueDate.slice(-2));
       if (!map[day]) map[day] = { due: 0, paid: 0, count: 0, paidCount: 0 };
       map[day].due += s.totalFee;
       map[day].paid += s.paidAmount;
@@ -107,7 +121,7 @@ export function TuitionCalendarDashboard() {
 
   const selectedStudents = useMemo(() => {
     const selected = selectedDay === null ? filteredStudents
-      : filteredStudents.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
+      : filteredStudents.filter(s => s.scheduledDueDate && Number(s.scheduledDueDate.slice(-2)) === selectedDay);
     return sortTuitionStudents(selected, monthStr, sortKey, sortDirection);
   }, [filteredStudents, selectedDay, monthStr, sortKey, sortDirection]);
 
@@ -358,12 +372,13 @@ export function TuitionCalendarDashboard() {
               <p className="text-sm text-muted-foreground text-center py-4">{search || statusFilter !== 'all' ? '조건에 맞는 학생이 없습니다' : '해당일 납부 대상 학생이 없습니다'}</p>
             ) : (
               <div className="overflow-x-auto">
-                <Table className="min-w-[980px]">
+                <Table className="min-w-[1160px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>이름</TableHead>
                       <TableHead>학교/학년</TableHead>
                       <TableHead className="whitespace-nowrap">원비수납일자</TableHead>
+                      <TableHead className="whitespace-nowrap">실제 납부일 / 차이</TableHead>
                       <TableHead className="text-right">수강료</TableHead>
                       <TableHead className="text-right">납부액</TableHead>
                       <TableHead>상태</TableHead>
@@ -379,8 +394,13 @@ export function TuitionCalendarDashboard() {
                           {s.school || '-'} {s.grade || ''}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                          <div>{month}월 {Number(dueDate(monthStr, s.payment_due_day).slice(-2))}일</div>
-                          <div className="text-[10px] text-muted-foreground">납부 예정일</div>
+                          <div>{s.scheduledDueDate || '확인 필요'}</div>
+                          <div className="text-[10px] text-muted-foreground">{s.dueDateBasis === 'billing' ? '청구된 납부 예정일' : s.dueDateBasis === 'current' ? '현재 납입일 설정 기준' : '예정일 확인 필요'}</div>
+                        </TableCell>
+                        <TableCell className="min-w-52">
+                          {studentMonthPaymentDates(payments, s.id, monthStr).length ? <div className="space-y-2">
+                            {studentMonthPaymentDates(payments, s.id, monthStr).map(payment => <PaymentTiming key={payment.id} payment={payment} schedules={schedules} dueDay={s.payment_due_day} showDue={false} showAmount />)}
+                          </div> : <span className="text-xs text-muted-foreground">납부 기록 없음</span>}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {s.totalFee.toLocaleString()}원
