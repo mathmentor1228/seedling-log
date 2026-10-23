@@ -7069,6 +7069,44 @@ export type Database = {
           },
         ]
       }
+      student_fee_overrides: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          from_month: string
+          id: string
+          note: string | null
+          student_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          from_month: string
+          id?: string
+          note?: string | null
+          student_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          from_month?: string
+          id?: string
+          note?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_fee_overrides_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_group_members: {
         Row: {
           created_at: string
