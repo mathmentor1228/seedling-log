@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
@@ -16,11 +16,12 @@ import { dueDate } from '@/lib/tuitionLedger';
 import { MonthInput } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
+import { filterTuitionStudents, type TuitionStatusFilter } from './tuitionCalendarFilters';
 import {
   ChevronLeft, ChevronRight, Loader2, Check, Wallet, Users,
-  CalendarDays, TrendingUp, AlertTriangle
+  CalendarDays, TrendingUp, AlertTriangle, Search, X, RotateCcw
 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 interface StudentDue {
@@ -47,6 +48,8 @@ export function TuitionCalendarDashboard() {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TuitionStatusFilter>('all');
 
   // Payment modal
   const [payModalStudent, setPayModalStudent] = useState<StudentDue | null>(null);
@@ -82,9 +85,14 @@ export function TuitionCalendarDashboard() {
     return days;
   }, [currentMonth]);
 
+  const filteredStudents = useMemo(
+    () => filterTuitionStudents(students, search, statusFilter),
+    [students, search, statusFilter],
+  );
+
   const dayData = useMemo(() => {
     const map: Record<number, { due: number; paid: number; count: number; paidCount: number }> = {};
-    for (const s of students) {
+    for (const s of filteredStudents) {
       const day = Number(dueDate(monthStr,s.payment_due_day).slice(-2));
       if (!map[day]) map[day] = { due: 0, paid: 0, count: 0, paidCount: 0 };
       map[day].due += s.totalFee;
@@ -93,12 +101,23 @@ export function TuitionCalendarDashboard() {
       if (s.isPaid) map[day].paidCount += 1;
     }
     return map;
-  }, [students, monthStr]);
+  }, [filteredStudents, monthStr]);
 
   const selectedStudents = useMemo(() => {
-    if (selectedDay === null) return students;
-    return students.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
-  }, [students, selectedDay, monthStr]);
+    if (selectedDay === null) return filteredStudents;
+    return filteredStudents.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
+  }, [filteredStudents, selectedDay, monthStr]);
+
+  const resetFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setSelectedDay(null);
+  };
+
+  const changeMonth = (nextMonth: Date) => {
+    setCurrentMonth(nextMonth);
+    setSelectedDay(null);
+  };
 
   // Summary stats
   const totalDue = students.reduce((s, st) => s + st.totalFee, 0);
@@ -188,17 +207,43 @@ export function TuitionCalendarDashboard() {
         </Card>
       </div>
 
+      <div className="flex flex-col gap-3" role="search" aria-label="납부 대상 학생 검색">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative w-full lg:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="학생 이름, 학교, 학년 검색"
+              placeholder="이름 · 학교 · 학년 검색"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSelectedDay(null); }}
+              className="pl-9 pr-10"
+            />
+            {search && <Button variant="ghost" size="icon" aria-label="검색어 지우기" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setSearch('')}><X className="h-4 w-4" /></Button>}
+          </div>
+          <ToggleGroup type="single" value={statusFilter} onValueChange={value => { if (value === 'all' || value === 'unpaid' || value === 'paid') setStatusFilter(value); }} variant="outline" size="sm" aria-label="수납 상태 필터" className="grid w-full grid-cols-3 lg:w-auto">
+            <ToggleGroupItem value="all" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-primary/15 data-[state=on]:text-primary">전체 <span className="text-xs tabular-nums">{students.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="unpaid" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="paid" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-success/15 data-[state=on]:text-success"><Check className="h-3.5 w-3.5 shrink-0" />완납 <span className="text-xs tabular-nums">{paidStudents.length}</span></ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <div className="flex min-h-7 flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground" role="status" aria-live="polite">조회 {selectedStudents.length}명 / 전체 {students.length}명</span>
+          {selectedDay !== null && <Button variant="secondary" size="sm" className="h-7 gap-1 text-xs" aria-label="선택 날짜 해제" onClick={() => setSelectedDay(null)}>{month}월 {selectedDay}일<X className="h-3 w-3" /></Button>}
+          {(search || statusFilter !== 'all' || selectedDay !== null) && <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1 text-xs" onClick={resetFilters}><RotateCcw className="h-3 w-3" />초기화</Button>}
+        </div>
+      </div>
+
       {/* Calendar */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" aria-label="이전 달" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <Button variant="ghost" size="icon" aria-label="이전 달" onClick={() => changeMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <CardTitle className="text-lg">
               {format(currentMonth, 'yyyy년 M월', { locale: ko })}
             </CardTitle>
-            <Button variant="ghost" size="icon" aria-label="다음 달" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <Button variant="ghost" size="icon" aria-label="다음 달" onClick={() => changeMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
@@ -225,11 +270,14 @@ export function TuitionCalendarDashboard() {
               const allPaid = hasData && data.paidCount === data.count;
 
               return (
-                <div
+                <Button
+                  variant="ghost"
                   key={dayNum}
+                  aria-label={`${month}월 ${dayNum}일 납부 대상`}
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedDay(isSelected ? null : dayNum)}
                   className={cn(
-                    "bg-background p-1.5 min-h-[80px] cursor-pointer transition-colors hover:bg-accent/50",
+                    "flex h-auto min-h-[80px] min-w-0 flex-col items-start justify-start rounded-none bg-background p-1.5 text-left transition-colors hover:bg-accent/50",
                     isSelected && "ring-2 ring-primary ring-inset bg-primary/5",
                     isToday && "bg-accent/30"
                   )}
@@ -262,7 +310,7 @@ export function TuitionCalendarDashboard() {
                       ) : null}
                     </div>
                   )}
-                </div>
+                </Button>
               );
             })}
           </div>
@@ -273,7 +321,7 @@ export function TuitionCalendarDashboard() {
       {(
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-base flex flex-wrap items-center gap-2">
               <CalendarDays className="w-4 h-4" />
               {month}월 {selectedDay === null ? '전체 납부 대상' : `${selectedDay}일 납부 대상`}
               <Badge variant="outline" className="ml-auto">
@@ -283,7 +331,7 @@ export function TuitionCalendarDashboard() {
           </CardHeader>
           <CardContent>
             {selectedStudents.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">해당일 납부 대상 학생이 없습니다</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{search || statusFilter !== 'all' ? '조건에 맞는 학생이 없습니다' : '해당일 납부 대상 학생이 없습니다'}</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -349,7 +397,7 @@ export function TuitionCalendarDashboard() {
                   </TableBody>
                 </Table>
                 {/* Day summary */}
-                <div className="flex justify-end gap-4 mt-3 text-sm border-t pt-3">
+                <div className="flex flex-wrap justify-end gap-4 mt-3 text-sm border-t pt-3">
                   <span className="text-muted-foreground">
                     청구: <span className="font-medium text-foreground">{selectedStudents.reduce((s, st) => s + st.totalFee, 0).toLocaleString()}원</span>
                   </span>
