@@ -11,6 +11,7 @@ import { EnglishPayrollTab } from './EnglishPayrollTab';
 import { useAuth } from '@/lib/auth';
 import { TuitionLedgerProvider } from './TuitionLedgerContext';
 import { PaymentReviewQueue } from './PaymentReviewQueue';
+import { DailyPaymentRecords } from './DailyPaymentRecords';
 
 export function TuitionDashboard() {
   const [tab, setTab] = useState('calendar');
@@ -30,6 +31,9 @@ export function TuitionDashboard() {
             </TabsTrigger>
             <TabsTrigger value="payments" className="gap-1.5">
               <Receipt className="w-4 h-4" />납부이력
+            </TabsTrigger>
+            <TabsTrigger value="daily" className="gap-1.5">
+              <CalendarDays className="w-4 h-4" />날짜별 수납
             </TabsTrigger>
             <TabsTrigger value="overdue" className="gap-1.5">
               <AlertTriangle className="w-4 h-4" />미납
@@ -52,6 +56,7 @@ export function TuitionDashboard() {
 
           <TabsContent value="calendar"><TuitionCalendarDashboard /></TabsContent>
           <TabsContent value="payments"><PaymentRecords /></TabsContent>
+          <TabsContent value="daily"><DailyPaymentRecords onReview={() => setTab('review')} /></TabsContent>
           <TabsContent value="overdue"><OverdueList /></TabsContent>
           <TabsContent value="siblings"><SiblingGroupManager /></TabsContent>
           <TabsContent value="billing"><BillingGenerator /></TabsContent>
