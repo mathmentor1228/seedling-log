@@ -176,6 +176,13 @@
       "when": 1792696549520,
       "tag": "0024_tuition_receipt_numbering",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792731770233,
+      "tag": "0025_student_monthly_fee_overrides",
+      "breakpoints": true
     }
   ]
 }

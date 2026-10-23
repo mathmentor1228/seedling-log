@@ -1,10 +1,10 @@
 # Current task
-- [ ] Apply student monthly fee fixing, its UI, pending-only recalculation, and verification — blocked: request #27 requires its exact SQL attachment, but only `27_학생별_월원비_고정.md` was uploaded; awaiting `27_학생별_월원비_고정.sql` before changing fees or screens.
+- [x] Apply student monthly fee fixing and its UI — original SQL applied byte-for-byte, generated types refreshed, override save/reload/delete verified using a zero-fee teacher test account and cleaned up, and 34 targeted tests passed; no publishing or function deployments.
 - [x] Add tuition main-tab student search, payment-status filters, and reset; verified 87 live students (44 unpaid/partial, 43 paid), detail opening, and narrow-screen display without changing payment data.
 - [x] Implement tuition ledger shared month/fee rules and one-row-per-student billing generation.
 - [x] Add student payment details, receipts/bulk print, and review queue.
 - [x] Add receipt numbering and verify historical backfill, October paid status, and November generation (87 student rows; no 휴학 students).
-- [ ] Resolve 유나린 November fee mismatch — request #27 authorizes 600,000 from November while preserving October at 525,000; blocked on its missing original SQL attachment.
+- [x] Resolve 유나린 November fee mismatch — authenticated monthly fee reads confirm October 525,000 and November 600,000; October has no unpaid month, November billing is 600,000, and the November recalculation button reports 0 changed across 87 student rows with no 휴학 students.
 - [x] Add inline title, description, and assignee correction to new-registration office task details.
 - [x] Verify correction save/cancel and reload readback on a real registration task with unchanged contents; only task fields are updated.
 - [x] Allow choosing question-by-question analysis or overall teacher comment for individual exam submission.

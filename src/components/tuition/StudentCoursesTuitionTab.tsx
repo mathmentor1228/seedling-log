@@ -15,9 +15,11 @@ import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent,
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { buildTeacherChangeNote } from '@/lib/teacherChangeLog';
-import { monthlyFees } from '@/lib/tuitionLedgerApi';
+import { monthlyFees, studentFeeOverrides } from '@/lib/tuitionLedgerApi';
 import { currentTuitionMonth } from './LedgerControls';
 import { paymentMonth } from '@/lib/tuitionLedger';
+import { applyingFeeOverride, type FeeOverride } from '@/lib/tuitionFeeOverrides';
+import { StudentFeeOverrideSection } from './StudentFeeOverrideSection';
 
 
 interface Props {
@@ -49,6 +51,9 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [monthlyNet, setMonthlyNet] = useState<number | null>(null);
+  const [overrides, setOverrides] = useState<FeeOverride[]>([]);
+  const [overrideError, setOverrideError] = useState('');
+  const [enrollmentStatus, setEnrollmentStatus] = useState('');
   const [siblingCount, setSiblingCount] = useState(0);
 
   const [showAddCourse, setShowAddCourse] = useState(false);
@@ -80,7 +85,8 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const loadAll = async () => {
     setLoading(true);
     setMonthlyNet(null);
-    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes, changesRes] = await Promise.all([
+    setOverrides([]); setOverrideError('');
+    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes, changesRes, overridesRes] = await Promise.all([
       supabase.from('student_courses')
         .select('*, custom_monthly_fee, course_policies(course_name, subject, grade_target, monthly_fee)')
         .eq('student_id', studentId)
@@ -103,14 +109,18 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         .not('full_name', 'is', null)
         .order('full_name'),
       supabase.from('students')
-        .select('sibling_group_id')
+        .select('sibling_group_id,enrollment_status')
         .eq('id', studentId)
         .single(),
       supabase.from('student_course_teacher_changes')
         .select('*')
         .eq('student_id', studentId)
         .order('effective_date', { ascending: false }),
+      studentFeeOverrides(studentId).then(rows => ({ rows, error: '' })).catch(() => ({ rows: [] as FeeOverride[], error: '월 원비 고정을 불러오지 못했습니다' })),
     ]);
+
+    setOverrides(overridesRes.rows); setOverrideError(overridesRes.error);
+    setEnrollmentStatus(studentRes.data?.enrollment_status || '');
 
     setTeacherChanges((changesRes.data || []) as any);
 
@@ -150,6 +160,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
 
   // Discount calculation
   const feeMonth = currentTuitionMonth();
+  const appliedOverride = applyingFeeOverride(overrides, feeMonth, enrollmentStatus);
   const activeCourses = courses.filter(c => c.is_active && c.enrollment_date <= `${feeMonth}-31` && (!c.end_date || c.end_date >= `${feeMonth}-01`));
   const uniqueSubjects = new Set(activeCourses.map(c => (c as any).course_policies?.subject).filter(Boolean));
   const subjectCount = uniqueSubjects.size;
@@ -325,14 +336,15 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         <Card><CardContent className="p-3">
           <p className="text-xs text-muted-foreground">월 수강료</p>
           <p className="text-lg font-bold">{monthlyNet == null ? '확인 필요' : `${monthlyNet.toLocaleString()}원`}</p>
-          {totalDiscount > 0 && (
+          {appliedOverride && <Badge variant="outline" className="mt-1 whitespace-normal">고정 {appliedOverride.amount.toLocaleString()}원 ({appliedOverride.from_month}~)</Badge>}
+          {totalDiscount > 0 && !appliedOverride && (
             <p className="text-[10px] text-green-600">-{totalDiscount.toLocaleString()}원 할인</p>
           )}
         </CardContent></Card>
         <Card><CardContent className="p-3">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Percent className="w-3 h-3" />할인 내역</p>
           <div className="text-xs mt-0.5 space-y-0.5">
-            {hasAnyCustomFee ? (
+            {appliedOverride ? <p className="text-muted-foreground">월 원비 고정 금액 사용</p> : hasAnyCustomFee ? (
               <p className="text-blue-600">직접지정 금액 사용</p>
             ) : (
               <>
@@ -348,6 +360,8 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
           <p className={cn("text-lg font-bold", unpaidCount > 0 ? "text-destructive" : "")}>{unpaidCount}건</p>
         </CardContent></Card>
       </div>
+
+      <StudentFeeOverrideSection key={studentId} studentId={studentId} rows={overrides} error={overrideError} onChanged={loadAll} />
 
       {/* View toggle */}
       <div className="flex gap-2">
