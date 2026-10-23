@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { billingDisplayStatus, paidForMonth, paymentMonth } from './tuitionLedger';
 import { getTodayKST } from './utils';
+import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
 
 // Page every ledger query so row caps never turn a partial read into "unpaid".
 export async function allRows(query: () => any): Promise<any[]> {
@@ -18,6 +19,27 @@ export async function monthlyFees(ids:string[],month:string):Promise<Record<stri
     while(index<ids.length) { const id=ids[index++]; const {data,error}=await supabase.rpc('student_monthly_fee',{_student_id:id,_month:month}); if(error) throw error; if(data==null) throw new Error('월 원비 조회 실패'); fees[id]=Number(data); }
   }));
   return fees;
+}
+export async function studentFeeOverrides(studentId: string): Promise<FeeOverride[]> {
+  return allRows(() => supabase.from('student_fee_overrides').select('id,from_month,amount,note').eq('student_id', studentId).order('from_month', { ascending: false }).order('id'));
+}
+export async function recalculatePendingBillings(month: string): Promise<{ changed: number; skipped: number }> {
+  const rows = await allRows(() => supabase.from('billing_schedules').select('*').eq('billing_month', month).eq('status', 'pending').order('id'));
+  const fees = await monthlyFees([...new Set<string>(rows.map(row => row.student_id))], month);
+  const changes = pendingRepriceChanges(rows, fees, month);
+  let changed = 0, skipped = 0;
+  for (const change of changes) {
+    const { row } = change;
+    // Recheck status and amounts in the write itself; preserve concurrent payments/edits.
+    let query = supabase.from('billing_schedules').update({ base_amount: change.base_amount, final_amount: change.final_amount })
+      .eq('id', row.id).eq('billing_month', month).eq('status', 'pending')
+      .eq('base_amount', row.base_amount).eq('final_amount', row.final_amount).eq('discount_amount', row.discount_amount);
+    query = row.extra_amount == null ? query.is('extra_amount', null) : query.eq('extra_amount', row.extra_amount);
+    const { data, error } = await query.select('id');
+    if (error) throw new Error(`${changed}건 변경 후 중단됐습니다. 청구 목록을 확인하고 다시 시도해주세요`);
+    if (data?.length) changed += data.length; else skipped++;
+  }
+  return { changed, skipped };
 }
 export async function getMonthPayments(month:string) {
   const rows=await allRows(()=>supabase.from('payment_records').select('*, billing_schedules(billing_month)').or(`billing_month.eq.${month},billing_month.is.null`).order('id'));
