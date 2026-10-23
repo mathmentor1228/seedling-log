@@ -1,4 +1,5 @@
 # Current task
+- [ ] Add sorting choices to the filtered tuition payment list and show each student's scheduled tuition collection date; verify read-only without publishing.
 - [x] Apply student monthly fee fixing and its UI — original SQL applied byte-for-byte, generated types refreshed, override save/reload/delete verified using a zero-fee teacher test account and cleaned up, and 34 targeted tests passed; no publishing or function deployments.
 - [x] Add tuition main-tab student search, payment-status filters, and reset; verified 87 live students (44 unpaid/partial, 43 paid), detail opening, and narrow-screen display without changing payment data.
 - [x] Implement tuition ledger shared month/fee rules and one-row-per-student billing generation.
