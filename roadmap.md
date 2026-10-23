@@ -1,4 +1,5 @@
 # Current task
+- [ ] Recheck the reuploaded monthly fee fixing request against the already-applied original, current monthly fees/billings, and existing UI without duplicate migration or publishing.
 - [x] Add sorting choices to the filtered tuition payment list and show scheduled tuition collection dates; 27 targeted tests passed and authenticated read-only checks verified 87 students, search, 44 unpaid/partial students, date/name/fee sorting, calendar-day selection, and desktop/narrow layouts; no records changed or publishing.
 - [x] Apply student monthly fee fixing and its UI — original SQL applied byte-for-byte, generated types refreshed, override save/reload/delete verified using a zero-fee teacher test account and cleaned up, and 34 targeted tests passed; no publishing or function deployments.
 - [x] Add tuition main-tab student search, payment-status filters, and reset; verified 87 live students (44 unpaid/partial, 43 paid), detail opening, and narrow-screen display without changing payment data.
