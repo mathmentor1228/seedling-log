@@ -16,10 +16,10 @@ import { dueDate } from '@/lib/tuitionLedger';
 import { MonthInput } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
-import { filterTuitionStudents, type TuitionStatusFilter } from './tuitionCalendarFilters';
+import { filterTuitionStudents, sortTuitionStudents, type TuitionStatusFilter, type TuitionSortKey, type TuitionSortDirection } from './tuitionCalendarFilters';
 import {
   ChevronLeft, ChevronRight, Loader2, Check, Wallet, Users,
-  CalendarDays, TrendingUp, AlertTriangle, Search, X, RotateCcw
+  CalendarDays, TrendingUp, AlertTriangle, Search, X, RotateCcw, ArrowUpNarrowWide, ArrowDownWideNarrow
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -50,6 +50,8 @@ export function TuitionCalendarDashboard() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TuitionStatusFilter>('all');
+  const [sortKey, setSortKey] = useState<TuitionSortKey>('due_date');
+  const [sortDirection, setSortDirection] = useState<TuitionSortDirection>('asc');
 
   // Payment modal
   const [payModalStudent, setPayModalStudent] = useState<StudentDue | null>(null);
@@ -104,9 +106,10 @@ export function TuitionCalendarDashboard() {
   }, [filteredStudents, monthStr]);
 
   const selectedStudents = useMemo(() => {
-    if (selectedDay === null) return filteredStudents;
-    return filteredStudents.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
-  }, [filteredStudents, selectedDay, monthStr]);
+    const selected = selectedDay === null ? filteredStudents
+      : filteredStudents.filter(s => Number(dueDate(monthStr,s.payment_due_day).slice(-2)) === selectedDay);
+    return sortTuitionStudents(selected, monthStr, sortKey, sortDirection);
+  }, [filteredStudents, selectedDay, monthStr, sortKey, sortDirection]);
 
   const resetFilters = () => {
     setSearch('');
@@ -321,24 +324,46 @@ export function TuitionCalendarDashboard() {
       {(
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex flex-wrap items-center gap-2">
-              <CalendarDays className="w-4 h-4" />
-              {month}월 {selectedDay === null ? '전체 납부 대상' : `${selectedDay}일 납부 대상`}
-              <Badge variant="outline" className="ml-auto">
-                {selectedStudents.length}명
-              </Badge>
-            </CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <CardTitle className="text-base flex flex-wrap items-center gap-2">
+                <CalendarDays className="w-4 h-4" />
+                {month}월 {selectedDay === null ? '전체 납부 대상' : `${selectedDay}일 납부 대상`}
+                <Badge variant="outline">{selectedStudents.length}명</Badge>
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="tuition-list-sort" className="shrink-0 text-xs text-muted-foreground">정렬</Label>
+                <Select value={sortKey} onValueChange={value => {
+                  if (value === 'due_date' || value === 'name' || value === 'school' || value === 'fee' || value === 'unpaid_amount') setSortKey(value);
+                }}>
+                  <SelectTrigger id="tuition-list-sort" aria-label="납부 목록 정렬방식" className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="due_date">원비수납일자 순</SelectItem>
+                    <SelectItem value="name">이름 순</SelectItem>
+                    <SelectItem value="school">학교/학년 순</SelectItem>
+                    <SelectItem value="fee">수강료 순</SelectItem>
+                    <SelectItem value="unpaid_amount">미납액 순</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0"
+                  aria-label={`정렬순서: ${sortDirection === 'asc' ? '오름차순' : '내림차순'}`}
+                  title={`${sortDirection === 'asc' ? '오름차순 · 내림차순으로 변경' : '내림차순 · 오름차순으로 변경'}`}
+                  onClick={() => setSortDirection(current => current === 'asc' ? 'desc' : 'asc')}>
+                  {sortDirection === 'asc' ? <ArrowUpNarrowWide className="h-4 w-4" /> : <ArrowDownWideNarrow className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {selectedStudents.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">{search || statusFilter !== 'all' ? '조건에 맞는 학생이 없습니다' : '해당일 납부 대상 학생이 없습니다'}</p>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[980px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>이름</TableHead>
                       <TableHead>학교/학년</TableHead>
+                      <TableHead className="whitespace-nowrap">원비수납일자</TableHead>
                       <TableHead className="text-right">수강료</TableHead>
                       <TableHead className="text-right">납부액</TableHead>
                       <TableHead>상태</TableHead>
@@ -350,8 +375,12 @@ export function TuitionCalendarDashboard() {
                     {selectedStudents.map(s => (
                       <TableRow key={s.id} className={cn(s.isPaid && "opacity-60")}>
                         <TableCell className="font-medium"><StudentPaymentLink id={s.id} name={s.name} /></TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {s.school || '-'} {s.grade || ''}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                          <div>{month}월 {Number(dueDate(monthStr, s.payment_due_day).slice(-2))}일</div>
+                          <div className="text-[10px] text-muted-foreground">납부 예정일</div>
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {s.totalFee.toLocaleString()}원
