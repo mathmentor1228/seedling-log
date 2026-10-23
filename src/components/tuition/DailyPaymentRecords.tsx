@@ -12,6 +12,8 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 import {AlertTriangle, CalendarDays, Loader2, Receipt, RefreshCw} from 'lucide-react';
 import {SourceBadge, currentTuitionMonth} from './LedgerControls';
 import {StudentPaymentLink, useTuitionLedger} from './TuitionLedgerContext';
+import {PaymentTiming} from './PaymentTiming';
+import {type PaymentSchedule} from '@/lib/tuitionPaymentDates';
 import {filterDailyPayments, groupDailyPayments, IMPORTED_PAYMENT_SOURCES, paymentRecordDate, paymentRecordState, summarizeDailyPayments, type DailyPayment, type DailyPaymentFilters} from './dailyPaymentSummary';
 
 const money = (value: number) => `${value.toLocaleString()}원`;
@@ -21,6 +23,7 @@ const matchLabels: Record<string, string> = {name: '이름 매칭', alias: '입�
 export function DailyPaymentRecords({onReview}: {onReview: () => void}) {
   const {revision, openReceipt} = useTuitionLedger();
   const [payments, setPayments] = useState<DailyPayment[]>([]);
+  const [schedules, setSchedules] = useState<PaymentSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
@@ -30,8 +33,11 @@ export function DailyPaymentRecords({onReview}: {onReview: () => void}) {
     let alive = true;
     setLoading(true);
     setError('');
-    allRows(() => supabase.from('payment_records').select('*,students(name,school,grade),billing_schedules(billing_month)').order('paid_date', {ascending: false}).order('id'))
-      .then(rows => {if (alive) setPayments(rows);})
+    Promise.all([
+      allRows(() => supabase.from('payment_records').select('*,students(name,school,grade,payment_due_day),billing_schedules(billing_month,due_date,status)').order('paid_date', {ascending: false}).order('id')),
+      allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').order('id')),
+    ])
+      .then(([rows, billings]) => {if (alive) {setPayments(rows); setSchedules(billings);}})
       .catch(() => {if (alive) setError('날짜별 수납 내역을 불러오지 못했습니다');})
       .finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
@@ -81,14 +87,14 @@ export function DailyPaymentRecords({onReview}: {onReview: () => void}) {
             {group.canceled > 0 && <span className="text-muted-foreground">취소 / 제외 {group.canceled}건 · {money(group.canceledAmount)}</span>}
           </span>
         </summary>
-        <div className="overflow-x-auto"><Table><TableHeader><TableRow>{['학생', '금액', '귀속월', '결제일', '장부 등록일', '출처', '처리 확인', '상세 / 메모', '영수증'].map(heading => <TableHead key={heading} className="whitespace-nowrap">{heading}</TableHead>)}</TableRow></TableHeader><TableBody>
+        <div className="overflow-x-auto"><Table><TableHeader><TableRow>{['학생', '금액', '귀속월', '예정일 / 실제 결제일 / 차이', '장부 등록일', '출처', '처리 확인', '상세 / 메모', '영수증'].map(heading => <TableHead key={heading} className="whitespace-nowrap">{heading}</TableHead>)}</TableRow></TableHeader><TableBody>
           {group.payments.map(payment => {
             const state = paymentRecordState(payment);
             return <TableRow key={payment.id} className={state === 'canceled' ? 'opacity-60' : ''}>
               <TableCell className="whitespace-nowrap">{payment.student_id ? <StudentPaymentLink id={payment.student_id} name={payment.students?.name || '미지정'}/> : '미지정'}<div className="text-xs text-muted-foreground">{payment.students?.school} {payment.students?.grade}</div></TableCell>
               <TableCell className="whitespace-nowrap font-semibold">{money(Number(payment.amount))}</TableCell>
               <TableCell className="whitespace-nowrap">{paymentMonth(payment) || '확인 필요'}</TableCell>
-              <TableCell className="whitespace-nowrap">{payment.paid_date}</TableCell>
+               <TableCell><PaymentTiming payment={payment} schedules={schedules} dueDay={payment.students?.payment_due_day}/></TableCell>
               <TableCell className="whitespace-nowrap">{paymentRecordDate(payment, 'registered') || '—'}</TableCell>
               <TableCell><SourceBadge source={payment.source}/></TableCell>
               <TableCell className="whitespace-nowrap"><Badge variant={state === 'review' ? 'warning' : state === 'canceled' ? 'muted' : 'success'}>{stateLabels[state]}</Badge><div className="mt-1 text-xs text-muted-foreground">{payment.matched_by ? matchLabels[payment.matched_by] || payment.matched_by : '—'}</div></TableCell>

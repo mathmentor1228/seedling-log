@@ -15,7 +15,8 @@ export interface DailyPayment extends LedgerPayment {
   memo?: string | null;
   external_id?: string | null;
   payment_method?: string;
-  students?: {name?: string; school?: string | null; grade?: string | null} | null;
+  students?: {name?: string; school?: string | null; grade?: string | null; payment_due_day?: number | null} | null;
+  billing_schedules?: {billing_month?: string | null; due_date?: string | null; status?: string} | null;
 }
 export interface DailyPaymentFilters {
   from: string;

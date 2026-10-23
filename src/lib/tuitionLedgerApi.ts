@@ -42,7 +42,7 @@ export async function recalculatePendingBillings(month: string): Promise<{ chang
   return { changed, skipped };
 }
 export async function getMonthPayments(month:string) {
-  const rows=await allRows(()=>supabase.from('payment_records').select('*, billing_schedules(billing_month)').or(`billing_month.eq.${month},billing_month.is.null`).order('id'));
+  const rows=await allRows(()=>supabase.from('payment_records').select('*, billing_schedules(billing_month,due_date,status)').or(`billing_month.eq.${month},billing_month.is.null`).order('id'));
   return rows.filter(p=>paymentMonth(p)===month);
 }
 export async function loadMonthLedger(month:string) {

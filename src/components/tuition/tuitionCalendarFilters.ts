@@ -31,6 +31,7 @@ export function filterTuitionStudents<T extends FilterableStudent>(
 interface SortableStudent extends FilterableStudent {
   id: string;
   payment_due_day: number;
+  scheduledDueDate?: string | null;
   paidAmount: number;
 }
 
@@ -47,7 +48,8 @@ export function sortTuitionStudents<T extends SortableStudent>(
     let result = 0;
     switch (key) {
       case 'due_date':
-        result = dueDate(month, a.payment_due_day).localeCompare(dueDate(month, b.payment_due_day));
+        result = (a.scheduledDueDate === undefined ? dueDate(month, a.payment_due_day) : a.scheduledDueDate || '9999-12-31')
+          .localeCompare(b.scheduledDueDate === undefined ? dueDate(month, b.payment_due_day) : b.scheduledDueDate || '9999-12-31');
         break;
       case 'name':
         result = koreanOrder.compare(a.name, b.name);
