@@ -221,9 +221,9 @@ export function TuitionCalendarDashboard() {
             {search && <Button variant="ghost" size="icon" aria-label="검색어 지우기" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setSearch('')}><X className="h-4 w-4" /></Button>}
           </div>
           <ToggleGroup type="single" value={statusFilter} onValueChange={value => { if (value === 'all' || value === 'unpaid' || value === 'paid') setStatusFilter(value); }} variant="outline" size="sm" aria-label="수납 상태 필터" className="grid w-full grid-cols-3 lg:w-auto">
-            <ToggleGroupItem value="all" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-primary/15 data-[state=on]:text-primary">전체 <span className="text-xs tabular-nums">{students.length}</span></ToggleGroupItem>
-            <ToggleGroupItem value="unpaid" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
-            <ToggleGroupItem value="paid" className="gap-1.5 whitespace-nowrap data-[state=on]:bg-success/15 data-[state=on]:text-success"><Check className="h-3.5 w-3.5 shrink-0" />완납 <span className="text-xs tabular-nums">{paidStudents.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="all" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-primary/15 data-[state=on]:text-primary">전체 <span className="text-xs tabular-nums">{students.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="unpaid" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="paid" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-success/15 data-[state=on]:text-success"><Check className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />완납 <span className="text-xs tabular-nums">{paidStudents.length}</span></ToggleGroupItem>
           </ToggleGroup>
         </div>
         <div className="flex min-h-7 flex-wrap items-center gap-2 text-sm">
