@@ -5,23 +5,25 @@ import {Button} from '@/components/ui/button';
 import {Table,TableHeader,TableHead,TableRow,TableBody,TableCell} from '@/components/ui/table';
 import {Loader2,Receipt,XCircle,RefreshCw} from 'lucide-react';
 import {toast} from 'sonner';
-import {allRows,cancelPayment,monthlyFees} from '@/lib/tuitionLedgerApi';
+import {allRows,cancelPayment,monthlyFees,studentFeeOverrides} from '@/lib/tuitionLedgerApi';
+import {applyingFeeOverride,type FeeOverride} from '@/lib/tuitionFeeOverrides';
 import {billingDisplayStatus,ledgerMonths,paidForMonth,paymentMonth,paymentReference} from '@/lib/tuitionLedger';
 import {formatStudentGrade,getTodayKST} from '@/lib/utils';
 import {BillingStatusBadge,SourceBadge,currentTuitionMonth} from './LedgerControls';
 export function StudentPaymentDetail({studentId,onClose,onReceipt,onChanged}:{studentId:string|null;onClose:()=>void;onReceipt:(p:any)=>void;onChanged:()=>void}) {
- const [data,setData]=useState<{student:any;billings:any[];payments:any[];unpaid:any[]}|null>(null);
+ const [data,setData]=useState<{student:any;billings:any[];payments:any[];unpaid:any[];override?:FeeOverride}|null>(null);
  const [error,setError]=useState('');const [version,setVersion]=useState(0);const [canceling,setCanceling]=useState('');
  useEffect(()=>{ if(!studentId)return;let alive=true;setData(null);setError('');
   (async()=>{
-   const [s,billings,payments]=await Promise.all([
-    supabase.from('students').select('id,name,school,grade,school_level,grade_year,payment_due_day,parent_phone,tuition_memo,deposit_name').eq('id',studentId).single(),
+   const [s,billings,payments,overrides]=await Promise.all([
+    supabase.from('students').select('id,name,school,grade,school_level,grade_year,payment_due_day,parent_phone,tuition_memo,deposit_name,enrollment_status').eq('id',studentId).single(),
     allRows(()=>supabase.from('billing_schedules').select('*').eq('student_id',studentId).order('billing_month',{ascending:false}).order('id')),
     allRows(()=>supabase.from('payment_records').select('*,billing_schedules(billing_month)').eq('student_id',studentId).order('paid_date',{ascending:false}).order('id')),
+    studentFeeOverrides(studentId),
    ]);if(s.error)throw s.error;
    const unpaid:any[]=[];
    for(const month of ledgerMonths(currentTuitionMonth())){const fee=(await monthlyFees([studentId],month))[studentId];const paid=paidForMonth(payments,studentId,month);if(fee>paid)unpaid.push({month,fee,paid});}
-   if(alive)setData({student:s.data,billings,payments,unpaid});
+   if(alive)setData({student:s.data,billings,payments,unpaid,override:applyingFeeOverride(overrides,currentTuitionMonth(),s.data?.enrollment_status||'')});
   })().catch(()=>{if(alive)setError('수납 상세내역을 불러오지 못했습니다');});return()=>{alive=false;};
  },[studentId,version]);
  async function cancel(p:any){if(!window.confirm(`${p.paid_date} ${Number(p.amount).toLocaleString()}원 납부를 취소할까요? 기록과 영수증 번호는 유지됩니다.`))return;setCanceling(p.id);try{const warning=await cancelPayment(p);warning?toast.warning(warning):toast.success('납부 취소 완료');setVersion(v=>v+1);onChanged();}catch{toast.error('취소하지 못했습니다');}finally{setCanceling('');}}
@@ -29,7 +31,7 @@ export function StudentPaymentDetail({studentId,onClose,onReceipt,onChanged}:{st
  {error?<div><p role="alert" className="text-destructive">{error}</p><Button variant="outline" onClick={()=>setVersion(v=>v+1)}><RefreshCw className="w-4 h-4 mr-1"/>다시 불러오기</Button></div>:!data?<Loader2 className="mx-auto animate-spin"/>:<>
   <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm border-b pb-4">
    <div><dt className="text-muted-foreground">학교/학년</dt><dd>{data.student.school||'—'} {formatStudentGrade(data.student)}</dd></div>
-   <div><dt className="text-muted-foreground">납입 예정일</dt><dd>매월 {data.student.payment_due_day}일</dd></div>
+   <div><dt className="text-muted-foreground">납입 예정일</dt><dd>매월 {data.student.payment_due_day}일{data.override&&<span className="block mt-1 text-xs text-primary">원비 고정: {data.override.amount.toLocaleString()}원 ({data.override.from_month}~)</span>}</dd></div>
    <div><dt className="text-muted-foreground">보호자 연락처</dt><dd>{data.student.parent_phone||'—'}</dd></div>
    <div><dt className="text-muted-foreground">입금자명</dt><dd>{data.student.deposit_name||'—'}</dd></div>
    <div className="col-span-2 md:col-span-4"><dt className="text-muted-foreground">원비 메모</dt><dd className="whitespace-pre-wrap">{data.student.tuition_memo||'—'}</dd></div>

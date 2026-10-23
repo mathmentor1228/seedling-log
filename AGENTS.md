@@ -8,3 +8,4 @@
 - Tuition details and receipt dialogs live as siblings in a shared provider; printing mounts a dedicated body portal so only receipts print and no nested Dialog conflicts occur.
 - Receipt numbering is transaction-locked by paid-date year and derived from preserved ledger rows; assigned numbers are immutable and canceled payments are retained to avoid numbering gaps.
 - Tuition calendar search and status filters share a pure UI-only filter for calendar counts and student rows; they consume existing monthly ledger status without recalculating fees or writing records.
+- Student monthly fee overrides remain separate from course fee and enrollment history; display applicability follows the authoritative monthly fee function, while pending billing repricing conditionally rechecks status and original amounts to preserve concurrent payments and edits.

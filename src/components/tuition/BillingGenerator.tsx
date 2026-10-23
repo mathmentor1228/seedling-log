@@ -10,10 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Loader2, Plus, Zap, Pencil } from 'lucide-react';
+import { Loader2, Plus, Zap, Pencil, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
-import { allRows, monthlyFees } from '@/lib/tuitionLedgerApi';
+import { allRows, monthlyFees, recalculatePendingBillings } from '@/lib/tuitionLedgerApi';
+import { useAuth } from '@/lib/auth';
 import { buildStudentBillings, billingDisplayStatus, LEDGER_START } from '@/lib/tuitionLedger';
 import { currentTuitionMonth, MonthInput } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
@@ -28,11 +29,14 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
 export function BillingGenerator() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentTuitionMonth());
-  const { revision } = useTuitionLedger();
+  const { revision, changed } = useTuitionLedger();
+  const { role } = useAuth();
   const [loadError, setLoadError] = useState('');
   const [billings, setBillings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalculationResult, setRecalculationResult] = useState('');
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editDiscount, setEditDiscount] = useState('0');
   const [editExtra, setEditExtra] = useState('0');
@@ -71,6 +75,18 @@ export function BillingGenerator() {
       toast.success(`${inserts.length}건 청구 생성 완료`); await loadBillings();
     } catch(err:any) { toast.error(err.message || '청구 생성 실패'); }
     finally { setGenerating(false); }
+  };
+
+  const recalculate = async () => {
+    if (role !== 'admin' || recalculating || selectedMonth < LEDGER_START) return;
+    const month = selectedMonth;
+    setRecalculating(true); setRecalculationResult('');
+    try {
+      const result = await recalculatePendingBillings(month);
+      const message = `${month} 대기 청구 ${result.changed}건 변경${result.skipped ? ` · 처리 중 변경된 ${result.skipped}건 제외` : ''}`;
+      setRecalculationResult(message); toast.success(message);
+    } catch (err) { toast.error(err instanceof Error ? err.message : '대기 청구 다시 계산 실패'); }
+    finally { changed(); setRecalculating(false); }
   };
 
   const openEdit = (item: any) => {
@@ -112,12 +128,16 @@ export function BillingGenerator() {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <MonthInput value={selectedMonth} onChange={setSelectedMonth} />
-        <Button onClick={generateBillings} disabled={generating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
+        <MonthInput value={selectedMonth} onChange={month => { setSelectedMonth(month); setRecalculationResult(''); }} />
+        <Button onClick={generateBillings} disabled={generating || recalculating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           자동 청구 생성
         </Button>
+        {role === 'admin' && <Button variant="outline" onClick={recalculate} disabled={recalculating || generating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
+          {recalculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}대기 청구 다시 계산
+        </Button>}
       </div>
+      {recalculationResult && <p role="status" className="text-sm text-muted-foreground">{recalculationResult}</p>}
 
       <Card>
         <CardHeader className="pb-2">
