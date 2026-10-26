@@ -404,17 +404,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     });
   }, [searchableItems, normalizedQuery]);
 
-  // PINNED-NAV-V1: 선생님별 자주 쓰는 메뉴를 상단에 고정 (계정별, 이 기기에 저장)
+  // PINNED-NAV-V2: 계정 정보(user_metadata)에 저장해 로그아웃·다른 기기에서도 유지, 기기 저장은 빠른 표시용 캐시
   const pinKey = user?.id ? `pinned-nav:${user.id}` : null;
   const [pinned, setPinned] = useState<string[]>([]);
   useEffect(() => {
     if (!pinKey) return;
-    try { setPinned(JSON.parse(localStorage.getItem(pinKey) || '[]')); } catch { setPinned([]); }
+    const remote = (user?.user_metadata as any)?.pinned_nav;
+    let local: string[] = [];
+    try { local = JSON.parse(localStorage.getItem(pinKey) || '[]'); } catch { local = []; }
+    if (Array.isArray(remote)) {
+      setPinned(remote);
+      localStorage.setItem(pinKey, JSON.stringify(remote));
+    } else {
+      setPinned(local);
+      if (local.length) void supabase.auth.updateUser({ data: { pinned_nav: local } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pinKey]);
   const togglePin = (href: string) => {
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
       if (pinKey) localStorage.setItem(pinKey, JSON.stringify(next));
+      void supabase.auth.updateUser({ data: { pinned_nav: next } });
       return next;
     });
   };
