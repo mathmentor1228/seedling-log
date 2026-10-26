@@ -432,19 +432,19 @@ export function TuitionCalendarDashboard() {
               <p className="text-sm text-muted-foreground text-center py-8">{onlyPayments ? '조건에 맞는 결제 내역이 없습니다' : search || statusFilter !== 'all' ? '조건에 맞는 학생이 없습니다' : '해당일 납부 대상 학생이 없습니다'}</p>
             ) : (
               <div className="overflow-x-auto">
-                <Table aria-label="달력 납부 목록" className="min-w-[1160px]">
+                <Table aria-label="달력 납부 목록" className="min-w-[1320px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="sticky left-0 z-20 w-32 min-w-32 border-r border-border bg-background text-foreground"><span className="flex items-center gap-1.5">이름<Pin className="h-3 w-3 text-muted-foreground" aria-hidden="true" /></span></TableHead>
                       <TableHead className="whitespace-nowrap">실제 납부일 / 차이</TableHead>
                       <TableHead className="whitespace-nowrap">결제 출처</TableHead>
-                      <TableHead>학교/학년</TableHead>
+                      <TableHead className="min-w-28 whitespace-nowrap">학교/학년</TableHead>
                       <TableHead className="whitespace-nowrap">원비수납일자</TableHead>
                       <TableHead className="whitespace-nowrap text-right">월 수강료</TableHead>
                       <TableHead className="whitespace-nowrap text-right">월 누적 납부액</TableHead>
-                      <TableHead>상태</TableHead>
-                      <TableHead>메모</TableHead>
-                      <TableHead className="text-center">수납</TableHead>
+                      <TableHead className="min-w-20 whitespace-nowrap">상태</TableHead>
+                      <TableHead className="min-w-36 whitespace-nowrap">메모</TableHead>
+                      <TableHead className="min-w-20 whitespace-nowrap text-center">수납</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -476,7 +476,7 @@ export function TuitionCalendarDashboard() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {s.isPaid ? (
                             <Badge variant="success">완납</Badge>
                           ) : s.paidAmount > 0 ? (
