@@ -61,7 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null);
 
+  const lastUserIdRef = useRef<string | null>(null);
   const applySession = async (nextSession: Session | null, finishLoading = false) => {
+    lastUserIdRef.current = nextSession?.user?.id ?? null;
     setSession(nextSession);
     setUser(nextSession?.user ?? null);
 
@@ -126,6 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // 성능: 토큰 갱신·초기 세션·정보 수정 시 같은 사용자면 권한/프로필을 다시 조회하지 않는다
+        if (
+          session?.user &&
+          lastUserIdRef.current === session.user.id &&
+          (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED')
+        ) {
+          setSession(session);
+          if (event === 'USER_UPDATED') setUser(session.user);
+          return;
+        }
         setTimeout(() => {
           if (mounted) void applySession(session);
         }, 0);
