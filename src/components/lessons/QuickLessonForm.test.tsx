@@ -45,7 +45,7 @@ describe('일지와 테스트 함께 저장', () => {
     expect(score).toHaveValue('85점');
     await user.clear(score);
     await user.type(score, '90점');
-    await user.click(screen.getByRole('button', { name: '저장', exact: true }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(mocks.saveTests).toHaveBeenCalled());
     expect(mocks.saveTests.mock.calls[0][0]).toBe('lesson-1');
     expect(mocks.saveTests.mock.calls[0][2][0].score).toBe('90점');
@@ -55,14 +55,14 @@ describe('일지와 테스트 함께 저장', () => {
   it('테스트 결과 저장 실패 시 수업을 마감하지 않는다', async () => {
     await openForm();
     mocks.saveTests.mockRejectedValueOnce(new Error('테스트 저장 실패'));
-    await userEvent.setup().click(screen.getByRole('button', { name: '마감', exact: true }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '마감' }));
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: '저장 실패' })));
     expect(mocks.upsert.mock.calls.some(([payload]) => payload.submitted === true)).toBe(false);
     expect(mocks.reconcile).not.toHaveBeenCalled();
   });
   it('테스트와 숙제 저장 성공 후에만 수업을 마감한다', async () => {
     await openForm();
-    await userEvent.setup().click(screen.getByRole('button', { name: '마감', exact: true }));
+    await userEvent.setup().click(screen.getByRole('button', { name: '마감' }));
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(2));
     expect(mocks.upsert.mock.calls[0][0]).not.toHaveProperty('submitted');
     expect(mocks.upsert.mock.calls[1][0].submitted).toBe(true);
@@ -74,7 +74,7 @@ describe('일지와 테스트 함께 저장', () => {
     await openForm();
     const user = userEvent.setup();
     await user.type(screen.getByRole('textbox', { name: '테스트 1 결과 및 점수' }), ' 수정');
-    await user.click(screen.getByRole('button', { name: '저장', exact: true }));
+    await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalled());
     expect(mocks.upsert.mock.calls[0][1]).toEqual({ preserveSubmitted: true });
     expect(mocks.upsert.mock.calls[0][0]).not.toHaveProperty('submitted');
@@ -94,7 +94,7 @@ describe('일지와 테스트 함께 저장', () => {
     mocks.loadTests.mockRejectedValueOnce(new Error('조회 실패'));
     render(<QuickLessonForm studentId="student-1" studentName="테스트 학생" classId="class-1" subject="수학" date="2026-10-30" teacherId="teacher-1" attendanceMarked />);
     await screen.findByRole('alert');
-    expect(screen.queryByRole('button', { name: '저장', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: '저장' })).toBeNull();
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 });
