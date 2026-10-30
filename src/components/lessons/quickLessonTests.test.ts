@@ -70,4 +70,20 @@ describe('대시보드 테스트 결과', () => {
     mocks.rpc.mockResolvedValue({ data: false, error: null });
     await expect(saveQuickTests('lesson-1', '수학', [{ ...base[0], score: '90점' }, base[1]], base)).rejects.toThrow('저장되지 않았습니다');
   });
+  it('별도 테스트 기록은 원래 기록에만 점수를 수정한다', async () => {
+    const base = mergeQuickTests(null, [{ id: 'record-1', content: '어휘', score: '17/20', passed: null }], []);
+    const edited = base.map(t => t.source === 'record' ? { ...t, score: '18/20' } : t);
+    await saveQuickTests('lesson-1', '영어', edited, base);
+    expect(mocks.from).toHaveBeenCalledWith('test_records');
+    expect(patch).toHaveBeenCalledWith({ score: '18/20' });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it('기존 테스트 일정 결과도 원래 일정에만 수정한다', async () => {
+    const base = mergeQuickTests(null, [], [{ id: 'schedule-1', content: '문법', result_score: '80점', result_passed: false }]);
+    const edited = base.map(t => t.source === 'schedule' ? { ...t, score: '90점', outcome: 'pass' as const } : t);
+    await saveQuickTests('lesson-1', '영어', edited, base);
+    expect(mocks.from).toHaveBeenCalledWith('test_schedules');
+    expect(patch).toHaveBeenCalledWith({ result_score: '90점', result_passed: true });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
 });
