@@ -121,7 +121,9 @@ export async function saveQuickTests(lessonId: string, subject: string, tests: Q
       if (contentChanged) updates.content = test.content.trim();
       if (scoreChanged) updates[scoreField] = test.score.trim() || null;
       if (outcomeChanged) updates[passedField] = test.outcome === 'none' ? null : test.outcome === 'pass';
-      let query = supabase.from(test.source === 'record' ? 'test_records' : 'test_schedules').update(updates).eq('id', test.id);
+      let query: any;
+      if (test.source === 'record') query = supabase.from('test_records').update(updates).eq('id', test.id);
+      else query = supabase.from('test_schedules').update(updates).eq('id', test.id);
       // Conditional updates protect changes made by assistants after this form was opened.
       if (contentChanged) query = query.eq('content', original.content);
       if (scoreChanged) query = original.score ? query.eq(scoreField, original.score) : query.or(`${scoreField}.is.null,${scoreField}.eq.`);
