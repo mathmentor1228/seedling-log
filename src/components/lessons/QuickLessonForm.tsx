@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Lock, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { QuickLessonTestFields } from './QuickLessonTestFields';
+import { QUICK_TEST_COLUMNS, loadQuickTests, saveQuickTests, validateQuickTests, type QuickLessonTest } from './quickLessonTests';
 
 const HW_STATUS: { key: string; label: string }[] = [
   { key: 'completed', label: '완료' },
@@ -51,11 +53,12 @@ interface Loaded {
   notes: string;
   learningIssuesNote: string;
   internalNotes: string;
+  tests: QuickLessonTest[];
 }
 
 const EMPTY: Loaded = {
   recordId: null, submitted: false, understanding: '', homeworkStatus: 'none_assigned', lessonRange: '', nextGoal: '',
-  nextHomework: '', existingHw: [], prevHomework: [], notes: '', learningIssuesNote: '', internalNotes: '',
+  nextHomework: '', existingHw: [], prevHomework: [], notes: '', learningIssuesNote: '', internalNotes: '', tests: [],
 };
 
 export function QuickLessonForm({ studentId, studentName, classId, subject, date, teacherId, attendanceMarked, onSaved, supplementary }: Props) {
@@ -66,23 +69,30 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
   const [f, setF] = useState<Loaded>(EMPTY);
   const [moreOpen, setMoreOpen] = useState(false);
   const [suppTag, setSuppTag] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshingTests, setRefreshingTests] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [recRes, prevRes] = await Promise.all([
         supabase.from('lesson_records')
-          .select('id, submitted, understanding_score, homework_status, lesson_range, notes, internal_notes, learning_issues_note, next_lesson_goal')
+          .select(`submitted, understanding_score, homework_status, lesson_range, notes, internal_notes, learning_issues_note, next_lesson_goal, ${QUICK_TEST_COLUMNS}`)
           .eq('student_id', studentId).eq('lesson_date', date).eq('subject', subject as any).maybeSingle(),
         supabase.from('homework_assignments')
           .select('content, check_status, assigned_date')
           .eq('student_id', studentId).eq('subject', subject as any).lt('assigned_date', date)
           .order('assigned_date', { ascending: false }).limit(4),
       ]);
+      if (recRes.error) throw recRes.error;
+      if (prevRes.error) throw prevRes.error;
       const rec = recRes.data as any;
+      const tests = await loadQuickTests(rec, studentId, subject, date);
       let hw: any[] = [];
       if (rec?.id) {
-        const { data } = await supabase.from('homework_assignments').select(HOMEWORK_LOAD_COLUMNS).eq('lesson_record_id', rec.id);
+        const { data, error } = await supabase.from('homework_assignments').select(HOMEWORK_LOAD_COLUMNS).eq('lesson_record_id', rec.id);
+        if (error) throw error;
         hw = data || [];
       }
       const loaded: Loaded = {
@@ -98,10 +108,13 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
         notes: supplementary ? (rec?.notes || '').replace(SUPP_TAG_RE, '').trim() : (rec?.notes || ''),
         learningIssuesNote: rec?.learning_issues_note || '',
         internalNotes: rec?.internal_notes || '',
+        tests,
       };
       if (supplementary) setSuppTag(((rec?.notes || '').match(SUPP_TAG_RE)?.[0] || '').trim());
       setBase(loaded); setF(loaded);
       if (loaded.learningIssuesNote || loaded.internalNotes) setMoreOpen(true);
+    } catch (error: any) {
+      setLoadError(error?.message || '일지와 테스트 결과를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
@@ -112,8 +125,30 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
   const dirty = useMemo(() => JSON.stringify({ ...f, existingHw: 0, prevHomework: 0 }) !== JSON.stringify({ ...base, existingHw: 0, prevHomework: 0 }), [f, base]);
   const patch = (p: Partial<Loaded>) => setF(prev => ({ ...prev, ...p }));
 
+  async function refreshTests() {
+    if (JSON.stringify(f.tests) !== JSON.stringify(base.tests) && !window.confirm('저장하지 않은 테스트 입력을 취소하고 다시 불러올까요?')) return;
+    setRefreshingTests(true);
+    try {
+      const { data, error } = await supabase.from('lesson_records').select(QUICK_TEST_COLUMNS)
+        .eq('student_id', studentId).eq('lesson_date', date).eq('subject', subject as any).maybeSingle();
+      if (error) throw error;
+      const tests = await loadQuickTests(data, studentId, subject, date);
+      setF(prev => ({ ...prev, tests }));
+      setBase(prev => ({ ...prev, tests }));
+    } catch (error: any) {
+      toast({ title: '테스트 조회 실패', description: error?.message || '다시 시도해 주세요.', variant: 'destructive' });
+    } finally {
+      setRefreshingTests(false);
+    }
+  }
+
   async function persist(finalize: boolean) {
-    if (saving) return;
+    if (saving || refreshingTests || loadError) return;
+    const testError = validateQuickTests(f.tests);
+    if (testError) {
+      toast({ title: '테스트 내용을 확인해 주세요', description: testError, variant: 'destructive' });
+      return;
+    }
     if (finalize && !attendanceMarked) {
       toast({ title: '출결을 먼저 선택해 주세요', description: '등원·지각·결석 중 하나를 누른 뒤 마감할 수 있습니다.', variant: 'destructive' });
       return;
@@ -135,14 +170,18 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
         internal_notes: f.internalNotes.trim() || null,
       };
       if (!f.recordId) payload.lesson_types = supplementary ? ['보충수업'] : ['정규수업'];
-      if (finalize) { payload.submitted = true; payload.submitted_at = new Date().toISOString(); }
-      const res = await safeUpsertLessonRecord(payload, { preserveSubmitted: !finalize });
+      const res = await safeUpsertLessonRecord(payload, { preserveSubmitted: true });
       if (res.error || !res.id) throw new Error(res.error?.message || '저장 실패');
+      await saveQuickTests(res.id, subject, f.tests, base.tests);
       const lines = f.nextHomework.split('\n').map(l => l.trim()).filter(Boolean);
       await reconcileLessonHomework({
         lessonRecordId: res.id, studentId, subject, assignedDate: date,
         items: lines.map((content, i) => ({ id: f.existingHw[i]?.id ?? null, content, homework_type: 'regular' })),
       });
+      if (finalize) {
+        const finalized = await safeUpsertLessonRecord({ student_id: studentId, subject, lesson_date: date, submitted: true, submitted_at: new Date().toISOString() });
+        if (finalized.error) throw finalized.error;
+      }
       toast({ title: finalize ? `${studentName} 마감 완료` : `${studentName} 저장됨` });
       await load();
       onSaved?.();
@@ -156,6 +195,9 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
 
   if (loading) {
     return <div className="flex items-center gap-2 text-xs text-muted-foreground py-2"><Loader2 className="w-3 h-3 animate-spin" /> 일지 불러오는 중</div>;
+  }
+  if (loadError) {
+    return <div role="alert" className="flex flex-wrap items-center gap-2 py-2 text-xs text-destructive"><span>일지·테스트 조회 실패: {loadError}</span><Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={load}>다시 불러오기</Button></div>;
   }
 
   return (
@@ -201,6 +243,8 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
         )}
       </div>
 
+      <QuickLessonTestFields tests={f.tests} disabled={saving} refreshing={refreshingTests} onChange={tests => patch({ tests })} onRefresh={refreshTests} />
+
       {/* 3줄: 다음 숙제 · 다음 목표 */}
       <div className="grid gap-2 sm:grid-cols-2">
         <Textarea value={f.nextHomework} onChange={e => patch({ nextHomework: e.target.value })} rows={2} placeholder="다음 숙제 (한 줄에 하나)" className="text-xs min-h-[56px]" disabled={saving} />
@@ -228,11 +272,11 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
           {dirty && <span className="ml-1 text-amber-700">· 저장 안 됨</span>}
         </span>
         <div className="flex gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={saving || !dirty} onClick={() => persist(false)}>
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={saving || refreshingTests || !dirty} onClick={() => persist(false)}>
             {saving && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}저장
           </Button>
           {!f.submitted && (
-            <Button size="sm" className="h-7 text-xs" disabled={saving} title={attendanceMarked ? '마감 처리' : '출결을 먼저 선택하세요'} onClick={() => persist(true)}>
+            <Button size="sm" className="h-7 text-xs" disabled={saving || refreshingTests} title={attendanceMarked ? '마감 처리' : '출결을 먼저 선택하세요'} onClick={() => persist(true)}>
               마감
             </Button>
           )}
