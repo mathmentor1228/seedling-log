@@ -246,9 +246,13 @@ export function QuickLessonForm({ studentId, studentName, classId, subject, date
       <QuickLessonTestFields tests={f.tests} disabled={saving} refreshing={refreshingTests} onChange={tests => patch({ tests })} onRefresh={refreshTests} />
 
       {/* 3줄: 다음 숙제 · 다음 목표 */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Textarea value={f.nextHomework} onChange={e => patch({ nextHomework: e.target.value })} rows={2} placeholder="다음 숙제 (한 줄에 하나)" className="text-xs min-h-[56px]" disabled={saving} />
-        <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2 pt-2 border-t">
+        <label className="space-y-1 block">
+          <span className="font-semibold text-foreground">📝 다음 숙제</span>
+          <Textarea value={f.nextHomework} onChange={e => patch({ nextHomework: e.target.value })} rows={2} placeholder="다음 숙제 (한 줄에 하나)" className="text-xs min-h-[56px]" disabled={saving} />
+        </label>
+        <div className="space-y-1">
+          <span className="font-semibold text-foreground block">다음 수업 목표 · 학부모 한 줄</span>
           <Input value={f.nextGoal} onChange={e => patch({ nextGoal: e.target.value })} placeholder="다음 수업 목표" className="h-8 text-xs" disabled={saving} />
           <Textarea value={f.notes} onChange={e => patch({ notes: e.target.value })} rows={1} placeholder="✉ 학부모께 한 줄 (선택 · 포털 노출)" className="text-xs min-h-[32px]" disabled={saving} />
         </div>
