@@ -1,6 +1,8 @@
 export const LEDGER_START = '2026-10';
 export interface LedgerPayment { student_id: string; amount: number; billing_month?: string | null; canceled_at?: string | null; billing_schedules?: { billing_month?: string | null } | null }
 export function paymentMonth(p: LedgerPayment): string | null { return p.billing_month || p.billing_schedules?.billing_month || null; }
+// Unknown months still require review; only known pre-ledger months are excluded.
+export function isLedgerReviewPayment(p: LedgerPayment): boolean { const month = paymentMonth(p); return month === null || month >= LEDGER_START; }
 export function paidForMonth(payments: LedgerPayment[], studentId: string, month: string): number {
   return payments.filter(p => p.student_id === studentId && !p.canceled_at && paymentMonth(p) === month).reduce((sum,p) => sum + Number(p.amount),0);
 }

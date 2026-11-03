@@ -1,6 +1,12 @@
 import {describe,it,expect} from 'vitest';
-import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,paymentReference,receiptCourseNames} from './tuitionLedger';
+import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,paymentReference,receiptCourseNames,isLedgerReviewPayment} from './tuitionLedger';
 describe('원비 장부 규칙',()=>{
+  it('확인 필요 목록은 10월부터이며 귀속월 미확정은 숨기지 않는다',()=>{
+    expect(isLedgerReviewPayment({student_id:'a',amount:127500,billing_month:'2026-09'})).toBe(false);
+    expect(isLedgerReviewPayment({student_id:'a',amount:127500,billing_schedules:{billing_month:'2026-09'}})).toBe(false);
+    expect(isLedgerReviewPayment({student_id:'a',amount:330000,billing_month:'2026-10'})).toBe(true);
+    expect(isLedgerReviewPayment({student_id:'a',amount:330000,billing_month:null})).toBe(true);
+  });
   it('납부일이 10월이어도 9월 청구는 10월 완납에 포함하지 않는다',()=>{expect(paidForMonth([{student_id:'a',amount:330000,billing_month:'2026-09'}],'a','2026-10')).toBe(0);});
   it('취소된 납부는 합산하지 않는다',()=>{expect(paidForMonth([{student_id:'a',amount:330000,billing_month:'2026-10',canceled_at:'2026-10-23'}],'a','2026-10')).toBe(0);});
   it('연결된 청구월보다 납부 자체의 청구월을 우선한다',()=>{expect(paymentMonth({student_id:'a',amount:1,billing_month:'2026-09',billing_schedules:{billing_month:'2026-10'}})).toBe('2026-09');});
