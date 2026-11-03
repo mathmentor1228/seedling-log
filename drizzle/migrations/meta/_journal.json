@@ -190,6 +190,13 @@
       "when": 1793711890007,
       "tag": "0026_student_payment_day_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793731246405,
+      "tag": "0027_checkbus_import_v1",
+      "breakpoints": true
     }
   ]
 }

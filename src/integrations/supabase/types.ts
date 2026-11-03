@@ -7453,6 +7453,7 @@ export type Database = {
       }
       students: {
         Row: {
+          checkbus_uid: string | null
           course_status: string
           created_at: string
           deposit_name: string | null
@@ -7485,6 +7486,7 @@ export type Database = {
           withdrawn_at: string | null
         }
         Insert: {
+          checkbus_uid?: string | null
           course_status?: string
           created_at?: string
           deposit_name?: string | null
@@ -7517,6 +7519,7 @@ export type Database = {
           withdrawn_at?: string | null
         }
         Update: {
+          checkbus_uid?: string | null
           course_status?: string
           created_at?: string
           deposit_name?: string | null
