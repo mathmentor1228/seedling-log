@@ -14,10 +14,13 @@ export async function allRows(query: () => any): Promise<any[]> {
   }
 }
 export async function monthlyFees(ids:string[],month:string):Promise<Record<string,number>> {
-  const fees:Record<string,number>={}; let index=0;
-  await Promise.all(Array.from({length:Math.min(8,ids.length)},async()=>{
-    while(index<ids.length) { const id=ids[index++]; const {data,error}=await supabase.rpc('student_monthly_fee',{_student_id:id,_month:month}); if(error) throw error; if(data==null) throw new Error('월 원비 조회 실패'); fees[id]=Number(data); }
-  }));
+  // One batched call instead of one RPC per student (was ~6s on /admin/tuition).
+  const {data,error}=await supabase.rpc('students_monthly_fees',{_month:month,_student_ids:ids});
+  if(error) throw error;
+  if(data==null) throw new Error('월 원비 조회 실패');
+  const fees:Record<string,number>={};
+  for(const id of ids) fees[id]=0;
+  for(const row of data as {student_id:string;fee:number}[]) fees[row.student_id]=Number(row.fee);
   return fees;
 }
 export async function studentFeeOverrides(studentId: string): Promise<FeeOverride[]> {
