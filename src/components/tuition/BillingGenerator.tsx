@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ export function BillingGenerator() {
   const { revision, changed } = useTuitionLedger();
   const { role } = useAuth();
   const [loadError, setLoadError] = useState('');
+  const loadVersion = useRef(0);
   const [billings, setBillings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -49,10 +50,11 @@ export function BillingGenerator() {
   useEffect(() => { loadBillings(); }, [selectedMonth, revision]);
 
   const loadBillings = async () => {
+    const version = ++loadVersion.current;
     setLoading(true); setLoadError('');
-    try { setBillings(await allRows(() => supabase.from('billing_schedules').select('*, students(name, payment_due_day)').eq('billing_month', selectedMonth).order('due_date').order('id'))); }
-    catch { setLoadError('청구 목록을 불러오지 못했습니다'); }
-    finally { setLoading(false); }
+    try { const rows = await allRows(() => supabase.from('billing_schedules').select('*, students(name, payment_due_day)').eq('billing_month', selectedMonth).order('due_date').order('id')); if (version === loadVersion.current) setBillings(rows); }
+    catch { if (version === loadVersion.current) setLoadError('청구 목록을 불러오지 못했습니다'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
   };
   const generateBillings = async () => {
     if (selectedMonth < LEDGER_START) { toast.error('2026년 10월부터 생성할 수 있습니다'); return; }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,7 @@ export function TuitionCalendarDashboard() {
   const [currentMonth, setCurrentMonth] = useState(getKSTDateObject());
   const { revision, changed } = useTuitionLedger();
   const [loadError, setLoadError] = useState('');
+  const loadVersion = useRef(0);
   const [payBillingMonth, setPayBillingMonth] = useState('');
   const [payDate, setPayDate] = useState(getTodayKST());
   const [students, setStudents] = useState<StudentDue[]>([]);
@@ -78,6 +79,7 @@ export function TuitionCalendarDashboard() {
   }, [monthStr, revision]);
 
   const loadData = async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setLoadError('');
     try {
@@ -85,14 +87,15 @@ export function TuitionCalendarDashboard() {
         loadMonthLedger(monthStr),
         allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month', monthStr).order('id')),
       ]);
+      if (version !== loadVersion.current) return;
       setSchedules(billings);
       setStudents(ledger.students.map(student => {
         const scheduled = scheduledPaymentDate(student.id, monthStr, billings, student.payment_due_day);
         return {...student, scheduledDueDate: scheduled.date, dueDateBasis: scheduled.basis};
       }));
       setPayments(ledger.payments.filter(p => !p.canceled_at));
-    } catch { setLoadError('수납 정보를 불러오지 못했습니다'); }
-    finally { setLoading(false); }
+    } catch { if (version === loadVersion.current) setLoadError('수납 정보를 불러오지 못했습니다'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
   };
 
   // Calendar data
