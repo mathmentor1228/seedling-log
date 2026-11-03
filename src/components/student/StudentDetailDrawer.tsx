@@ -16,6 +16,7 @@ import StudentPinManager from '@/components/StudentPinManager';
 import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
 import { StudentBookProgress } from '@/components/student/StudentBookProgress';
 import { StudentMessagePanel } from '@/components/student/StudentMessagePanel';
+import { StudentPaymentDaySection } from '@/components/student/StudentPaymentDaySection';
 import { isAdmin, isTeacher, type AppRole } from '@/lib/auth';
 
 interface StudentLite {
@@ -253,6 +254,12 @@ export function StudentDetailDrawer({
                 </>
               )}
             </Section>
+
+            {isAdmin(role) && (
+              <Section title="💳 수업료 결제일">
+                <StudentPaymentDaySection studentId={student.id} currentDay={student.payment_due_day} />
+              </Section>
+            )}
 
             {/* Intro messages */}
             {isAdmin(role) && (
