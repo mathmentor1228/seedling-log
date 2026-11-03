@@ -14,7 +14,7 @@ import {getTodayKST} from '@/lib/utils';
 import {useAuth} from '@/lib/auth';
 import {allRows,recordManualPayment} from '@/lib/tuitionLedgerApi';
 import {paymentMonth,paymentReference} from '@/lib/tuitionLedger';
-import {currentTuitionMonth,MonthInput,SourceBadge} from './LedgerControls';
+import {currentTuitionMonth,MonthInput,NoReceiptLabel,SourceBadge} from './LedgerControls';
 import {StudentPaymentLink,useTuitionLedger} from './TuitionLedgerContext';
 import {PaymentTiming} from './PaymentTiming';
 import {type PaymentSchedule} from '@/lib/tuitionPaymentDates';
