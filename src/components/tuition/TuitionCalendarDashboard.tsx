@@ -17,6 +17,8 @@ import { LEDGER_START, dueDate } from '@/lib/tuitionLedger';
 import { scheduledPaymentDate, studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
 import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
+import { MonthJumpDialog } from './MonthJumpDialog';
+
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
 import { filterTuitionStudents, filterTuitionListPayments, filterTuitionStudentsByPayment, sortTuitionStudents, type TuitionStatusFilter, type TuitionSortKey, type TuitionSortDirection, type TuitionPaymentView, type TuitionListPayment } from './tuitionCalendarFilters';
@@ -61,6 +63,8 @@ export function TuitionCalendarDashboard() {
   const [sortDirection, setSortDirection] = useState<TuitionSortDirection>('asc');
   const [paymentSource, setPaymentSource] = useState('all');
   const [paymentView, setPaymentView] = useState<TuitionPaymentView>('all');
+  const [jumpOpen, setJumpOpen] = useState(false);
+
 
   // Payment modal
   const [payModalStudent, setPayModalStudent] = useState<StudentDue | null>(null);
@@ -160,6 +164,12 @@ export function TuitionCalendarDashboard() {
       if (sortKey === 'unpaid_amount') setSortKey('due_date');
     }
   };
+
+  const jumpToMonth = (target: string) => {
+    const [y, m] = target.split('-').map(Number);
+    changeMonth(new Date(y, m - 1, 1));
+  };
+
 
   // Summary stats
   const totalDue = students.reduce((s, st) => s + st.totalFee, 0);
@@ -284,9 +294,15 @@ export function TuitionCalendarDashboard() {
             <Button variant="ghost" size="icon" aria-label="이전 달" onClick={() => changeMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <CardTitle className="text-lg">
-              {format(currentMonth, 'yyyy년 M월', { locale: ko })}
-            </CardTitle>
+            <div className="flex items-center gap-1">
+              <CardTitle className="text-lg">
+                {format(currentMonth, 'yyyy년 M월', { locale: ko })}
+              </CardTitle>
+              <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" aria-label="연도와 월로 바로 이동" onClick={() => setJumpOpen(true)}>
+                <CalendarDays className="h-3.5 w-3.5" />이동
+              </Button>
+            </div>
+
             <Button variant="ghost" size="icon" aria-label="다음 달" onClick={() => changeMonth(addMonths(currentMonth, 1))}>
               <ChevronRight className="w-4 h-4" />
             </Button>
@@ -360,6 +376,9 @@ export function TuitionCalendarDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <MonthJumpDialog open={jumpOpen} onOpenChange={setJumpOpen} currentMonth={currentMonth} onJump={jumpToMonth} />
+
 
       {/* Selected Day Students */}
       {(
