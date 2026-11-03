@@ -800,7 +800,7 @@ function IncomeContent() {
                   <TableHead className="text-right">시수</TableHead>
                   <TableHead className="text-right">신규</TableHead>
                   <TableHead className="text-right">퇴원</TableHead>
-                  <TableHead className="text-right">매출(예상)</TableHead>
+                  <TableHead className="text-right">{focusKey < LEDGER_START ? '기존 매출 배분액' : '매출(예상)'}</TableHead>
                   <TableHead className="text-right">인건비</TableHead>
                   <TableHead className="text-right">순이익</TableHead>
                   <TableHead className="text-right">마진율</TableHead>
