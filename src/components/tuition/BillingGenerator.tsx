@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,9 +29,11 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
 export function BillingGenerator() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentTuitionMonth());
+  const isHistorical = selectedMonth < LEDGER_START;
   const { revision, changed } = useTuitionLedger();
   const { role } = useAuth();
   const [loadError, setLoadError] = useState('');
+  const loadVersion = useRef(0);
   const [billings, setBillings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -48,10 +50,11 @@ export function BillingGenerator() {
   useEffect(() => { loadBillings(); }, [selectedMonth, revision]);
 
   const loadBillings = async () => {
+    const version = ++loadVersion.current;
     setLoading(true); setLoadError('');
-    try { setBillings(await allRows(() => supabase.from('billing_schedules').select('*, students(name, payment_due_day)').eq('billing_month', selectedMonth).order('due_date').order('id'))); }
-    catch { setLoadError('청구 목록을 불러오지 못했습니다'); }
-    finally { setLoading(false); }
+    try { const rows = await allRows(() => supabase.from('billing_schedules').select('*, students(name, payment_due_day)').eq('billing_month', selectedMonth).order('due_date').order('id')); if (version === loadVersion.current) setBillings(rows); }
+    catch { if (version === loadVersion.current) setLoadError('청구 목록을 불러오지 못했습니다'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
   };
   const generateBillings = async () => {
     if (selectedMonth < LEDGER_START) { toast.error('2026년 10월부터 생성할 수 있습니다'); return; }
@@ -90,6 +93,7 @@ export function BillingGenerator() {
   };
 
   const openEdit = (item: any) => {
+    if (isHistorical) return;
     setEditItem(item);
     setEditDiscount(String(item.discount_amount));
     setEditExtra(String(item.extra_amount || 0));
@@ -100,7 +104,7 @@ export function BillingGenerator() {
   };
 
   const saveEdit = async () => {
-    if (!editItem) return;
+    if (!editItem || isHistorical) return;
     const discount = Number(editDiscount) || 0;
     const extra = Number(editExtra) || 0;
     const lateFee = Number(editLateFee) || 0;
@@ -128,12 +132,12 @@ export function BillingGenerator() {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <MonthInput value={selectedMonth} onChange={month => { setSelectedMonth(month); setRecalculationResult(''); }} />
-        <Button onClick={generateBillings} disabled={generating || recalculating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
+        <MonthInput value={selectedMonth} onChange={month => { setSelectedMonth(month); setRecalculationResult(''); setEditItem(null); }} />
+        {!isHistorical && <Button onClick={generateBillings} disabled={generating || recalculating || loading} className="gap-1.5">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           자동 청구 생성
-        </Button>
-        {role === 'admin' && <Button variant="outline" onClick={recalculate} disabled={recalculating || generating || loading || selectedMonth < LEDGER_START} className="gap-1.5">
+        </Button>}
+        {!isHistorical && role === 'admin' && <Button variant="outline" onClick={recalculate} disabled={recalculating || generating || loading} className="gap-1.5">
           {recalculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}대기 청구 다시 계산
         </Button>}
       </div>
@@ -147,7 +151,7 @@ export function BillingGenerator() {
           {loadError ? <div role="alert" className="p-8 text-destructive">{loadError}</div> : loading ? (
             <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
           ) : billings.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">청구 내역이 없습니다. 자동 청구 생성을 눌러주세요.</div>
+            <div className="p-8 text-center text-muted-foreground">{isHistorical ? '2026-10 이전은 출결버스 납부 기록만 조회합니다.' : '청구 내역이 없습니다. 자동 청구 생성을 눌러주세요.'}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -186,7 +190,7 @@ export function BillingGenerator() {
                         <TableCell>{b.due_date}</TableCell>
                         <TableCell><Badge variant={badge.variant}>{badge.label}</Badge></TableCell>
                         <TableCell>
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(b)}><Pencil className="w-3.5 h-3.5" /></Button>
+                          {!isHistorical && <Button size="sm" variant="ghost" onClick={() => openEdit(b)}><Pencil className="w-3.5 h-3.5" /></Button>}
                         </TableCell>
                       </TableRow>
                     );
@@ -198,7 +202,7 @@ export function BillingGenerator() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
+      <Dialog open={!isHistorical && !!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>청구 수정 - {(editItem as any)?.students?.name}</DialogTitle>

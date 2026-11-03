@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { allRows, loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
 import { supabase } from '@/integrations/supabase/client';
-import { dueDate } from '@/lib/tuitionLedger';
+import { LEDGER_START, dueDate } from '@/lib/tuitionLedger';
 import { scheduledPaymentDate, studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
 import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
@@ -47,6 +47,7 @@ export function TuitionCalendarDashboard() {
   const [currentMonth, setCurrentMonth] = useState(getKSTDateObject());
   const { revision, changed } = useTuitionLedger();
   const [loadError, setLoadError] = useState('');
+  const loadVersion = useRef(0);
   const [payBillingMonth, setPayBillingMonth] = useState('');
   const [payDate, setPayDate] = useState(getTodayKST());
   const [students, setStudents] = useState<StudentDue[]>([]);
@@ -71,12 +72,14 @@ export function TuitionCalendarDashboard() {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
   const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+  const isHistorical = monthStr < LEDGER_START;
 
   useEffect(() => {
     loadData();
   }, [monthStr, revision]);
 
   const loadData = async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
     setLoadError('');
     try {
@@ -84,14 +87,15 @@ export function TuitionCalendarDashboard() {
         loadMonthLedger(monthStr),
         allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month', monthStr).order('id')),
       ]);
+      if (version !== loadVersion.current) return;
       setSchedules(billings);
       setStudents(ledger.students.map(student => {
         const scheduled = scheduledPaymentDate(student.id, monthStr, billings, student.payment_due_day);
         return {...student, scheduledDueDate: scheduled.date, dueDateBasis: scheduled.basis};
       }));
       setPayments(ledger.payments.filter(p => !p.canceled_at));
-    } catch { setLoadError('수납 정보를 불러오지 못했습니다'); }
-    finally { setLoading(false); }
+    } catch { if (version === loadVersion.current) setLoadError('수납 정보를 불러오지 못했습니다'); }
+    finally { if (version === loadVersion.current) setLoading(false); }
   };
 
   // Calendar data
@@ -103,8 +107,8 @@ export function TuitionCalendarDashboard() {
   }, [currentMonth]);
 
   const filteredStudents = useMemo(
-    () => filterTuitionStudents(students, search, statusFilter),
-    [students, search, statusFilter],
+    () => filterTuitionStudents(students, search, isHistorical ? 'all' : statusFilter),
+    [students, search, statusFilter, isHistorical],
   );
 
   const dayData = useMemo(() => {
@@ -150,16 +154,21 @@ export function TuitionCalendarDashboard() {
   const changeMonth = (nextMonth: Date) => {
     setCurrentMonth(nextMonth);
     setSelectedDay(null);
+    setPayModalStudent(null);
+    if (format(nextMonth, 'yyyy-MM') < LEDGER_START) {
+      setStatusFilter('all');
+      if (sortKey === 'unpaid_amount') setSortKey('due_date');
+    }
   };
 
   // Summary stats
   const totalDue = students.reduce((s, st) => s + st.totalFee, 0);
   const totalPaid = students.reduce((s, st) => s + st.paidAmount, 0);
-  const unpaidStudents = students.filter(s => !s.isPaid && s.totalFee > 0);
+  const unpaidStudents = isHistorical ? [] : students.filter(s => !s.isPaid && s.totalFee > 0);
   const paidStudents = students.filter(s => s.isPaid);
 
   const handlePay = async () => {
-    if (!payModalStudent) return;
+    if (!payModalStudent || isHistorical) return;
     const amount = Number(payAmount);
     if (!payDate || !payBillingMonth) { toast.error('납부일과 청구월을 입력해주세요'); return; }
     if (!amount || amount <= 0) { toast.error('금액을 입력해주세요'); return; }
@@ -180,6 +189,7 @@ export function TuitionCalendarDashboard() {
   };
 
   const openPayModal = (student: StudentDue) => {
+    if (isHistorical) return;
     setPayModalStudent(student);
     setPayAmount(String(Math.max(0, student.totalFee - student.paidAmount)));
     setPayBillingMonth(monthStr);
@@ -197,8 +207,9 @@ export function TuitionCalendarDashboard() {
 
   return (
     <div className="space-y-6">
+      {isHistorical && <p role="note" className="border-l-2 border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">2026-10 이전은 출결버스 기록입니다. 미납 판정은 2026-10부터 합니다.</p>}
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={cn('grid grid-cols-2 gap-3', isHistorical ? 'md:grid-cols-3' : 'md:grid-cols-4')}>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
@@ -216,7 +227,7 @@ export function TuitionCalendarDashboard() {
             <p className="text-[10px] text-muted-foreground">{paidStudents.length}명 완료</p>
           </CardContent>
         </Card>
-        <Card>
+        {!isHistorical && <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
               <AlertTriangle className="w-3.5 h-3.5" />미납 잔액
@@ -226,7 +237,7 @@ export function TuitionCalendarDashboard() {
             </p>
             <p className="text-[10px] text-muted-foreground">{unpaidStudents.length}명 미납</p>
           </CardContent>
-        </Card>
+        </Card>}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
@@ -253,9 +264,9 @@ export function TuitionCalendarDashboard() {
             />
             {search && <Button variant="ghost" size="icon" aria-label="검색어 지우기" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" onClick={() => setSearch('')}><X className="h-4 w-4" /></Button>}
           </div>
-          <ToggleGroup type="single" value={statusFilter} onValueChange={value => { if (value === 'all' || value === 'unpaid' || value === 'paid') setStatusFilter(value); }} variant="outline" size="sm" aria-label="수납 상태 필터" className="grid w-full grid-cols-3 lg:w-auto">
+          <ToggleGroup type="single" value={isHistorical ? 'all' : statusFilter} onValueChange={value => { if (value === 'all' || value === 'unpaid' || value === 'paid') setStatusFilter(value); }} variant="outline" size="sm" aria-label="수납 상태 필터" className="grid w-full grid-cols-3 lg:w-auto">
             <ToggleGroupItem value="all" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-primary/15 data-[state=on]:text-primary">전체 <span className="text-xs tabular-nums">{students.length}</span></ToggleGroupItem>
-            <ToggleGroupItem value="unpaid" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
+            <ToggleGroupItem value="unpaid" disabled={isHistorical} className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
             <ToggleGroupItem value="paid" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-success/15 data-[state=on]:text-success"><Check className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />완납 <span className="text-xs tabular-nums">{paidStudents.length}</span></ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -376,7 +387,7 @@ export function TuitionCalendarDashboard() {
                     <SelectItem value="name">이름 순</SelectItem>
                     <SelectItem value="school">학교/학년 순</SelectItem>
                     <SelectItem value="fee">수강료 순</SelectItem>
-                    <SelectItem value="unpaid_amount">미납액 순</SelectItem>
+                    {!isHistorical && <SelectItem value="unpaid_amount">미납액 순</SelectItem>}
                   </SelectContent>
                 </Select>
                 <Button variant="outline" size="icon" className="h-8 w-8 shrink-0"
@@ -444,7 +455,7 @@ export function TuitionCalendarDashboard() {
                       <TableHead className="whitespace-nowrap text-right">월 누적 납부액</TableHead>
                       <TableHead className="min-w-20 whitespace-nowrap">상태</TableHead>
                       <TableHead className="min-w-36 whitespace-nowrap">메모</TableHead>
-                      <TableHead className="min-w-20 whitespace-nowrap text-center">수납</TableHead>
+                      {!isHistorical && <TableHead className="min-w-20 whitespace-nowrap text-center">수납</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -490,7 +501,7 @@ export function TuitionCalendarDashboard() {
                         <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
                           {s.tuition_memo || '-'}
                         </TableCell>
-                        <TableCell className="text-center">
+                        {!isHistorical && <TableCell className="text-center">
                           {!s.isPaid && s.totalFee > 0 ? (
                             <Button
                               size="sm"
@@ -503,7 +514,7 @@ export function TuitionCalendarDashboard() {
                           ) : s.isPaid ? (
                             <Check className="w-4 h-4 text-success mx-auto" />
                           ) : null}
-                        </TableCell>
+                        </TableCell>}
                       </TableRow>;
                     })}
                   </TableBody>
@@ -516,11 +527,11 @@ export function TuitionCalendarDashboard() {
                   <span className="text-muted-foreground">
                     수납: <span className="font-medium text-success">{selectedStudents.reduce((s, st) => s + st.paidAmount, 0).toLocaleString()}원</span>
                   </span>
-                  <span className="text-muted-foreground">
+                  {!isHistorical && <span className="text-muted-foreground">
                     잔액: <span className="font-medium text-destructive">
                       {selectedStudents.reduce((s, st) => s + Math.max(0,st.totalFee - st.paidAmount), 0).toLocaleString()}원
                     </span>
-                  </span>
+                  </span>}
                 </div>
               </div>
             )}
@@ -529,7 +540,7 @@ export function TuitionCalendarDashboard() {
       )}
 
       {/* Payment Modal */}
-      <Dialog open={!!payModalStudent} onOpenChange={(open) => !open && setPayModalStudent(null)}>
+      <Dialog open={!isHistorical && !!payModalStudent} onOpenChange={(open) => !open && setPayModalStudent(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>수납 처리 - {payModalStudent?.name}</DialogTitle>

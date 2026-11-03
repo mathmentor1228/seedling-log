@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { billingDisplayStatus, paidForMonth, paymentMonth } from './tuitionLedger';
+import { LEDGER_START, billingDisplayStatus, paidForMonth, paymentMonth } from './tuitionLedger';
 import { getTodayKST } from './utils';
 import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
 
@@ -46,6 +46,25 @@ export async function getMonthPayments(month:string) {
   return rows.filter(p=>paymentMonth(p)===month);
 }
 export async function loadMonthLedger(month:string) {
+  if (month < LEDGER_START) {
+    const rows = await allRows(() => supabase.from('payment_records')
+      .select('*, billing_schedules(billing_month,due_date,status), students(id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status)')
+      .eq('billing_month', month).is('canceled_at', null).order('id'));
+    const totals = new Map<string, any>();
+    const payments = rows.map(({ students: student, ...payment }) => {
+      if (!student) throw new Error('과거 수납 학생 정보를 불러오지 못했습니다');
+      const existing = totals.get(payment.student_id);
+      const amount = Number(payment.amount);
+      totals.set(payment.student_id, {
+        ...student,
+        totalFee: (existing?.totalFee ?? 0) + amount,
+        paidAmount: (existing?.paidAmount ?? 0) + amount,
+        isPaid: true,
+      });
+      return payment;
+    });
+    return { students: [...totals.values()], payments };
+  }
   const [students,payments]=await Promise.all([
     allRows(()=>supabase.from('students').select('id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status').order('id')),
     getMonthPayments(month),

@@ -18,6 +18,8 @@ import {
   Wallet, TrendingDown, DollarSign,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LEDGER_START } from '@/lib/tuitionLedger';
+import { tuitionIncomeRevenue } from '@/lib/tuitionIncomeRevenue';
 
 type Profile = { id: string; full_name: string; is_active: boolean };
 type Student = {
@@ -304,18 +306,14 @@ function IncomeContent() {
     return out;
   }, [historical, studentTeacherRatios]);
 
-  // Resolve revenue: total = 장부 합계(있으면) > 현재 스냅샷. 선생님 분배 = 2026-01~04 historical, 그 외 현재 비율.
+  // Pre-ledger revenue is recorded payments only; preserve existing teacher allocations.
   const getMonthRevenue = (monthKey: string): { teacherRevenue: Map<string, number>; total: number; unassigned: number; source: 'payments' | 'historical' | 'current' } => {
     const h = monthKey >= '2026-01' && monthKey <= '2026-04' ? historicalByMonth.get(monthKey) : undefined;
     const split = h ? h.teacherRevenue : teacherRevenueCurrent;
     let assigned = 0;
     for (const v of split.values()) assigned += v;
-    if (paymentTotals.has(monthKey)) {
-      const total = paymentTotals.get(monthKey)!;
-      return { teacherRevenue: split, total, unassigned: Math.max(0, total - assigned), source: 'payments' };
-    }
-    if (h) return { ...h, source: 'historical' };
-    return { teacherRevenue: teacherRevenueCurrent, total: assigned, unassigned: 0, source: 'current' };
+    const revenue = tuitionIncomeRevenue(monthKey, paymentTotals, assigned, h?.total);
+    return { teacherRevenue: split, ...revenue, unassigned: revenue.source === 'historical' ? h?.unassigned ?? 0 : Math.max(0, revenue.total - assigned) };
   };
 
   const teacherRevenue = useMemo(() => getMonthRevenue(focusKey).teacherRevenue, [historicalByMonth, teacherRevenueCurrent, paymentTotals, focusKey]);
@@ -607,8 +605,8 @@ function IncomeContent() {
       {/* KPI Row 2: P&L */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard icon={<DollarSign className="w-5 h-5" />} tone="primary"
-          label="이달 예상 매출 (할인 반영)" value={wonFmt(Math.round(focusKPI.revenue))}
-          hint="활성 수강 × 다과목·형제 할인 적용" />
+          label={focusKey < LEDGER_START ? '이달 실제 수납액' : '이달 예상 매출 (할인 반영)'} value={wonFmt(Math.round(focusKPI.revenue))}
+          hint={focusKey < LEDGER_START ? '귀속월 납부 합계 · 취소 제외' : '활성 수강 × 다과목·형제 할인 적용'} />
         <KpiCard icon={<Wallet className="w-5 h-5" />} tone="amber"
           label="이달 인건비 합계" value={wonFmt(Math.round(focusKPI.salary))}
           hint="선생님별 월급 입력값" />
@@ -674,7 +672,7 @@ function IncomeContent() {
             </ResponsiveContainer>
           </div>
           <p className="text-[11px] text-muted-foreground mt-3">
-            * 2026-05 이전 매출은 <b>실제 납부 데이터(엑셀 적재)</b> 기준, 이후는 현재 활성 수강 정액 기준입니다.
+            * 2026-10 이전 매출은 <b>귀속월 실제 납부 합계(취소 제외)</b>이며 미납을 판정하지 않습니다. 이후는 납부 기록이 있으면 장부 합계, 없으면 현재 활성 수강 정액 기준입니다.
           </p>
         </CardContent>
       </Card>
@@ -802,7 +800,7 @@ function IncomeContent() {
                   <TableHead className="text-right">시수</TableHead>
                   <TableHead className="text-right">신규</TableHead>
                   <TableHead className="text-right">퇴원</TableHead>
-                  <TableHead className="text-right">매출(예상)</TableHead>
+                  <TableHead className="text-right">{focusKey < LEDGER_START ? '기존 매출 배분액' : '매출(예상)'}</TableHead>
                   <TableHead className="text-right">인건비</TableHead>
                   <TableHead className="text-right">순이익</TableHead>
                   <TableHead className="text-right">마진율</TableHead>

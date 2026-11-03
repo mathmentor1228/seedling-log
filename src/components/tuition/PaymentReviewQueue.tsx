@@ -11,12 +11,12 @@ import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/compon
 import {Check,UserRoundCheck,Ban,Loader2,RefreshCw} from 'lucide-react';
 import {toast} from 'sonner';
 import {allRows,cancelPayment,syncStudentBilling} from '@/lib/tuitionLedgerApi';
-import {paymentMonth} from '@/lib/tuitionLedger';
+import {LEDGER_START,isLedgerReviewPayment,paymentMonth} from '@/lib/tuitionLedger';
 import {SourceBadge} from './LedgerControls';
 import {StudentPaymentLink,useTuitionLedger} from './TuitionLedgerContext';
 export function PaymentReviewQueue(){
  const {revision,changed}=useTuitionLedger();const [rows,setRows]=useState<any[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [students,setStudents]=useState<any[]>([]);const [active,setActive]=useState<any|null>(null);const [mode,setMode]=useState('assign');const [studentId,setStudentId]=useState('');const [search,setSearch]=useState('');const [alias,setAlias]=useState('');const [saveAlias,setSaveAlias]=useState(false);const [note,setNote]=useState('');const [saving,setSaving]=useState(false);
- async function load(){setLoading(true);setError('');try{setRows(await allRows(()=>supabase.from('payment_records').select('*,students(name),billing_schedules(billing_month)').eq('needs_review',true).is('canceled_at',null).order('paid_date',{ascending:false}).order('id')));}catch{setError('확인 필요 목록을 불러오지 못했습니다');}finally{setLoading(false);}}
+ async function load(){setLoading(true);setError('');try{setRows((await allRows(()=>supabase.from('payment_records').select('*,students(name),billing_schedules(billing_month)').eq('needs_review',true).is('canceled_at',null).or(`billing_month.gte.${LEDGER_START},billing_month.is.null`).order('paid_date',{ascending:false}).order('id'))).filter(isLedgerReviewPayment));}catch{setError('확인 필요 목록을 불러오지 못했습니다');}finally{setLoading(false);}}
  useEffect(()=>{load();},[revision]);
  async function begin(p:any,nextMode:string){try{if(nextMode==='assign')setStudents(await allRows(()=>supabase.from('students').select('id,name,school,grade').order('name').order('id')));setMode(nextMode);setStudentId('');setSearch('');const parsed=`${p.raw_text||''}\n${p.memo||''}`.match(/입금자(?:명)?\s*[:：]?\s*([^\n,|]+)/);setAlias(parsed?.[1]?.trim()||'');setSaveAlias(false);setNote(p.review_note||'');setActive(p);}catch{toast.error('학생 목록을 불러오지 못했습니다');}}
  async function confirmed(p:any){try{const {error}=await supabase.from('payment_records').update({needs_review:false}).eq('id',p.id);if(error)throw error;toast.success('금액 확인 완료');changed();}catch{toast.error('확인 처리 실패');}}
