@@ -82,7 +82,7 @@ export function useExamHubData(): ExamHubData {
       const [cy, su, st, ci, ln, tc, rs, rp, dp, it, tb, ar, po, pa, la, pf, sy, sa, wt] = await Promise.all([
         db.from('exam_cycles').select('*').neq('status', 'cancelled').order('start_date', { ascending: true, nullsFirst: false }),
         db.from('exam_cycle_subjects').select('*').order('subject'),
-        db.from('students').select('id, name, grade, school, school_level, grade_year, enrollment_status').order('name'),
+        db.from('students').select('id, name, grade, school, school_level, grade_year, enrollment_status').in('enrollment_status', ['재학', '재등원', '휴학']).order('name'),
         db.from('class_students').select('student_id, classes(subject, teacher_id)'),
         db.from('student_subject_teachers').select('student_id, subject, teacher_id'),
         db.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),

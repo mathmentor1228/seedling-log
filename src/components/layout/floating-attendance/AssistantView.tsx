@@ -64,6 +64,7 @@ export function AssistantView({
       .from('students')
       .select('id, name')
       .ilike('name', `%${name}%`)
+      .in('enrollment_status', ['재학', '재등원', '휴학'])
       .limit(5);
     setSearchResults(data ?? []);
     setSearching(false);

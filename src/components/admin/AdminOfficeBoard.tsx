@@ -122,6 +122,7 @@ export function AdminOfficeBoard() {
     supabase
       .from('students')
       .select('id, name, school, school_level, grade_year, enrollment_status')
+      .in('enrollment_status', ['재학', '재등원', '휴학'])
       .order('name')
       .then(({ data }) => setStudents((data as PickableStudent[]) || []));
   }, [showCreateDialog]);

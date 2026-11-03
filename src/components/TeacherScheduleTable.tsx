@@ -119,7 +119,8 @@ export function TeacherScheduleTable({
         const { data: students, error: sError } = await supabase
           .from('students')
           .select('id, name, grade, school_level, grade_year')
-          .in('id', studentIds);
+          .in('id', studentIds)
+          .in('enrollment_status', ['재학', '재등원', '휴학']);
 
         if (sError) throw sError;
 
