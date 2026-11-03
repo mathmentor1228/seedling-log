@@ -183,6 +183,13 @@
       "when": 1792731770233,
       "tag": "0025_student_monthly_fee_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793711890007,
+      "tag": "0026_student_payment_day_changes",
+      "breakpoints": true
     }
   ]
 }

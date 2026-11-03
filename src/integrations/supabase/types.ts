@@ -7222,6 +7222,44 @@ export type Database = {
           },
         ]
       }
+      student_payment_day_changes: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_day: number
+          old_day: number | null
+          reason: string
+          student_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_day: number
+          old_day?: number | null
+          reason: string
+          student_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_day?: number
+          old_day?: number | null
+          reason?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_payment_day_changes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_point_history: {
         Row: {
           created_at: string
