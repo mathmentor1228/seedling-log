@@ -15,7 +15,8 @@ beforeEach(() => {
   db.tables = {};
   db.failures = {};
   db.reads = [];
-  db.rpc.mockReset().mockResolvedValue({ data: 330000, error: null });
+  db.rpc.mockReset().mockImplementation((_name: string, args: { _student_ids?: string[] }) =>
+    Promise.resolve({ data: (args?._student_ids ?? []).map(id => ({ student_id: id, fee: 330000 })), error: null }));
   db.from.mockReset().mockImplementation((table: string) => {
     const filters: ((row: Record<string, any>) => boolean)[] = [];
     const query = {
@@ -107,7 +108,7 @@ describe('historical monthly ledger', () => {
       { id: '부분납', totalFee: 330000, paidAmount: 100000, isPaid: false },
       { id: '미납', totalFee: 330000, paidAmount: 0, isPaid: false },
     ]);
-    expect(db.rpc).toHaveBeenCalledTimes(2);
-    expect(db.rpc).toHaveBeenCalledWith('student_monthly_fee', { _student_id: '부분납', _month: '2026-10' });
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+    expect(db.rpc).toHaveBeenCalledWith('students_monthly_fees', { _month: '2026-10', _student_ids: ['부분납', '미납'] });
   });
 });

@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => ({
     cssCodeSplit: true,
     sourcemap: false,
     chunkSizeWarningLimit: 1500,
+    modulePreload: { polyfill: true },
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -33,6 +34,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf';
           if (id.includes('katex')) return 'katex';
           if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+          // TUITION-PERF-V1: lucide icons and date-fns helpers each shipped as
+          // ~1KB chunks (100+ sequential requests on cold cache). Bundle them.
+          if (id.includes('lucide-react')) return 'icons';
+          if (id.includes('date-fns')) return 'date';
         },
       },
     },

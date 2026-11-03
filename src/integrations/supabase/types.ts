@@ -9931,6 +9931,13 @@ export type Database = {
         Args: { _month: string; _student_id: string }
         Returns: number
       }
+      students_monthly_fees: {
+        Args: { _month: string; _student_ids?: string[] }
+        Returns: {
+          fee: number
+          student_id: string
+        }[]
+      }
       teacher_owns_student: {
         Args: { _student_id: string; _teacher_id: string }
         Returns: boolean

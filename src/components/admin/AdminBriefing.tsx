@@ -186,6 +186,7 @@ export function AdminBriefing() {
       const { data: gradeData } = await supabase
         .from('students')
         .select('grade')
+        .in('enrollment_status', ['재학', '재등원', '휴학'])
         .not('grade', 'is', null);
       
       if (gradeData) {

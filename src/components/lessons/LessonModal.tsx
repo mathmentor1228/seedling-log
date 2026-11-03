@@ -71,7 +71,7 @@ export function LessonModal({
     setFetchError(null);
     try {
       const [studentsRes, classesRes, profilesRes] = await Promise.all([
-        supabase.from('students').select('id, name').order('name'),
+        supabase.from('students').select('id, name').in('enrollment_status', ['재학', '재등원', '휴학']).order('name'),
         supabase.from('classes').select('id, name, subject, teacher_id').order('name'),
         supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       ]);

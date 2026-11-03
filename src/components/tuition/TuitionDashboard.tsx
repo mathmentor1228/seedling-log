@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { CalendarDays, Receipt, AlertTriangle, Settings, Users, Wallet } from 'lucide-react';
 import { TuitionCalendarDashboard } from './TuitionCalendarDashboard';
 import { PaymentRecords } from './PaymentRecords';
@@ -19,8 +18,7 @@ export function TuitionDashboard() {
   const isAdmin = role === 'admin' || user?.email === 'bfkor8810@naver.com';
 
   return (
-    <AppLayout>
-      <TuitionLedgerProvider>
+    <TuitionLedgerProvider>
       <div className="p-4 md:p-6 space-y-4">
         <h1 className="text-2xl font-bold">수강료 관리</h1>
 
@@ -64,7 +62,6 @@ export function TuitionDashboard() {
           {isAdmin && <TabsContent value="payroll"><EnglishPayrollTab /></TabsContent>}
         </Tabs>
       </div>
-      </TuitionLedgerProvider>
-    </AppLayout>
+    </TuitionLedgerProvider>
   );
 }

@@ -146,6 +146,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       const { data } = await supabase
         .from('students')
         .select('id, name')
+        .in('enrollment_status', ['재학', '재등원', '휴학'])
         .order('name');
       setStudents(data || []);
     } catch (error) {

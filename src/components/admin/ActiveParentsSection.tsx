@@ -62,7 +62,8 @@ export function ActiveParentsSection() {
         const { data } = await supabase
           .from('students')
           .select('id, name, parent_name, parent_phone')
-          .in('id', ids);
+          .in('id', ids)
+          .in('enrollment_status', ['재학', '재등원', '휴학']);
         students = (data || []) as StudentRow[];
       }
       const sMap = new Map(students.map((s) => [s.id, s]));
