@@ -10,7 +10,8 @@ import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
 import {AlertTriangle, CalendarDays, Loader2, Receipt, RefreshCw} from 'lucide-react';
-import {SourceBadge, currentTuitionMonth} from './LedgerControls';
+import {NoReceiptLabel, SourceBadge, currentTuitionMonth} from './LedgerControls';
+import {hasReceipt, shiftBillingMonth} from './paymentHistorySummary';
 import {StudentPaymentLink, useTuitionLedger} from './TuitionLedgerContext';
 import {PaymentTiming} from './PaymentTiming';
 import {type PaymentSchedule} from '@/lib/tuitionPaymentDates';
@@ -29,19 +30,28 @@ export function DailyPaymentRecords({onReview}: {onReview: () => void}) {
   const [reload, setReload] = useState(0);
   const [filters, setFilters] = useState<DailyPaymentFilters>({from: `${currentTuitionMonth()}-01`, to: getTodayKST(), source: 'imported', state: 'all', basis: 'paid', search: ''});
 
+  const validMonth = (v: string) => /^\d{4}-\d{2}/.test(v) ? v.slice(0, 7) : currentTuitionMonth();
+  let startMonth = validMonth(filters.from), endMonth = validMonth(filters.to);
+  if (startMonth > endMonth) endMonth = startMonth;
+  const basis = filters.basis;
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setError('');
+    const lo = shiftBillingMonth(startMonth, -1), hi = shiftBillingMonth(endMonth, 2);
     Promise.all([
-      allRows(() => supabase.from('payment_records').select('*,students(name,school,grade,payment_due_day),billing_schedules(billing_month,due_date,status)').order('paid_date', {ascending: false}).order('id')),
-      allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').order('id')),
+      allRows(() => {
+        let q: any = supabase.from('payment_records').select('*,students(name,school,grade,payment_due_day),billing_schedules(billing_month,due_date,status)');
+        q = basis === 'paid' ? q.gte('paid_date', `${lo}-01`).lt('paid_date', `${hi}-01`) : q.gte('created_at', `${lo}-01T00:00:00+09:00`).lt('created_at', `${hi}-01T00:00:00+09:00`);
+        return q.order('paid_date', {ascending: false}).order('id');
+      }),
+      allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').gte('billing_month', shiftBillingMonth(startMonth, -3)).lte('billing_month', shiftBillingMonth(endMonth, 1)).order('id')),
     ])
       .then(([rows, billings]) => {if (alive) {setPayments(rows); setSchedules(billings);}})
       .catch(() => {if (alive) setError('날짜별 수납 내역을 불러오지 못했습니다');})
       .finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
-  }, [revision, reload]);
+  }, [revision, reload, startMonth, endMonth, basis]);
 
   const invalidRange = !!filters.from && !!filters.to && filters.from > filters.to;
   const visible = useMemo(() => filterDailyPayments(payments, filters), [payments, filters]);
@@ -99,7 +109,7 @@ export function DailyPaymentRecords({onReview}: {onReview: () => void}) {
               <TableCell><SourceBadge source={payment.source}/></TableCell>
               <TableCell className="whitespace-nowrap"><Badge variant={state === 'review' ? 'warning' : state === 'canceled' ? 'muted' : 'success'}>{stateLabels[state]}</Badge><div className="mt-1 text-xs text-muted-foreground">{payment.matched_by ? matchLabels[payment.matched_by] || payment.matched_by : '—'}</div></TableCell>
               <TableCell className="min-w-48 max-w-72 text-xs"><p>{paymentReference(payment) || payment.payment_method || '—'}</p><p className="whitespace-pre-wrap break-words text-muted-foreground">{payment.memo}</p>{payment.review_note && <p className={state === 'review' ? 'text-warning' : 'text-muted-foreground'}>{payment.review_note}</p>}{payment.raw_text && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">수집 원문</summary><p className="whitespace-pre-wrap break-all">{payment.raw_text}</p></details>}</TableCell>
-              <TableCell><Button variant="ghost" size="icon" aria-label={`${payment.students?.name || '미지정'} ${payment.paid_date} 영수증`} title="영수증" onClick={() => openReceipt([payment])}><Receipt className="h-4 w-4"/></Button></TableCell>
+              <TableCell>{hasReceipt(payment as any) ? <Button variant="ghost" size="icon" aria-label={`${payment.students?.name || '미지정'} ${payment.paid_date} 영수증`} title="영수증" onClick={() => openReceipt([payment])}><Receipt className="h-4 w-4"/></Button> : <NoReceiptLabel/>}</TableCell>
             </TableRow>;
           })}
         </TableBody></Table></div>

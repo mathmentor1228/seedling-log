@@ -1,6 +1,6 @@
 import {paymentMonth, type LedgerPayment} from '@/lib/tuitionLedger';
 
-export const IMPORTED_PAYMENT_SOURCES = ['결제선생', '이코딩키오스크', '이코딩수기', '계좌이체문자'] as const;
+export const IMPORTED_PAYMENT_SOURCES = ['결제선생', '이코딩키오스크', '이코딩수기', '계좌이체문자', '출결버스'] as const;
 export type PaymentRecordState = 'recorded' | 'review' | 'canceled';
 export type PaymentDateBasis = 'paid' | 'registered';
 export interface DailyPayment extends LedgerPayment {

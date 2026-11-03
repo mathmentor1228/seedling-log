@@ -71,7 +71,12 @@ interface Student {
   student_code: string | null;
   payment_due_day: number | null;
   created_at: string;
+  registration_date?: string | null;
+  withdrawal_last_class_date?: string | null;
+  withdrawn_at?: string | null;
 }
+
+const withdrawalDate = (s: Student) => s.withdrawal_last_class_date || s.withdrawn_at?.slice(0, 10) || '';
 
 export default function Students() {
   const { role } = useAuth();
@@ -535,6 +540,9 @@ export default function Students() {
     }
     return true;
   }).sort((a, b) => {
+    if (statusFilter === '퇴원') {
+      return withdrawalDate(b).localeCompare(withdrawalDate(a)) || a.name.localeCompare(b.name, 'ko');
+    }
     if (sortMode === 'recent') {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     }
@@ -948,6 +956,7 @@ export default function Students() {
                     )}
                     <TableHead>학생</TableHead>
                     <TableHead>상태</TableHead>
+                    {statusFilter === '퇴원' && <TableHead className="whitespace-nowrap">재원 기간 ↓</TableHead>}
                     <TableHead>학교 / 학년</TableHead>
                     <TableHead>수강 과목</TableHead>
                     <TableHead>배정 슬롯</TableHead>
@@ -1018,6 +1027,11 @@ export default function Students() {
                             {student.enrollment_status || '재학'}
                           </Badge>
                         </TableCell>
+                        {statusFilter === '퇴원' && (
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {student.registration_date || '-'} ~ {withdrawalDate(student) || '-'}
+                          </TableCell>
+                        )}
                         <TableCell className="text-sm">
                           <div className="text-foreground">{student.school || '-'}</div>
                           <div className="text-xs text-muted-foreground">

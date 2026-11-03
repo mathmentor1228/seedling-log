@@ -117,6 +117,7 @@ function IncomeContent() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [comps, setComps] = useState<Comp[]>([]);
   const [historical, setHistorical] = useState<Historical[]>([]);
+  const [paymentTotals, setPaymentTotals] = useState<Map<string, number>>(new Map());
 
   const today = new Date();
   const [anchor, setAnchor] = useState<string>(monthKeyFromDate(today).key);
@@ -135,9 +136,20 @@ function IncomeContent() {
         supabase.from('student_courses').select('id, student_id, teacher_id, enrollment_date, end_date, is_active, custom_monthly_fee, course_policy_id'),
         supabase.from('course_policies').select('id, monthly_fee, subject'),
         supabase.from('teacher_monthly_compensation').select('teacher_id, month, salary'),
-        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed, teacher_id_override'),
+        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed, teacher_id_override').gte('year_month', '2026-01').lte('year_month', '2026-04'),
         fetchAllLessons(start),
       ]);
+      // 장부(payment_records) 귀속월 합계 — 취소 제외, 표시 12개월 범위만 페이지 단위로 읽음
+      const totals = new Map<string, number>();
+      for (let page = 0; page < 100; page++) {
+        const { data, error } = await supabase.from('payment_records').select('billing_month, amount')
+          .is('canceled_at', null).gte('billing_month', months[0].key).lte('billing_month', months[months.length - 1].key)
+          .order('id').range(page * 1000, page * 1000 + 999);
+        if (error) throw error;
+        for (const r of data || []) if (r.billing_month) totals.set(r.billing_month, (totals.get(r.billing_month) || 0) + Number(r.amount || 0));
+        if (!data || data.length < 1000) break;
+      }
+      setPaymentTotals(totals);
 
       const errs = [tRes.error, sRes.error, sstRes.error, cRes.error, pRes.error, compRes.error, histRes.error].filter(Boolean);
       if (errs.length) throw errs[0];
@@ -292,16 +304,21 @@ function IncomeContent() {
     return out;
   }, [historical, studentTeacherRatios]);
 
-  // Resolve revenue for a given month: historical if exists, else current snapshot
-  const getMonthRevenue = (monthKey: string): { teacherRevenue: Map<string, number>; total: number; unassigned: number; source: 'historical' | 'current' } => {
-    const h = historicalByMonth.get(monthKey);
+  // Resolve revenue: total = 장부 합계(있으면) > 현재 스냅샷. 선생님 분배 = 2026-01~04 historical, 그 외 현재 비율.
+  const getMonthRevenue = (monthKey: string): { teacherRevenue: Map<string, number>; total: number; unassigned: number; source: 'payments' | 'historical' | 'current' } => {
+    const h = monthKey >= '2026-01' && monthKey <= '2026-04' ? historicalByMonth.get(monthKey) : undefined;
+    const split = h ? h.teacherRevenue : teacherRevenueCurrent;
+    let assigned = 0;
+    for (const v of split.values()) assigned += v;
+    if (paymentTotals.has(monthKey)) {
+      const total = paymentTotals.get(monthKey)!;
+      return { teacherRevenue: split, total, unassigned: Math.max(0, total - assigned), source: 'payments' };
+    }
     if (h) return { ...h, source: 'historical' };
-    let total = 0;
-    for (const v of teacherRevenueCurrent.values()) total += v;
-    return { teacherRevenue: teacherRevenueCurrent, total, unassigned: 0, source: 'current' };
+    return { teacherRevenue: teacherRevenueCurrent, total: assigned, unassigned: 0, source: 'current' };
   };
 
-  const teacherRevenue = useMemo(() => getMonthRevenue(focusKey).teacherRevenue, [historicalByMonth, teacherRevenueCurrent, focusKey]);
+  const teacherRevenue = useMemo(() => getMonthRevenue(focusKey).teacherRevenue, [historicalByMonth, teacherRevenueCurrent, paymentTotals, focusKey]);
 
 
   // Lookup: comp by teacher + month
@@ -415,7 +432,7 @@ function IncomeContent() {
       const revenue = monthRev.total;
       return { month: mk.label, key: mk.key, taught: taught.size, lessons: lessonCount, new: newCnt, withdrawn: wdCnt, net: newCnt - wdCnt, salaryTotal, revenue, profit: revenue - salaryTotal, revSource: monthRev.source };
     });
-  }, [months, lessons, students, comps, historicalByMonth, teacherRevenueCurrent]);
+  }, [months, lessons, students, comps, historicalByMonth, teacherRevenueCurrent, paymentTotals]);
 
   // Focus month per-teacher rows (table + P&L)
   const focusMonthRows = useMemo(() => {
@@ -474,7 +491,7 @@ function IncomeContent() {
   // P&L trend (academy-wide): historical revenue for past months, snapshot for focus/current
   const totalFocusRevenue = useMemo(() => {
     return getMonthRevenue(focusKey).total;
-  }, [historicalByMonth, teacherRevenueCurrent, focusKey]);
+  }, [historicalByMonth, teacherRevenueCurrent, paymentTotals, focusKey]);
 
   const plTrend = useMemo(() => {
     return academyTrend.map(r => ({
@@ -553,6 +570,11 @@ function IncomeContent() {
           <Button variant="outline" size="icon" onClick={() => setAnchor(shiftMonth(anchor, -1))}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
+          <select aria-label="수입 조회 연도" className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            value={anchor.slice(0, 4)}
+            onChange={e => { const y = e.target.value; const now = monthKeyFromDate(new Date()).key; const k = `${y}-${anchor.slice(5, 7)}`; setAnchor(k > now ? now : k); }}>
+            {[2022, 2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}년</option>)}
+          </select>
           <div className="px-3 py-1.5 rounded-md border bg-card text-sm font-semibold min-w-[100px] text-center">
             기준 {focusLabel}
           </div>
