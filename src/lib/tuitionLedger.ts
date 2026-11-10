@@ -38,3 +38,10 @@ export function buildStudentBillings(students: {id:string;payment_due_day:number
     return {student_id:s.id,student_course_id:null,billing_month:month,base_amount:fee,discount_amount:0,extra_amount:extra,extra_memo:intensive[s.id]?.memo || null,final_amount:fee+extra,due_date:dueDate(month,s.payment_due_day),status:'pending'};
   });
 }
+export interface PaymentExcess { required: number; alreadyPaid: number; after: number; excess: number }
+// Fixed monthly fees: any entry that would push a month's total above the fee needs explicit confirmation.
+export function paymentExcess(required: number, alreadyPaid: number, amount: number): PaymentExcess | null {
+  const after = alreadyPaid + amount;
+  const excess = after - Math.max(0, required);
+  return excess > 0 ? { required: Math.max(0, required), alreadyPaid, after, excess } : null;
+}
