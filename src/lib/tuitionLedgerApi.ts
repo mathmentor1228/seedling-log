@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { LEDGER_START, billingDisplayStatus, paidForMonth, paymentMonth } from './tuitionLedger';
+import { LEDGER_START, billingDisplayStatus, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
 import { getTodayKST } from './utils';
 import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
 
@@ -86,6 +86,16 @@ export async function syncStudentBilling(studentId:string,month:string) {
     const status=required>0 && total>=required?'paid':billingDisplayStatus({status:'pending',due_date:b.due_date},getTodayKST());
     if(b.status!==status) { const {error}=await supabase.from('billing_schedules').update({status}).eq('id',b.id); if(error) throw error; }
   }
+}
+// Months before the ledger have no fixed fee, so they are never judged as over- or under-paid.
+export async function overpaymentCheck(studentId:string,month:string,amount:number,excludePaymentId?:string):Promise<PaymentExcess|null> {
+  if(!month || month<LEDGER_START) return null;
+  const [billings,payments]=await Promise.all([
+    allRows(()=>supabase.from('billing_schedules').select('final_amount').eq('student_id',studentId).eq('billing_month',month).neq('status','cancelled').order('id')),
+    allRows(()=>supabase.from('payment_records').select('id,student_id,amount,billing_month,canceled_at,billing_schedules(billing_month)').eq('student_id',studentId).is('canceled_at',null).order('id')),
+  ]);
+  const required=billings.length?billings.reduce((sum,b)=>sum+Number(b.final_amount),0):(await monthlyFees([studentId],month))[studentId] ?? 0;
+  return paymentExcess(required,paidForMonth(payments.filter(p=>p.id!==excludePaymentId),studentId,month),amount);
 }
 export async function recordManualPayment(input:{student_id:string;billing_month:string;amount:number;paid_date:string;payment_method:string;memo:string|null;recorded_by?:string|null}) {
   const {data:billings,error:billError}=await supabase.from('billing_schedules').select('id').eq('student_id',input.student_id).eq('billing_month',input.billing_month).neq('status','cancelled').order('id').limit(1);

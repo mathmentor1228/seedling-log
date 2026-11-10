@@ -18,6 +18,8 @@ import { scheduledPaymentDate, studentMonthPaymentDates, type PaymentSchedule } 
 import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
 import { MonthJumpDialog } from './MonthJumpDialog';
+import { confirmOverpayment } from './overpaymentConfirm';
+import { keepOpenOnToast } from '@/lib/confirmAtTop';
 
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
@@ -184,7 +186,10 @@ export function TuitionCalendarDashboard() {
     if (!amount || amount <= 0) { toast.error('금액을 입력해주세요'); return; }
     setSaving(true);
     try {
-      const warning = await recordManualPayment({student_id:payModalStudent.id, billing_month:payBillingMonth, amount, paid_date:payDate, payment_method:payMethod, memo:payMemo || null});
+      const overNote = await confirmOverpayment({studentName:payModalStudent.name, studentId:payModalStudent.id, month:payBillingMonth, amount});
+      if (overNote === null) { toast.info('반영하지 않았어요. 금액과 청구월을 다시 확인해 주세요', {position:'top-center'}); return; }
+      const memo = [payMemo.trim(), overNote].filter(Boolean).join(' ') || null;
+      const warning = await recordManualPayment({student_id:payModalStudent.id, billing_month:payBillingMonth, amount, paid_date:payDate, payment_method:payMethod, memo});
       if(warning) toast.warning(warning); else toast.success(`${payModalStudent.name} 납부 기록 완료`);
       changed();
       setPayModalStudent(null);
@@ -559,8 +564,8 @@ export function TuitionCalendarDashboard() {
       )}
 
       {/* Payment Modal */}
-      <Dialog open={!isHistorical && !!payModalStudent} onOpenChange={(open) => !open && setPayModalStudent(null)}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={!isHistorical && !!payModalStudent} onOpenChange={(open) => !open && !saving && setPayModalStudent(null)}>
+        <DialogContent className="max-w-sm" onInteractOutside={keepOpenOnToast}>
           <DialogHeader>
             <DialogTitle>수납 처리 - {payModalStudent?.name}</DialogTitle>
           </DialogHeader>

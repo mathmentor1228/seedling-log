@@ -445,3 +445,6 @@
 .mr-table tr:nth-child(even) td {
   background: hsl(var(--muted) / 0.25);
 }
+
+/* Radix modals disable pointer events on <body>; keep top confirmation toasts clickable over an open dialog. */
+[data-sonner-toast] { pointer-events: auto !important; }
