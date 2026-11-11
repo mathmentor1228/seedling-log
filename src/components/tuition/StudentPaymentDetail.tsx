@@ -2,16 +2,18 @@ import {useEffect,useMemo,useState} from 'react';
 import {supabase} from '@/integrations/supabase/client';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Button} from '@/components/ui/button';
+import {Badge} from '@/components/ui/badge';
 import {Table,TableHeader,TableHead,TableRow,TableBody,TableCell} from '@/components/ui/table';
 import {Loader2,Receipt,XCircle,RefreshCw} from 'lucide-react';
 import {toast} from 'sonner';
 import {allRows,cancelPayment,monthlyFees,studentFeeOverrides} from '@/lib/tuitionLedgerApi';
 import {applyingFeeOverride,type FeeOverride} from '@/lib/tuitionFeeOverrides';
-import {billingDisplayStatus,ledgerMonths,paidForMonth,paymentMonth,paymentReference} from '@/lib/tuitionLedger';
+import {billingDisplayStatus,dueDate,ledgerMonths,paidForMonth,paymentMonth,paymentReference} from '@/lib/tuitionLedger';
 import {formatStudentGrade,getTodayKST} from '@/lib/utils';
 import {BillingStatusBadge,NoReceiptLabel,SourceBadge,currentTuitionMonth} from './LedgerControls';
 import {hasReceipt,paymentYearSubtotals} from './paymentHistorySummary';
 import {PaymentTiming} from './PaymentTiming';
+import {scheduledPaymentDate} from '@/lib/tuitionPaymentDates';
 export function StudentPaymentDetail({studentId,onClose,onReceipt,onChanged}:{studentId:string|null;onClose:()=>void;onReceipt:(p:any)=>void;onChanged:()=>void}) {
  const [data,setData]=useState<{student:any;billings:any[];payments:any[];unpaid:any[];override?:FeeOverride}|null>(null);
  const [error,setError]=useState('');const [version,setVersion]=useState(0);const [canceling,setCanceling]=useState('');
@@ -29,7 +31,7 @@ export function StudentPaymentDetail({studentId,onClose,onReceipt,onChanged}:{st
     studentFeeOverrides(studentId),
    ]);if(s.error)throw s.error;
    const unpaid:any[]=[];
-   for(const month of ledgerMonths(currentTuitionMonth())){const fee=(await monthlyFees([studentId],month))[studentId];const paid=paidForMonth(payments,studentId,month);if(fee>paid)unpaid.push({month,fee,paid});}
+   for(const month of ledgerMonths(currentTuitionMonth())){const fee=(await monthlyFees([studentId],month))[studentId];const paid=paidForMonth(payments,studentId,month);if(fee>paid)unpaid.push({month,fee,paid,due:scheduledPaymentDate(studentId,month,billings,s.data?.payment_due_day).date||dueDate(month,s.data?.payment_due_day)});}
    if(alive)setData({student:s.data,billings,payments,unpaid,override:applyingFeeOverride(overrides,currentTuitionMonth(),s.data?.enrollment_status||'')});
   })().catch(()=>{if(alive)setError('수납 상세내역을 불러오지 못했습니다');});return()=>{alive=false;};
  },[studentId,version]);
@@ -49,7 +51,7 @@ export function StudentPaymentDetail({studentId,onClose,onReceipt,onChanged}:{st
    {subtotals.length>0&&<div className="mb-3 space-y-2"><Table><TableHeader><TableRow><TableHead>연도</TableHead><TableHead>건수</TableHead><TableHead>합계</TableHead></TableRow></TableHeader><TableBody>{subtotals.map(y=><TableRow key={y.year}><TableCell>{y.year}년</TableCell><TableCell>{y.count}건</TableCell><TableCell>{y.amount.toLocaleString()}원</TableCell></TableRow>)}</TableBody></Table>
     <div className="flex flex-wrap gap-1.5">{['all',...years].map(y=><Button key={y} size="sm" variant={year===y?'default':'outline'} onClick={()=>setYear(y)}>{y==='all'?'전체':`${y}년`}</Button>)}</div></div>}
    <div className="overflow-x-auto"><Table><TableHeader><TableRow>{['예정일 / 실제 납부일 / 차이','금액','귀속월','출처','수단','상세 / 메모','영수증','취소'].map(h=><TableHead key={h} className="whitespace-nowrap">{h}</TableHead>)}</TableRow></TableHeader><TableBody>{shownPayments.map(p=><TableRow key={p.id} className={p.canceled_at?'opacity-50':''}><TableCell><PaymentTiming payment={p} schedules={data.billings} dueDay={data.student.payment_due_day}/></TableCell><TableCell className="whitespace-nowrap">{Number(p.amount).toLocaleString()}원{p.canceled_at&&<div className="text-destructive">취소</div>}</TableCell><TableCell>{paymentMonth(p)||'확인 필요'}</TableCell><TableCell><SourceBadge source={p.source}/></TableCell><TableCell>{p.payment_method}</TableCell><TableCell className="min-w-40 max-w-72 text-xs"><p>{paymentReference(p)||'—'}</p><p className="whitespace-pre-wrap text-muted-foreground">{p.memo}</p><details><summary className="cursor-pointer">원문</summary><p className="whitespace-pre-wrap break-all">{p.raw_text||'—'}</p></details></TableCell><TableCell>{hasReceipt(p)?<Button size="icon" variant="ghost" aria-label={`${p.paid_date} 영수증`} title="영수증" onClick={()=>onReceipt(p)}><Receipt className="w-4 h-4"/></Button>:<NoReceiptLabel/>}</TableCell><TableCell>{!p.canceled_at&&<Button size="icon" variant="ghost" aria-label={`${p.paid_date} 납부 취소`} title="납부 취소" disabled={!!canceling} onClick={()=>cancel(p)}><XCircle className="w-4 h-4 text-destructive"/></Button>}</TableCell></TableRow>)}</TableBody></Table></div>{!data.payments.length&&<p className="text-sm text-muted-foreground py-3">납부 이력이 없습니다</p>}</section>
-  <section><h3 className="mb-2">미납 · 2026년 10월부터</h3>{data.unpaid.length?<Table><TableHeader><TableRow><TableHead>청구월</TableHead><TableHead>원비</TableHead><TableHead>납부</TableHead><TableHead>잔액</TableHead></TableRow></TableHeader><TableBody>{data.unpaid.map(u=><TableRow key={u.month}><TableCell>{u.month}</TableCell><TableCell>{u.fee.toLocaleString()}원</TableCell><TableCell>{u.paid.toLocaleString()}원</TableCell><TableCell className="text-destructive">{(u.fee-u.paid).toLocaleString()}원</TableCell></TableRow>)}</TableBody></Table>:<p className="text-sm text-muted-foreground py-3">미납 월이 없습니다</p>}</section>
+  <section><h3 className="mb-2">미납 · 2026년 10월부터</h3>{data.unpaid.length?<Table><TableHeader><TableRow><TableHead>청구월</TableHead><TableHead>원비</TableHead><TableHead>납부</TableHead><TableHead>잔액</TableHead></TableRow></TableHeader><TableBody>{data.unpaid.map(u=><TableRow key={u.month}><TableCell>{u.month}{u.due>getTodayKST()&&<Badge variant="secondary" className="ml-2 text-[10px]" title={`납부기한 ${u.due}`}>기한 전</Badge>}</TableCell><TableCell>{u.fee.toLocaleString()}원</TableCell><TableCell>{u.paid.toLocaleString()}원</TableCell><TableCell className="text-destructive">{(u.fee-u.paid).toLocaleString()}원</TableCell></TableRow>)}</TableBody></Table>:<p className="text-sm text-muted-foreground py-3">미납 월이 없습니다</p>}</section>
  </>}
  </DialogContent></Dialog>;
 }
