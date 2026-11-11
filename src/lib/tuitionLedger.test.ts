@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,paymentReference,receiptCourseNames,isLedgerReviewPayment} from './tuitionLedger';
+import {buildStudentBillings,paidForMonth,paymentMonth,paymentStatus,dueDate,ledgerMonths,billingDisplayStatus,isDueByToday,paymentReference,receiptCourseNames,isLedgerReviewPayment} from './tuitionLedger';
 describe('원비 장부 규칙',()=>{
   it('확인 필요 목록은 10월부터이며 귀속월 미확정은 숨기지 않는다',()=>{
     expect(isLedgerReviewPayment({student_id:'a',amount:127500,billing_month:'2026-09'})).toBe(false);
@@ -22,4 +22,8 @@ describe('원비 장부 규칙',()=>{
   it('외부 식별자보다 실제 카드 승인번호를 표시한다',()=>{expect(paymentReference({external_id:'4035571',raw_text:'키오스크 승인 09001410'})).toBe('승인번호 09001410');});
   it('입금자명 뒤의 다른 수납 메모는 이름에서 제외한다',()=>{expect(paymentReference({raw_text:'입금자 허승무 · 이코딩 수기 #4087953'})).toBe('입금자 허승무');});
   it('영수증에는 해당 월 활성 과정만 포함한다',()=>{const policy={subject:'수학',course_name:'고등기본수학'};expect(receiptCourseNames([{is_active:true,enrollment_date:'2026-10-01',course_policies:policy},{is_active:false,enrollment_date:'2026-10-01',course_policies:{subject:'영어',course_name:'고등영어'}},{is_active:true,enrollment_date:'2026-12-01',course_policies:{subject:'국어',course_name:'고등국어'}}],'2026-11')).toBe('수학 · 고등기본수학');});
+  it('납부기한이 오늘이면 미납 명단에 포함한다',()=>{expect(isDueByToday('2026-11',11,'2026-11-11')).toBe(true);});
+  it('납부일 29일은 11일에 아직 기한 전이다',()=>{expect(isDueByToday('2026-11',29,'2026-11-11')).toBe(false);});
+  it('지난달은 어떤 납부일이어도 기한이 지났다',()=>{expect(isDueByToday('2026-10',31,'2026-11-11')).toBe(true);expect(isDueByToday('2026-10',1,'2026-11-11')).toBe(true);});
+  it('30일까지인 달의 31일 납부일은 말일로 맞춘다',()=>{expect(isDueByToday('2026-11',31,'2026-11-30')).toBe(true);expect(isDueByToday('2026-11',31,'2026-11-29')).toBe(false);});
 });

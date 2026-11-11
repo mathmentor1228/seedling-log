@@ -111,4 +111,18 @@ describe('historical monthly ledger', () => {
     expect(db.rpc).toHaveBeenCalledTimes(1);
     expect(db.rpc).toHaveBeenCalledWith('students_monthly_fees', { _month: '2026-10', _student_ids: ['부분납', '미납'] });
   });
+
+  it('exposes each student due date from the saved bill first, falling back to the due day', async () => {
+    db.tables.students = [student('청구일변경'), student('청구없음'), { ...student('29일'), payment_due_day: 29 }];
+    db.tables.billing_schedules = [
+      { student_id: '청구일변경', billing_month: '2026-11', due_date: '2026-11-03', status: 'pending' },
+      { student_id: '청구일변경', billing_month: '2026-10', due_date: '2026-10-20', status: 'paid' },
+    ];
+    const ledger = await loadMonthLedger('2026-11');
+    expect(ledger.students.map(row => [row.id, row.dueDate])).toEqual([
+      ['청구일변경', '2026-11-03'], ['청구없음', '2026-11-15'], ['29일', '2026-11-29'],
+    ]);
+    expect(ledger.schedules).toHaveLength(1);
+    expect(db.reads.filter(read => read.table === 'billing_schedules')).toHaveLength(1);
+  });
 });
