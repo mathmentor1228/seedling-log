@@ -9,12 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
-import { allRows, loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
-import { supabase } from '@/integrations/supabase/client';
-import { LEDGER_START, dueDate } from '@/lib/tuitionLedger';
-import { scheduledPaymentDate, studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
+import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { LEDGER_START } from '@/lib/tuitionLedger';
+import { studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
+import { isUpcomingUnpaid, isUnpaid, unpaidSummary, useShowUpcomingUnpaid } from './unpaidDue';
 import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
 import { MonthJumpDialog } from './MonthJumpDialog';
@@ -37,6 +38,7 @@ interface StudentDue {
   payment_due_day: number;
   scheduledDueDate?: string | null;
   dueDateBasis?: 'billing' | 'current' | 'unknown';
+  dueDate?: string | null;
   school: string | null;
   grade: string | null;
   parent_phone: string | null;
@@ -66,6 +68,7 @@ export function TuitionCalendarDashboard() {
   const [paymentSource, setPaymentSource] = useState('all');
   const [paymentView, setPaymentView] = useState<TuitionPaymentView>('all');
   const [jumpOpen, setJumpOpen] = useState(false);
+  const [showUpcoming, setShowUpcoming] = useShowUpcomingUnpaid();
 
 
   // Payment modal
@@ -89,16 +92,11 @@ export function TuitionCalendarDashboard() {
     setLoading(true);
     setLoadError('');
     try {
-      const [ledger, billings] = await Promise.all([
-        loadMonthLedger(monthStr),
-        allRows(() => supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month', monthStr).order('id')),
-      ]);
+      // The ledger load already carries this month's billing due dates (one billing read).
+      const ledger = await loadMonthLedger(monthStr);
       if (version !== loadVersion.current) return;
-      setSchedules(billings);
-      setStudents(ledger.students.map(student => {
-        const scheduled = scheduledPaymentDate(student.id, monthStr, billings, student.payment_due_day);
-        return {...student, scheduledDueDate: scheduled.date, dueDateBasis: scheduled.basis};
-      }));
+      setSchedules(ledger.schedules);
+      setStudents(ledger.students);
       setPayments(ledger.payments.filter(p => !p.canceled_at));
     } catch { if (version === loadVersion.current) setLoadError('수납 정보를 불러오지 못했습니다'); }
     finally { if (version === loadVersion.current) setLoading(false); }
@@ -112,9 +110,12 @@ export function TuitionCalendarDashboard() {
     return days;
   }, [currentMonth]);
 
+  const todayStr = getTodayKST();
+  // Same rule as the 미납 tab: due today or earlier counts; later due dates are "기한 전".
+  const isUpcoming = (s: StudentDue) => !isHistorical && isUpcomingUnpaid(s, monthStr, todayStr);
   const filteredStudents = useMemo(
-    () => filterTuitionStudents(students, search, isHistorical ? 'all' : statusFilter),
-    [students, search, statusFilter, isHistorical],
+    () => filterTuitionStudents(students, search, isHistorical ? 'all' : statusFilter, showUpcoming ? undefined : isUpcoming),
+    [students, search, statusFilter, isHistorical, showUpcoming, monthStr, todayStr],
   );
 
   const dayData = useMemo(() => {
@@ -131,7 +132,6 @@ export function TuitionCalendarDashboard() {
     return map;
   }, [filteredStudents, monthStr]);
 
-  const todayStr = getTodayKST();
   const listPayments = useMemo(
     () => filterTuitionListPayments(payments, monthStr, paymentSource, paymentView, todayStr),
     [payments, monthStr, paymentSource, paymentView, todayStr],
@@ -176,7 +176,11 @@ export function TuitionCalendarDashboard() {
   // Summary stats
   const totalDue = students.reduce((s, st) => s + st.totalFee, 0);
   const totalPaid = students.reduce((s, st) => s + st.paidAmount, 0);
-  const unpaidStudents = isHistorical ? [] : students.filter(s => !s.isPaid && s.totalFee > 0);
+  const allUnpaid = isHistorical ? [] : students.filter(isUnpaid);
+  const upcomingUnpaid = allUnpaid.filter(isUpcoming);
+  const unpaidStudents = showUpcoming ? allUnpaid : allUnpaid.filter(s => !isUpcoming(s));
+  const unpaidTotals = unpaidSummary(unpaidStudents);
+  const upcomingTotals = unpaidSummary(upcomingUnpaid);
   const paidStudents = students.filter(s => s.isPaid);
 
   const handlePay = async () => {
@@ -247,10 +251,10 @@ export function TuitionCalendarDashboard() {
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
               <AlertTriangle className="w-3.5 h-3.5" />미납 잔액
             </div>
-            <p className={cn("text-xl font-bold", (totalDue - totalPaid) > 0 ? "text-destructive" : "")}>
-              {students.reduce((sum, s) => sum + Math.max(0, s.totalFee - s.paidAmount), 0).toLocaleString()}원
+            <p className={cn("text-xl font-bold", unpaidTotals.balance > 0 ? "text-destructive" : "")}>
+              {unpaidTotals.balance.toLocaleString()}원
             </p>
-            <p className="text-[10px] text-muted-foreground">{unpaidStudents.length}명 미납</p>
+            <p className="text-[10px] text-muted-foreground">{unpaidStudents.length}명 미납{upcomingUnpaid.length > 0 && (showUpcoming ? ` · 그중 기한 전 ${upcomingTotals.count}명 ${upcomingTotals.balance.toLocaleString()}원` : ` · 기한 전 ${upcomingTotals.count}명 제외`)}</p>
           </CardContent>
         </Card>}
         <Card>
@@ -284,6 +288,10 @@ export function TuitionCalendarDashboard() {
             <ToggleGroupItem value="unpaid" disabled={isHistorical} className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-destructive/15 data-[state=on]:text-destructive"><AlertTriangle className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />미납·부분납 <span className="text-xs tabular-nums">{unpaidStudents.length}</span></ToggleGroupItem>
             <ToggleGroupItem value="paid" className="gap-1 whitespace-nowrap px-1 text-xs sm:gap-1.5 sm:px-2.5 sm:text-sm data-[state=on]:bg-success/15 data-[state=on]:text-success"><Check className="hidden h-3.5 w-3.5 shrink-0 sm:inline-block" />완납 <span className="text-xs tabular-nums">{paidStudents.length}</span></ToggleGroupItem>
           </ToggleGroup>
+          {!isHistorical && <div className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5">
+            <Switch id="calendar-show-upcoming" checked={showUpcoming} onCheckedChange={setShowUpcoming} />
+            <Label htmlFor="calendar-show-upcoming" className="cursor-pointer whitespace-nowrap text-sm">기한 전 학생도 보기</Label>
+          </div>}
         </div>
         <div className="flex min-h-7 flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground" role="status" aria-live="polite">조회 {selectedStudents.length}명 / 전체 {students.length}명</span>
@@ -515,7 +523,9 @@ export function TuitionCalendarDashboard() {
                           {s.isPaid ? (
                             <Badge variant="success">완납</Badge>
                           ) : s.paidAmount > 0 ? (
-                            <Badge variant="secondary" className="text-[10px]">부분납</Badge>
+                            <span className="flex flex-wrap items-center gap-1"><Badge variant="secondary" className="text-[10px]">부분납</Badge>{isUpcoming(s) && <Badge variant="outline" className="text-[10px]">기한 전</Badge>}</span>
+                          ) : isUpcoming(s) ? (
+                            <Badge variant="outline" className="text-[10px]">기한 전</Badge>
                           ) : s.totalFee > 0 ? (
                             <Badge variant="destructive" className="text-[10px]">미납</Badge>
                           ) : (

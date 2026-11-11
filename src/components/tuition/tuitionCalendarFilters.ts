@@ -59,13 +59,15 @@ export function filterTuitionStudents<T extends FilterableStudent>(
   students: T[],
   search: string,
   status: TuitionStatusFilter,
+  // Unpaid students whose due date has not arrived yet; hidden from the unpaid filter when given.
+  isUpcoming?: (student: T) => boolean,
 ): T[] {
   const query = search.trim().toLocaleLowerCase();
   return students.filter(student => {
     const matchesSearch = !query || [student.name, student.school, student.grade]
       .some(value => value?.toLocaleLowerCase().includes(query));
     const matchesStatus = status === 'all'
-      || (status === 'unpaid' && student.totalFee > 0 && !student.isPaid)
+      || (status === 'unpaid' && student.totalFee > 0 && !student.isPaid && !isUpcoming?.(student))
       || (status === 'paid' && student.isPaid);
     return matchesSearch && matchesStatus;
   });
