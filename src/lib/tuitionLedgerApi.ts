@@ -1,7 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
-import { LEDGER_START, billingDisplayStatus, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
+import { LEDGER_START, billingDisplayStatus, dueDate, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
 import { getTodayKST } from './utils';
 import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
+import { scheduledPaymentDate, type PaymentSchedule } from './tuitionPaymentDates';
 
 // Page every ledger query so row caps never turn a partial read into "unpaid".
 export async function allRows(query: () => any): Promise<any[]> {
@@ -63,17 +64,24 @@ export async function loadMonthLedger(month:string) {
         totalFee: (existing?.totalFee ?? 0) + amount,
         paidAmount: (existing?.paidAmount ?? 0) + amount,
         isPaid: true,
+        dueDate: dueDate(month, student.payment_due_day),
       });
       return payment;
     });
-    return { students: [...totals.values()], payments };
+    return { students: [...totals.values()], payments, schedules: [] as PaymentSchedule[] };
   }
-  const [students,payments]=await Promise.all([
+  const [students,payments,schedules]=await Promise.all([
     allRows(()=>supabase.from('students').select('id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status').order('id')),
     getMonthPayments(month),
+    allRows(()=>supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month',month).order('id')) as Promise<PaymentSchedule[]>,
   ]);
   const fees=await monthlyFees(students.map(s=>s.id),month);
-  return {students:students.filter(s=>fees[s.id]>0).map(s=>({...s,totalFee:fees[s.id],paidAmount:paidForMonth(payments,s.id,month),isPaid:paidForMonth(payments,s.id,month)>=fees[s.id]})),payments};
+  return {students:students.filter(s=>fees[s.id]>0).map(s=>{
+    const paid=paidForMonth(payments,s.id,month);
+    // A saved bill due date (owner-editable) wins; the student's due day is the fallback.
+    const scheduled=scheduledPaymentDate(s.id,month,schedules,s.payment_due_day);
+    return {...s,totalFee:fees[s.id],paidAmount:paid,isPaid:paid>=fees[s.id],scheduledDueDate:scheduled.date,dueDateBasis:scheduled.basis,dueDate:scheduled.date||dueDate(month,s.payment_due_day)};
+  }),payments,schedules};
 }
 export async function syncStudentBilling(studentId:string,month:string) {
   const [billings,payments]=await Promise.all([

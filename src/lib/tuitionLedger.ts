@@ -1,3 +1,4 @@
+import { getTodayKST } from './utils';
 export const LEDGER_START = '2026-10';
 export interface LedgerPayment { student_id: string; amount: number; billing_month?: string | null; canceled_at?: string | null; billing_schedules?: { billing_month?: string | null } | null }
 export function paymentMonth(p: LedgerPayment): string | null { return p.billing_month || p.billing_schedules?.billing_month || null; }
@@ -11,6 +12,8 @@ export function dueDate(month: string, day: number) {
   const [y,m] = month.split('-').map(Number);
   return `${month}-${String(Math.min(Math.max(1,day || 1),new Date(y,m,0).getDate())).padStart(2,'0')}`;
 }
+// Today inclusive: a student whose due date is today already belongs on the unpaid list.
+export function isDueByToday(month: string, dueDay: number, today = getTodayKST()) { return dueDate(month, dueDay) <= today; }
 export function ledgerMonths(end: string): string[] {
   const list: string[] = [];
   let [y,m] = LEDGER_START.split('-').map(Number);
