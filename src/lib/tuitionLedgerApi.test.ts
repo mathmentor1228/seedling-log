@@ -125,4 +125,16 @@ describe('historical monthly ledger', () => {
     expect(ledger.schedules).toHaveLength(1);
     expect(db.reads.filter(read => read.table === 'billing_schedules')).toHaveLength(1);
   });
+
+  it('keeps a withdrawn student only while a non-cancelled bill remains, flagged when it is the withdrawal month', async () => {
+    db.rpc.mockImplementation((_n: string, args: { _student_ids?: string[] }) =>
+      Promise.resolve({ data: (args?._student_ids ?? []).map(id => ({ student_id: id, fee: id.startsWith('재학') ? 330000 : 0 })), error: null }));
+    db.tables.students = [student('재학생'), { ...student('김천우', '퇴원'), withdrawal_last_class_date: '2026-11-12' }, student('오채민', '퇴원')];
+    db.tables.billing_schedules = [
+      { student_id: '김천우', billing_month: '2026-11', due_date: '2026-11-21', status: 'pending', final_amount: 310000 },
+      { student_id: '오채민', billing_month: '2026-11', due_date: '2026-11-23', status: 'cancelled', final_amount: 320000 },
+    ];
+    const ledger = await loadMonthLedger('2026-11');
+    expect(ledger.students.map(row => [row.id, row.totalFee, (row as any).withdrawalCheck])).toEqual([['재학생', 330000, false], ['김천우', 310000, true]]);
+  });
 });

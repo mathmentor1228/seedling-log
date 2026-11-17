@@ -221,7 +221,6 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
           { label: '학교·시험 일정', href: '/admin/exam-schools', icon: <School className="w-4 h-4" />, description: '담당 학교 설정 · 나이스/홈페이지 자동 감시 · 시험 사이클 초안 확인·확정', allowedRoles: ['admin', 'teacher'] },
           { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, description: '반 생성·명단·시간표 연결', allowedRoles: ['admin'] },
           { label: '수업 계획(커리큘럼)', href: '/plan', icon: <BookOpenCheck className="w-4 h-4" />, description: '반별 진도 설계·학생별 시작 진도', allowedRoles: ['admin', 'teacher'] },
-          { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·입고·배부·교재비', allowedRoles: ['admin', 'teacher'] },
         ],
       },
 
@@ -259,6 +258,8 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, description: '직원 계정·역할 관리', allowedRoles: ['admin'] },
         { label: '수강료 관리', href: '/admin/tuition', icon: <Wallet className="w-4 h-4" />, description: '월 청구 생성·미납 관리', allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
+        // FEE-SYNC-BOOKTAB-V1: 교재 관리는 운영설정 아래 (경로·권한 그대로)
+        { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, description: '교재 주문·입고·배부·교재비', allowedRoles: ['admin', 'teacher'] },
         { label: '수입 관리', href: '/admin/income', icon: <TrendingUp className="w-4 h-4" />, description: '월별 수입 집계', allowedRoles: ['admin'] },
         { label: '근무시간', href: '/work-logs', icon: <Clock className="w-4 h-4" />, description: '조교 근무 기록', allowedRoles: ['admin', 'assistant'] },
         { label: '특강 신청 현황', href: '/admin/intensive-applications', icon: <ClipboardList className="w-4 h-4" />, description: '방학 특강 신청 접수', adminOnly: true },
@@ -409,25 +410,40 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [pinned, setPinned] = useState<string[]>([]);
   useEffect(() => {
     if (!pinKey) return;
-    const remote = (user?.user_metadata as any)?.pinned_nav;
+    let alive = true;
     let local: string[] = [];
     try { local = JSON.parse(localStorage.getItem(pinKey) || '[]'); } catch { local = []; }
-    if (Array.isArray(remote)) {
-      setPinned(remote);
-      localStorage.setItem(pinKey, JSON.stringify(remote));
-    } else {
-      setPinned(local);
-      if (local.length) void supabase.auth.updateUser({ data: { pinned_nav: local } });
-    }
+    const apply = (remote: unknown) => {
+      if (!alive) return;
+      if (Array.isArray(remote)) {
+        setPinned(remote);
+        try { localStorage.setItem(pinKey, JSON.stringify(remote)); } catch { /* storage unavailable */ }
+      } else {
+        setPinned(local);
+        if (local.length) void supabase.auth.updateUser({ data: { pinned_nav: local } });
+      }
+    };
+    // Show the cached session copy immediately, then the server copy: the stored session can be stale
+    // when the same account pinned menus on another device, and saving from stale state overwrote them.
+    setPinned(Array.isArray((user?.user_metadata as any)?.pinned_nav) ? (user?.user_metadata as any).pinned_nav : local);
+    supabase.auth.getUser().then(({ data, error }) => { if (!error && data.user) apply((data.user.user_metadata as any)?.pinned_nav); else apply((user?.user_metadata as any)?.pinned_nav); });
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pinKey]);
-  const togglePin = (href: string) => {
-    setPinned(prev => {
-      const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
-      if (pinKey) localStorage.setItem(pinKey, JSON.stringify(next));
-      void supabase.auth.updateUser({ data: { pinned_nav: next } });
-      return next;
-    });
+  const togglePin = async (href: string) => {
+    const prev = pinned;
+    const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
+    setPinned(next);
+    if (pinKey) { try { localStorage.setItem(pinKey, JSON.stringify(next)); } catch { /* storage unavailable */ } }
+    const { error } = await supabase.auth.updateUser({ data: { pinned_nav: next } });
+    if (error) {
+      // Saving failed: roll back so the menu never shows a pin that will vanish on next login.
+      setPinned(prev);
+      if (pinKey) { try { localStorage.setItem(pinKey, JSON.stringify(prev)); } catch { /* ignore */ } }
+      toast.error('고정 메뉴를 저장하지 못했어요', { description: error.message === 'Auth session missing!' ? '로그인이 만료됐어요. 다시 로그인한 뒤 고정해 주세요.' : error.message });
+      return;
+    }
+    toast.success(next.includes(href) ? '상단에 고정했어요' : '고정을 풀었어요', { duration: 1500 });
   };
   const pinnedItems = pinned
     .map(h => searchableItems.find(i => i.href === h))
@@ -484,12 +500,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       {!sidebarCollapsed && (
         <button
           type="button"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(item.href); }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); void togglePin(item.href); }}
           title={isPinned ? '상단 고정 해제' : '상단에 고정'}
           aria-label={isPinned ? `${item.label} 상단 고정 해제` : `${item.label} 상단에 고정`}
           className={cn(
             "absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-sidebar-foreground/50 hover:text-primary hover:bg-sidebar-accent transition-opacity",
-            isPinned ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+            isPinned ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-60"
           )}
         >
           {isPinned && keyPrefix ? <PinOff className="w-3.5 h-3.5" /> : <Pin className={cn("w-3.5 h-3.5", isPinned && "fill-current")} />}

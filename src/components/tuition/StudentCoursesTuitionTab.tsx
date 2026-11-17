@@ -15,10 +15,11 @@ import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent,
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { buildTeacherChangeNote } from '@/lib/teacherChangeLog';
-import { monthlyFees, studentFeeOverrides } from '@/lib/tuitionLedgerApi';
-import { currentTuitionMonth } from './LedgerControls';
-import { paymentMonth } from '@/lib/tuitionLedger';
-import { applyingFeeOverride, type FeeOverride } from '@/lib/tuitionFeeOverrides';
+import { applyFeeChange, loadFeeSyncData, monthlyFees, studentFeeOverrides } from '@/lib/tuitionLedgerApi';
+import { MonthInput, currentTuitionMonth } from './LedgerControls';
+import { LEDGER_START, defaultFeeSyncMonth, feeSyncTargets, paymentMonth } from '@/lib/tuitionLedger';
+import { applyingFeeOverride, projectedMonthlyFee, type FeeOverride } from '@/lib/tuitionFeeOverrides';
+import { useAuth } from '@/lib/auth';
 import { StudentFeeOverrideSection } from './StudentFeeOverrideSection';
 
 
@@ -63,6 +64,11 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [feeEditCourse, setFeeEditCourse] = useState<any | null>(null);
   const [feeEditValue, setFeeEditValue] = useState('');
   const [feeSaving, setFeeSaving] = useState(false);
+  // 원비 변경 → 미납 청구 반영 (#34)
+  const { role } = useAuth();
+  const [feeSync, setFeeSync] = useState<{ bills: any[]; payments: any[] } | null>(null);
+  const [feeSyncError, setFeeSyncError] = useState('');
+  const [syncMonth, setSyncMonth] = useState(currentTuitionMonth());
 
   // 담당 선생님 변경(정산 기준일 포함) state
   const [teacherChanges, setTeacherChanges] = useState<any[]>([]);
@@ -300,7 +306,19 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const openFeeEdit = (c: any) => {
     setFeeEditCourse(c);
     setFeeEditValue(c.custom_monthly_fee != null ? String(c.custom_monthly_fee) : '');
+    setFeeSync(null); setFeeSyncError('');
+    loadFeeSyncData(studentId).then(data => {
+      setFeeSync(data);
+      setSyncMonth(defaultFeeSyncMonth(data.bills, data.payments, currentTuitionMonth()));
+    }).catch(() => setFeeSyncError('미납 청구를 불러오지 못했습니다'));
   };
+  const editedFee = feeEditValue.trim() === '' ? null : Number(feeEditValue.trim());
+  const feeChanged = !!feeEditCourse && editedFee !== (feeEditCourse.custom_monthly_fee == null ? null : Number(feeEditCourse.custom_monthly_fee)) && (editedFee == null || (!Number.isNaN(editedFee) && editedFee >= 0));
+  const feePreview = useMemo(() => {
+    if (!feeEditCourse || !feeSync || !feeChanged) return null;
+    const projected = projectedMonthlyFee({ month: syncMonth, courses, edit: { courseId: feeEditCourse.id, fee: editedFee }, siblingCount, overrides, enrollmentStatus });
+    return { ...projected, targets: feeSyncTargets(feeSync.bills, feeSync.payments, syncMonth, projected.total) };
+  }, [feeEditCourse, feeSync, feeChanged, syncMonth, courses, editedFee, siblingCount, overrides, enrollmentStatus]);
 
   const saveCustomFee = async () => {
     if (!feeEditCourse) return;
@@ -315,9 +333,18 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
       .from('student_courses')
       .update({ custom_monthly_fee: newVal } as any)
       .eq('id', feeEditCourse.id);
+    if (error) { setFeeSaving(false); toast.error('수강료 수정 실패'); return; }
+    let syncNote = '';
+    if (role === 'admin' && feePreview && feePreview.targets.length > 0) {
+      try {
+        // Bills follow the authoritative monthly fee function, read after the course fee is saved.
+        const total = (await monthlyFees([studentId], syncMonth))[studentId];
+        const n = await applyFeeChange(studentId, syncMonth, total);
+        syncNote = ` · 미납 청구 ${n}건을 ${total.toLocaleString()}원으로 반영`;
+      } catch (err) { toast.error(`수강료는 저장됐지만 청구 반영에 실패했습니다: ${err instanceof Error ? err.message : ''}`); }
+    }
     setFeeSaving(false);
-    if (error) { toast.error('수강료 수정 실패'); return; }
-    toast.success(newVal == null ? '직접지정 해제 완료 (정책 금액 사용)' : '수강료 수정 완료');
+    toast.success((newVal == null ? '직접지정 해제 완료 (정책 금액 사용)' : '수강료 수정 완료') + syncNote);
     setFeeEditCourse(null);
     loadAll();
   };
@@ -663,6 +690,16 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
                 * 다과목/형제 할인 등 이미 반영된 실제 청구 금액을 입력하세요. 비우면 정책 금액(다과목·형제 할인 자동 적용)으로 돌아갑니다.
               </p>
             </div>
+            {feeChanged && <section aria-label="미납 청구 반영" className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+              <div className="flex items-center justify-between gap-2"><Label htmlFor="fee-sync-month" className="text-sm">적용 시작 달</Label><MonthInput id="fee-sync-month" label="적용 시작 달" min={LEDGER_START} value={syncMonth} onChange={v => v && setSyncMonth(v)} /></div>
+              {feeSyncError ? <p role="alert" className="text-xs text-destructive">{feeSyncError}</p> : !feePreview ? <Loader2 className="h-4 w-4 animate-spin" /> : feePreview.override ? (
+                <p className="text-xs text-muted-foreground">{feePreview.override.from_month}부터 월 원비 고정 {feePreview.override.amount.toLocaleString()}원이 있어 청구는 바뀌지 않습니다.</p>
+              ) : feePreview.targets.length ? (
+                <p className="text-sm" role="status">미납 청구 <b>{feePreview.targets.length}건</b>이 {[...new Set(feePreview.targets.map(t => t.from))].map(v => v.toLocaleString()).join('·')}원 → <b>{feePreview.targets[0].to.toLocaleString()}원</b>으로 바뀝니다 <span className="text-xs text-muted-foreground">({feePreview.targets.map(t => t.bill.billing_month).join(', ')})</span></p>
+              ) : <p className="text-xs text-muted-foreground" role="status">{syncMonth}부터 바뀌는 미납 청구가 없습니다 (월 원비 {feePreview.total.toLocaleString()}원)</p>}
+              {role !== 'admin' && feePreview?.targets.length ? <p className="text-xs text-muted-foreground">청구 반영은 원장 계정에서만 됩니다.</p> : null}
+              <p className="text-[11px] text-muted-foreground">완납·부분납·결제가 붙은 청구와 원장이 직접 고친 청구는 그대로 둡니다.</p>
+            </section>}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setFeeEditCourse(null)}>취소</Button>

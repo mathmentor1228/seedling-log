@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
-import { LEDGER_START, billingDisplayStatus, dueDate, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
+import { LEDGER_START, billingDisplayStatus, dueDate, needsWithdrawalMonthCheck, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
+import { monthsAround, type RangeBill } from '@/components/tuition/unpaidDue';
 import { getTodayKST } from './utils';
 import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
 import { scheduledPaymentDate, type PaymentSchedule } from './tuitionPaymentDates';
@@ -71,16 +72,20 @@ export async function loadMonthLedger(month:string) {
     return { students: [...totals.values()], payments, schedules: [] as PaymentSchedule[] };
   }
   const [students,payments,schedules]=await Promise.all([
-    allRows(()=>supabase.from('students').select('id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status').order('id')),
+    allRows(()=>supabase.from('students').select('id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status,withdrawal_last_class_date,withdrawn_at').order('id')),
     getMonthPayments(month),
-    allRows(()=>supabase.from('billing_schedules').select('student_id,billing_month,due_date,status').eq('billing_month',month).order('id')) as Promise<PaymentSchedule[]>,
+    allRows(()=>supabase.from('billing_schedules').select('id,student_id,billing_month,due_date,status,final_amount,discount_amount,extra_amount,memo').eq('billing_month',month).order('id')) as Promise<(PaymentSchedule & {id?:string;final_amount?:number;discount_amount?:number;extra_amount?:number|null;memo?:string|null})[]>,
   ]);
   const fees=await monthlyFees(students.map(s=>s.id),month);
-  return {students:students.filter(s=>fees[s.id]>0).map(s=>{
+  // 퇴원/휴학 students have a 0 monthly fee; keep them only while a non-cancelled bill remains for the month (amount = that bill).
+  const billTotal=(id:string)=>schedules.filter(b=>b.student_id===id&&b.status!=='cancelled').reduce((sum,b)=>sum+Number(b.final_amount||0),0);
+  const inactive=(s:any)=>s.enrollment_status==='퇴원'||s.enrollment_status==='휴학';
+  return {students:students.filter(s=>fees[s.id]>0||(inactive(s)&&billTotal(s.id)>0)).map(s=>{
+    const fee=fees[s.id]>0?fees[s.id]:billTotal(s.id);
     const paid=paidForMonth(payments,s.id,month);
     // A saved bill due date (owner-editable) wins; the student's due day is the fallback.
     const scheduled=scheduledPaymentDate(s.id,month,schedules,s.payment_due_day);
-    return {...s,totalFee:fees[s.id],paidAmount:paid,isPaid:paid>=fees[s.id],scheduledDueDate:scheduled.date,dueDateBasis:scheduled.basis,dueDate:scheduled.date||dueDate(month,s.payment_due_day)};
+    return {...s,totalFee:fee,paidAmount:paid,isPaid:paid>=fee,scheduledDueDate:scheduled.date,dueDateBasis:scheduled.basis,dueDate:scheduled.date||dueDate(month,s.payment_due_day),withdrawalCheck:inactive(s)&&needsWithdrawalMonthCheck(s,month)};
   }),payments,schedules};
 }
 export async function syncStudentBilling(studentId:string,month:string) {
@@ -120,4 +125,32 @@ export async function cancelPayment(p:any,note?:string) {
   const month=paymentMonth(p);
   if(month) { try {await syncStudentBilling(p.student_id,month);} catch {return '취소는 저장됐지만 청구 상태 확인이 필요합니다';} }
   return null;
+}
+
+// #32 V2: bills whose due date may fall in [from, to] (± one billing month), with that window's payments.
+const RANGE_STUDENT_COLUMNS='id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status,withdrawal_last_class_date,withdrawn_at';
+export async function loadUnpaidByDueRange(from:string,to:string):Promise<{bills:RangeBill[];payments:any[]}> {
+  const {start,end}=monthsAround(from,to);
+  const [bills,payments]=await Promise.all([
+    allRows(()=>supabase.from('billing_schedules').select(`id,student_id,billing_month,due_date,status,final_amount,memo,students(${RANGE_STUDENT_COLUMNS})`).gte('billing_month',start).lte('billing_month',end).neq('status','cancelled').order('id')),
+    allRows(()=>supabase.from('payment_records').select('id,student_id,amount,billing_month,canceled_at,billing_schedules(billing_month)').or(`and(billing_month.gte.${start},billing_month.lte.${end}),billing_month.is.null`).is('canceled_at',null).order('id')),
+  ]);
+  return {bills:bills as RangeBill[],payments};
+}
+// #32 V2: every payment actually made in [from, to], regardless of billing month.
+export async function loadPaymentsByPaidRange(from:string,to:string) {
+  return allRows(()=>supabase.from('payment_records').select('id,student_id,amount,paid_date,billing_month,source,needs_review,canceled_at,students(name),billing_schedules(billing_month,final_amount)').gte('paid_date',from).lte('paid_date',to).order('paid_date',{ascending:false}).order('id'));
+}
+// #34: bills + payments needed to preview which unpaid bills a fee change will touch.
+export async function loadFeeSyncData(studentId:string) {
+  const [bills,payments]=await Promise.all([
+    allRows(()=>supabase.from('billing_schedules').select('id,billing_month,status,final_amount,discount_amount,extra_amount,memo').eq('student_id',studentId).gte('billing_month',LEDGER_START).order('billing_month').order('id')),
+    allRows(()=>supabase.from('payment_records').select('id,billing_schedule_id,billing_month,canceled_at').eq('student_id',studentId).order('id')),
+  ]);
+  return {bills,payments};
+}
+export async function applyFeeChange(studentId:string,fromMonth:string,newTotal:number):Promise<number> {
+  const {data,error}=await supabase.rpc('apply_fee_change',{p_student_id:studentId,p_from_month:fromMonth,p_new_total:newTotal});
+  if(error) throw new Error(error.message || '원비 변경을 청구에 반영하지 못했습니다');
+  return Number(data ?? 0);
 }

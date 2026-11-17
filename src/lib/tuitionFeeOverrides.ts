@@ -22,3 +22,21 @@ export function pendingRepriceChanges(rows: RepriceBilling[], fees: Record<strin
     return Number(row.base_amount) === base && Number(row.final_amount) === final ? [] : [{ row, base_amount: base, final_amount: final }];
   });
 }
+// Client mirror of student_monthly_fee for previews (#34): override first, else course fees with
+// multi-subject/sibling discounts only when no course has a directly set fee.
+export interface FeePreviewCourse { id: string; is_active: boolean; enrollment_date: string; end_date?: string | null; custom_monthly_fee?: number | string | null; course_policies?: { subject?: string | null; monthly_fee?: number | string | null } | null }
+const MULTI_DISCOUNT = (n: number) => n >= 4 ? 100000 : n === 3 ? 80000 : n === 2 ? 50000 : 0;
+export function projectedMonthlyFee(input: { month: string; courses: FeePreviewCourse[]; edit?: { courseId: string; fee: number | null }; siblingCount: number; overrides: FeeOverride[]; enrollmentStatus: string }): { total: number; override?: FeeOverride } {
+  if (!['재학', '재등원'].includes(input.enrollmentStatus)) return { total: 0 };
+  const override = applyingFeeOverride(input.overrides, input.month, input.enrollmentStatus);
+  if (override) return { total: override.amount, override };
+  const [y, m] = input.month.split('-').map(Number);
+  const start = `${input.month}-01`, end = `${input.month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+  const active = input.courses.filter(c => c.is_active && c.enrollment_date <= end && (!c.end_date || c.end_date >= start))
+    .map(c => input.edit && c.id === input.edit.courseId ? { ...c, custom_monthly_fee: input.edit.fee } : c);
+  const gross = active.reduce((sum, c) => sum + Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0), 0);
+  if (gross === 0) return { total: 0 };
+  if (active.some(c => c.custom_monthly_fee != null)) return { total: gross };
+  const subjects = new Set(active.map(c => c.course_policies?.subject).filter(Boolean)).size;
+  return { total: Math.max(0, gross - MULTI_DISCOUNT(subjects) - (input.siblingCount > 1 ? 10000 : 0)) };
+}

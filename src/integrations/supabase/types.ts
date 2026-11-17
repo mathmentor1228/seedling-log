@@ -9691,6 +9691,14 @@ export type Database = {
     }
     Functions: {
       apply_due_office_task_student_sync: { Args: never; Returns: number }
+      apply_fee_change: {
+        Args: {
+          p_from_month: string
+          p_new_total: number
+          p_student_id: string
+        }
+        Returns: number
+      }
       apply_lesson_homework_status: {
         Args: {
           _lesson_date: string

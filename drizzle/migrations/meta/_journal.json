@@ -211,6 +211,20 @@
       "when": 1793780026966,
       "tag": "0029_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794900347978,
+      "tag": "0030_withdraw_cancel_bills",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794900366711,
+      "tag": "0031_apply_fee_change",
+      "breakpoints": true
     }
   ]
 }

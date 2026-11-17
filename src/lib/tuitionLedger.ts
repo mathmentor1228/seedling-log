@@ -48,3 +48,56 @@ export function paymentExcess(required: number, alreadyPaid: number, amount: num
   const excess = after - Math.max(0, required);
   return excess > 0 ? { required: Math.max(0, required), alreadyPaid, after, excess } : null;
 }
+
+// ---- Due-date ranges (#32 V2) ----
+// A saved bill due date wins; otherwise the student's due day in the bill's month (clamped to month end).
+export function effectiveDueDate(bill: { billing_month: string; due_date: string | null }, paymentDueDay: number) { return bill.due_date ?? dueDate(bill.billing_month, paymentDueDay); }
+// Inclusive on both ends ('YYYY-MM-DD' strings compare lexically).
+export function inRange(d: string, from: string, to: string) { return d >= from && d <= to; }
+
+// ---- Withdrawal base month (#33, mirrors cancel_bills_after_withdrawal) ----
+export function kstDate(timestamp: string): string { return new Date(new Date(timestamp).getTime() + 9 * 3600_000).toISOString().slice(0, 10); }
+export interface WithdrawalInfo { enrollment_status?: string | null; withdrawal_last_class_date?: string | null; withdrawn_at?: string | null }
+// 퇴원: month of the last class, else month of the withdrawal date (KST). 휴학 has no stored change date.
+export function withdrawalBaseMonth(s: WithdrawalInfo): string | null {
+  if (s.enrollment_status !== '퇴원') return null;
+  const date = s.withdrawal_last_class_date || (s.withdrawn_at ? kstDate(s.withdrawn_at) : null);
+  return date ? date.slice(0, 7) : null;
+}
+// Bills in the base month are kept for the owner to decide; later months are auto-cancelled by the trigger.
+export function needsWithdrawalMonthCheck(s: WithdrawalInfo, billingMonth: string): boolean {
+  if (s.enrollment_status === '휴학') return true;
+  const base = withdrawalBaseMonth(s);
+  return base !== null && base === billingMonth;
+}
+export function autoCancelInfo(memo: string | null | undefined): { kind: '퇴원' | '휴학'; date: string } | null {
+  const m = memo?.match(/자동취소:\s*(퇴원|휴학|기존 퇴원생 정리)\s*(\d{4}-\d{2}-\d{2})/);
+  if (!m) return null;
+  return { kind: m[1] === '휴학' ? '휴학' : '퇴원', date: m[2] };
+}
+
+// ---- Fee change sync (#34, mirrors apply_fee_change) ----
+export interface FeeSyncBill { id: string; billing_month: string; status: string; final_amount: number | string; discount_amount?: number | string | null; extra_amount?: number | string | null; memo?: string | null }
+export interface FeeSyncPayment { billing_schedule_id?: string | null; billing_month?: string | null; canceled_at?: string | null }
+export function billAmountFor(bill: FeeSyncBill, newTotal: number) { return newTotal - Number(bill.discount_amount || 0) + Number(bill.extra_amount || 0); }
+export function feeSyncTargets(bills: FeeSyncBill[], payments: FeeSyncPayment[], fromMonth: string, newTotal: number) {
+  return bills.filter(b => {
+    if (b.billing_month < fromMonth || b.billing_month < LEDGER_START) return false;
+    if (b.status !== 'pending' && b.status !== 'overdue') return false;
+    if (b.memo && b.memo.includes('원장')) return false;
+    if (Number(b.final_amount) === billAmountFor(b, newTotal)) return false;
+    if (payments.some(p => p.billing_schedule_id === b.id)) return false;
+    if (payments.some(p => !p.canceled_at && p.billing_month === b.billing_month)) return false;
+    // One bill row per student-month; legacy split months are left to manual review.
+    if (bills.some(o => o.id !== b.id && o.billing_month === b.billing_month && o.status !== 'cancelled')) return false;
+    return true;
+  }).map(b => ({ bill: b, from: Number(b.final_amount), to: billAmountFor(b, newTotal) })).sort((a, b) => a.bill.billing_month.localeCompare(b.bill.billing_month));
+}
+// Default start month: this month, unless this month already has money (paid/partial or any payment) — then next month.
+export function defaultFeeSyncMonth(bills: FeeSyncBill[], payments: FeeSyncPayment[], current: string): string {
+  const touched = bills.some(b => b.billing_month === current && (b.status === 'paid' || b.status === 'partial'))
+    || payments.some(p => !p.canceled_at && p.billing_month === current);
+  if (!touched) return current;
+  const [y, m] = current.split('-').map(Number);
+  return `${y + (m === 12 ? 1 : 0)}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
+}

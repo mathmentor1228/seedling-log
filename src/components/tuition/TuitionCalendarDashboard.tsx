@@ -12,15 +12,16 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
-import { loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
-import { LEDGER_START } from '@/lib/tuitionLedger';
+import { applyFeeChange, loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { LEDGER_START, feeSyncTargets } from '@/lib/tuitionLedger';
+import { useAuth } from '@/lib/auth';
 import { studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
 import { isUpcomingUnpaid, isUnpaid, unpaidSummary, useShowUpcomingUnpaid } from './unpaidDue';
 import { PaymentTiming } from './PaymentTiming';
 import { MonthInput } from './LedgerControls';
 import { MonthJumpDialog } from './MonthJumpDialog';
 import { confirmOverpayment } from './overpaymentConfirm';
-import { keepOpenOnToast } from '@/lib/confirmAtTop';
+import { confirmAtTop, keepOpenOnToast } from '@/lib/confirmAtTop';
 
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { SourceBadge } from './LedgerControls';
@@ -47,6 +48,8 @@ interface StudentDue {
   isPaid: boolean;
   paidAmount: number;
   paymentId?: string;
+  enrollment_status?: string | null;
+  withdrawalCheck?: boolean;
 }
 
 export function TuitionCalendarDashboard() {
@@ -69,6 +72,8 @@ export function TuitionCalendarDashboard() {
   const [paymentView, setPaymentView] = useState<TuitionPaymentView>('all');
   const [jumpOpen, setJumpOpen] = useState(false);
   const [showUpcoming, setShowUpcoming] = useShowUpcomingUnpaid();
+  const { role } = useAuth();
+  const [syncing, setSyncing] = useState('');
 
 
   // Payment modal
@@ -182,6 +187,23 @@ export function TuitionCalendarDashboard() {
   const unpaidTotals = unpaidSummary(unpaidStudents);
   const upcomingTotals = unpaidSummary(upcomingUnpaid);
   const paidStudents = students.filter(s => s.isPaid);
+
+  // #34: a pending bill that no longer matches the student's current monthly fee can be synced from this month.
+  const feeMismatch = (st: StudentDue) => {
+    if (isHistorical || role !== 'admin' || st.enrollment_status === '퇴원' || st.enrollment_status === '휴학') return null;
+    const bills = (schedules as any[]).filter(b => b.student_id === st.id && b.id);
+    return feeSyncTargets(bills, payments.filter(p => p.student_id === st.id) as any[], monthStr, st.totalFee)[0] ?? null;
+  };
+  const syncFee = async (st: StudentDue) => {
+    const target = feeMismatch(st);
+    if (!target || syncing) return;
+    const ok = await confirmAtTop({ title: `${st.name} ${monthStr}부터 원비 변경을 청구에 반영할까요?`, description: `청구 ${target.from.toLocaleString()}원 → ${target.to.toLocaleString()}원 (현재 월 원비 기준). 안 낸 청구만 바뀌어요.`, confirmLabel: '청구에 반영' });
+    if (!ok) return;
+    setSyncing(st.id);
+    try { const n = await applyFeeChange(st.id, monthStr, st.totalFee); toast.success(`${st.name} 미납 청구 ${n}건을 새 원비로 바꿨어요`); changed(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : '원비 변경 반영 실패'); }
+    finally { setSyncing(''); }
+  };
 
   const handlePay = async () => {
     if (!payModalStudent || isHistorical) return;
@@ -511,6 +533,8 @@ export function TuitionCalendarDashboard() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
                           {s.totalFee.toLocaleString()}원
+                          {s.withdrawalCheck && !s.isPaid && <Badge variant="outline" className="ml-1.5 border-warning/60 text-warning text-[10px]" title="퇴원(휴학) 당월 청구입니다. 받을지 확인해 주세요">퇴원 당월 · 확인</Badge>}
+                          {(() => { const m = feeMismatch(s); return m ? <Button size="sm" variant="outline" className="mt-1 flex h-6 ml-auto gap-1 px-2 text-[10px]" disabled={!!syncing} title={`청구 ${m.from.toLocaleString()}원 → ${m.to.toLocaleString()}원`} onClick={() => syncFee(s)}>{syncing === s.id && <Loader2 className="h-3 w-3 animate-spin" />}원비 변경 반영 <span className="text-muted-foreground">청구 {m.from.toLocaleString()}</span></Button> : null; })()}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right tabular-nums">
                           {s.paidAmount > 0 ? (

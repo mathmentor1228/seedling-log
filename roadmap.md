@@ -1,4 +1,10 @@
-# Current task
+# Current task (2026-11-17 요청서 #32 V2 · #33 · #34)
+- [x] #32 V2: 미납 탭 기간 선택·납부기한 기준 미납·결제일 기준 결제내역·퇴원/휴학 배지 (미리보기 17행/32행, 달력 17명 일치)
+- [x] #33: 자동취소 트리거(되돌리기 시험으로 동작 확인)·기존 정리 0건·퇴원 당월 배지·자동취소 안내
+- [x] #34: apply_fee_change(되돌리기 시험 확인)·원비 변경 미리보기(김혜원 1건 530,000→600,000, 저장 안 함)·달력 반영 버튼·일괄 생성은 이미 현재 원비 사용
+- [x] #34: 교재 관리 운영설정 아래로 이동·고정핀 저장 실패 처리/최신 정보 읽기/터치 표시 (고정·해제 새로고침 후 유지 확인)
+
+# Previous tasks
 - [x] Exclude pre-2026-10 months from unpaid judgement using recorded non-canceled payments only; authenticated September preview confirms 88 students/92 payments/36,355,000 won and zero unpaid, October keeps 17 unpaid/partial, historical billing controls hidden, Park Seojeong September 127,500 preserved and unpaid only from October, income September matches; 88 tests passed and build OK, no data/backend changes or publishing.
 - [x] Add existing test-result viewing and editing to dashboard inline lesson entries; canonical slots 1/2 and legacy result fallbacks, changed-field saves preserving metadata/submitted state, refresh without clearing lesson edits, and visible read/conflict errors; authenticated display/edit/refresh and 872px/390px layout checked without saving real results, isolated persistence tests run, no backend changes or publishing.
 - [x] Verify October 26 reupload: SQL byte-identical to existing migration; live function and authenticated reads confirm October 525,000, November 600,000, one override and November billing 600,000; 87 November bills/no inactive students and read-only recalculation comparison 0 changes; required UI/types inspected, November row and October no-unpaid UI verified, 13 tests passed with no runtime errors; no duplicate migration, record edits, function deployment, secrets, or publishing.

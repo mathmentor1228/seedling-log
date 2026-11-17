@@ -27,3 +27,26 @@ describe('원비 장부 규칙',()=>{
   it('지난달은 어떤 납부일이어도 기한이 지났다',()=>{expect(isDueByToday('2026-10',31,'2026-11-11')).toBe(true);expect(isDueByToday('2026-10',1,'2026-11-11')).toBe(true);});
   it('30일까지인 달의 31일 납부일은 말일로 맞춘다',()=>{expect(isDueByToday('2026-11',31,'2026-11-30')).toBe(true);expect(isDueByToday('2026-11',31,'2026-11-29')).toBe(false);});
 });
+
+import {effectiveDueDate,inRange,withdrawalBaseMonth,needsWithdrawalMonthCheck,autoCancelInfo,feeSyncTargets,defaultFeeSyncMonth} from './tuitionLedger';
+describe('기간별 미납 기준 (#32 V2)',()=>{
+  it('청구에 저장된 납부기한이 학생 납부일보다 우선한다',()=>{expect(effectiveDueDate({billing_month:'2026-10',due_date:'2026-10-26'},12)).toBe('2026-10-26');});
+  it('저장된 기한이 없으면 학생 납부일로 계산한다',()=>{expect(effectiveDueDate({billing_month:'2026-11',due_date:null},29)).toBe('2026-11-29');});
+  it('2026년 10월 31일 납부일은 10-31 그대로다',()=>{expect(effectiveDueDate({billing_month:'2026-10',due_date:null},31)).toBe('2026-10-31');});
+  it('기간은 시작일과 종료일을 모두 포함한다',()=>{expect(inRange('2026-11-01','2026-11-01','2026-11-17')).toBe(true);expect(inRange('2026-11-17','2026-11-01','2026-11-17')).toBe(true);expect(inRange('2026-11-18','2026-11-01','2026-11-17')).toBe(false);expect(inRange('2026-10-31','2026-11-01','2026-11-17')).toBe(false);});
+});
+describe('퇴원 기준 달 (#33)',()=>{
+  it('마지막 수업일이 있으면 그 달이 기준이다 (박지현 10/2, 퇴원 처리 11/2)',()=>{expect(withdrawalBaseMonth({enrollment_status:'퇴원',withdrawal_last_class_date:'2026-10-02',withdrawn_at:'2026-11-02T03:00:00Z'})).toBe('2026-10');});
+  it('마지막 수업일이 없으면 퇴원일(한국 시간)의 달이다',()=>{expect(withdrawalBaseMonth({enrollment_status:'퇴원',withdrawn_at:'2026-10-31T16:00:00Z'})).toBe('2026-11');});
+  it('퇴원 당월 청구만 확인 표시하고 그 전 달은 그냥 미납이다',()=>{const s={enrollment_status:'퇴원',withdrawal_last_class_date:'2026-11-12'};expect(needsWithdrawalMonthCheck(s,'2026-11')).toBe(true);expect(needsWithdrawalMonthCheck(s,'2026-10')).toBe(false);});
+  it('재학생은 확인 표시가 없다',()=>{expect(needsWithdrawalMonthCheck({enrollment_status:'재학'},'2026-11')).toBe(false);});
+  it('자동취소 메모에서 날짜를 읽는다',()=>{expect(autoCancelInfo('자동취소: 퇴원 2026-11-20')).toEqual({kind:'퇴원',date:'2026-11-20'});expect(autoCancelInfo('메모\n자동취소: 휴학 2026-12-01')).toEqual({kind:'휴학',date:'2026-12-01'});expect(autoCancelInfo('10/30 퇴원으로 11월 청구 취소')).toBeNull();});
+});
+describe('원비 변경 반영 (#34)',()=>{
+  const bill=(id:string,month:string,extra:Record<string,unknown>={})=>({id,billing_month:month,status:'pending',final_amount:530000,discount_amount:0,extra_amount:0,memo:null,...extra});
+  it('김혜원: 11월 대기 청구 530,000 → 600,000',()=>{expect(feeSyncTargets([bill('n','2026-11')],[],'2026-11',600000).map(t=>[t.bill.id,t.from,t.to])).toEqual([['n',530000,600000]]);});
+  it('완납·부분납·결제 붙은 청구·원장 메모 청구는 바꾸지 않는다',()=>{const bills=[bill('p','2026-11',{status:'paid'}),bill('q','2026-12',{status:'partial'}),bill('r','2027-01'),bill('s','2027-02',{memo:'원장 직접 조정'})];expect(feeSyncTargets(bills,[{billing_schedule_id:'r'}],'2026-11',600000)).toEqual([]);});
+  it('시작 달 이전 청구는 바꾸지 않는다',()=>{expect(feeSyncTargets([bill('o','2026-10'),bill('n','2026-11')],[],'2026-11',600000).map(t=>t.bill.id)).toEqual(['n']);});
+  it('특강비가 붙은 청구는 새 원비에 특강비를 더한다',()=>{expect(feeSyncTargets([bill('n','2026-11',{extra_amount:100000,final_amount:630000})],[],'2026-11',600000)[0].to).toBe(700000);});
+  it('이번 달이 이미 납부됐으면 기본 시작 달은 다음 달이다',()=>{expect(defaultFeeSyncMonth([bill('n','2026-11',{status:'paid'})],[],'2026-11')).toBe('2026-12');expect(defaultFeeSyncMonth([bill('n','2026-11')],[],'2026-11')).toBe('2026-11');expect(defaultFeeSyncMonth([],[{billing_month:'2026-12'}],'2026-12')).toBe('2027-01');});
+});

@@ -37,3 +37,18 @@ describe('월 원비 고정과 대기 청구 재계산', () => {
     expect(() => pendingRepriceChanges([billing], { a: 600000 }, '2026-09')).toThrow();
   });
 });
+import { projectedMonthlyFee } from './tuitionFeeOverrides';
+describe('원비 변경 미리보기 금액 (#34)', () => {
+  const course = (id: string, subject: string, fee: number, custom: number | null = null) => ({ id, is_active: true, enrollment_date: '2026-09-01', custom_monthly_fee: custom, course_policies: { subject, monthly_fee: fee } });
+  it('김혜원: 직접지정 228,000+302,000에서 한 과목을 372,000으로 바꾸면 600,000', () => {
+    const courses = [course('a', '영어', 320000, 228000), course('b', '국어', 280000, 302000)];
+    expect(projectedMonthlyFee({ month: '2026-11', courses, edit: { courseId: 'b', fee: 372000 }, siblingCount: 0, overrides: [], enrollmentStatus: '재학' }).total).toBe(600000);
+  });
+  it('직접지정이 없으면 2과목 할인과 형제 할인을 뺀다', () => {
+    expect(projectedMonthlyFee({ month: '2026-11', courses: [course('a', '영어', 320000), course('b', '국어', 280000)], siblingCount: 2, overrides: [], enrollmentStatus: '재학' }).total).toBe(540000);
+  });
+  it('월 원비 고정이 있으면 고정 금액이 우선이다', () => {
+    const r = projectedMonthlyFee({ month: '2026-11', courses: [course('a', '영어', 320000)], edit: { courseId: 'a', fee: 400000 }, siblingCount: 0, overrides: [{ id: 'o', from_month: '2026-11', amount: 600000, note: null }], enrollmentStatus: '재학' });
+    expect(r.total).toBe(600000); expect(r.override?.id).toBe('o');
+  });
+});
