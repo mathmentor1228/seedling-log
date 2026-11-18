@@ -76,6 +76,13 @@ export function autoCancelInfo(memo: string | null | undefined): { kind: '퇴원
   return { kind: m[1] === '휴학' ? '휴학' : '퇴원', date: m[2] };
 }
 
+// #35: owner decisions on a bill are appended to the system memo (never replacing collector/auto-cancel lines).
+export function appendMemoLine(memo: string | null | undefined, line: string): string { return memo && memo.trim() ? `${memo}\n${line}` : line; }
+export function manualWithdrawalCancelDate(memo: string | null | undefined): string | null {
+  const m = memo?.match(/퇴원 당월 취소:\s*(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
 // ---- Fee change sync (#34, mirrors apply_fee_change) ----
 export interface FeeSyncBill { id: string; billing_month: string; status: string; final_amount: number | string; discount_amount?: number | string | null; extra_amount?: number | string | null; memo?: string | null }
 export interface FeeSyncPayment { billing_schedule_id?: string | null; billing_month?: string | null; canceled_at?: string | null }

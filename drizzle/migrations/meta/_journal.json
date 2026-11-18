@@ -225,6 +225,13 @@
       "when": 1794900366711,
       "tag": "0031_apply_fee_change",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795019869896,
+      "tag": "0032_billing_note",
+      "breakpoints": true
     }
   ]
 }

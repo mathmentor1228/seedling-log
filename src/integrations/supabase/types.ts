@@ -544,6 +544,7 @@ export type Database = {
           id: string
           late_fee: number
           memo: string | null
+          note: string | null
           status: string
           student_course_id: string | null
           student_id: string
@@ -561,6 +562,7 @@ export type Database = {
           id?: string
           late_fee?: number
           memo?: string | null
+          note?: string | null
           status?: string
           student_course_id?: string | null
           student_id: string
@@ -578,6 +580,7 @@ export type Database = {
           id?: string
           late_fee?: number
           memo?: string | null
+          note?: string | null
           status?: string
           student_course_id?: string | null
           student_id?: string

@@ -12,6 +12,8 @@ import { cn, formatStudentGrade, getTodayKST } from '@/lib/utils';
 import { SourceBadge } from './LedgerControls';
 import { StudentPaymentLink, useTuitionLedger } from './TuitionLedgerContext';
 import { OverduePayDialog, type OverduePayTarget } from './OverduePayDialog';
+import { BillNoteCell } from './BillNoteCell';
+import { WithdrawalCancelButton } from './WithdrawalCancelButton';
 import { OVERDUE_PRESETS, OVERDUE_RANGE_KEY, buildDueRangeRows, overdueRange, rangeSummary, useShowUpcomingUnpaid, type OverdueRangePreset, type RangeUnpaidRow } from './unpaidDue';
 
 interface SavedRange { preset: OverdueRangePreset; from?: string; to?: string }
@@ -78,17 +80,18 @@ export function OverdueList() {
         <p className="text-sm">미납 {summary.unpaid}명 · 부분납 {summary.partial}명 · 잔액 <span className="font-bold text-destructive">{won(summary.balance)}</span></p>
         <p className="text-xs text-muted-foreground">{showUpcoming ? (upcoming.length ? `그중 기한 전 ${upcomingSummary.count}명 · ${won(upcomingSummary.balance)}` : '기한 전 미납자 없음') : `납부기한이 이 기간에 든 청구만 · 기한 전 ${upcomingSummary.count}명 제외`}</p>
         <div className="overflow-x-auto border rounded-lg"><Table>
-          <TableHeader><TableRow>{['기한', '학생', '학교/학년', '청구월', '청구액', '납부액', '잔액', '상태', '메모', '수납'].map(h => <TableHead key={h} className="whitespace-nowrap">{h}</TableHead>)}</TableRow></TableHeader>
+          <TableHeader><TableRow>{['기한', '학생', '학교/학년', '청구월', '청구액', '납부액', '잔액', '상태', '비고', '수납'].map(h => <TableHead key={h} className="whitespace-nowrap">{h}</TableHead>)}</TableRow></TableHeader>
           <TableBody>{shown.map(r => { const isUp = upcomingKeys.has(r.key); return <TableRow key={r.key} className={cn(isUp && 'text-muted-foreground bg-muted/30')}>
             <TableCell className="whitespace-nowrap tabular-nums">{r.due}</TableCell>
             <TableCell className="whitespace-nowrap"><StudentPaymentLink id={r.student.id} name={r.student.name} /><StatusBadge s={r.student} /></TableCell>
             <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{r.student.school || '-'} {formatStudentGrade(r.student as any)}</TableCell>
             <TableCell className="whitespace-nowrap">{r.billing_month}</TableCell>
-            <TableCell className="whitespace-nowrap text-right tabular-nums">{won(r.required)}{r.withdrawalCheck && <Badge variant="outline" className="ml-1.5 border-warning/60 text-warning text-[10px]" title="퇴원(휴학) 당월 청구입니다. 받을지 확인해 주세요">퇴원 당월 · 확인</Badge>}</TableCell>
+            <TableCell className="whitespace-nowrap text-right tabular-nums">{won(r.required)}{r.withdrawalCheck && <WithdrawalCancelButton name={r.student.name} month={r.billing_month} amount={r.required} billIds={r.billIds} status={r.billStatus} paid={r.paid} onCancelled={() => { setData(d => d && { ...d, bills: d.bills.filter(b => !r.billIds.includes(b.id)) }); changed(); }} />}</TableCell>
             <TableCell className="whitespace-nowrap text-right tabular-nums">{won(r.paid)}</TableCell>
             <TableCell className={cn('whitespace-nowrap text-right font-semibold tabular-nums', isUp ? 'text-muted-foreground' : 'text-destructive')}>{won(r.balance)}</TableCell>
             <TableCell className="whitespace-nowrap"><Badge variant={isUp ? 'outline' : r.state === '부분납' ? 'secondary' : 'destructive'}>{r.state}</Badge>{isUp && <span className="block text-xs text-muted-foreground">기한 전</span>}</TableCell>
-            <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground" title={r.student.tuition_memo || ''}>{r.student.tuition_memo || '-'}</TableCell>
+            <TableCell><BillNoteCell billId={r.billId} value={r.note} label={`${r.student.name} ${r.billing_month}`} studentMemo={r.student.tuition_memo}
+              onSaved={next => setData(d => d && { ...d, bills: d.bills.map(b => b.id === r.billId ? { ...b, note: next } : b) })} /></TableCell>
             <TableCell><Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setPayTarget({ studentId: r.student.id, name: r.student.name, month: r.billing_month, required: r.required, paid: r.paid })}>수납</Button></TableCell>
           </TableRow>; })}</TableBody>
         </Table>{!shown.length && <p className="p-8 text-center text-muted-foreground">이 기간에 기한이 온 미납이 없습니다{upcoming.length ? ` (기한 전 ${upcoming.length}명)` : ''}</p>}</div>

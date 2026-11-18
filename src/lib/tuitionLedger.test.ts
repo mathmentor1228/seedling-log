@@ -50,3 +50,16 @@ describe('원비 변경 반영 (#34)',()=>{
   it('특강비가 붙은 청구는 새 원비에 특강비를 더한다',()=>{expect(feeSyncTargets([bill('n','2026-11',{extra_amount:100000,final_amount:630000})],[],'2026-11',600000)[0].to).toBe(700000);});
   it('이번 달이 이미 납부됐으면 기본 시작 달은 다음 달이다',()=>{expect(defaultFeeSyncMonth([bill('n','2026-11',{status:'paid'})],[],'2026-11')).toBe('2026-12');expect(defaultFeeSyncMonth([bill('n','2026-11')],[],'2026-11')).toBe('2026-11');expect(defaultFeeSyncMonth([],[{billing_month:'2026-12'}],'2026-12')).toBe('2027-01');});
 });
+
+describe('청구 메모 이어 붙이기 (#35)', () => {
+  it('기존 시스템 메모 뒤에 줄을 바꿔 붙인다', async () => {
+    const { appendMemoLine } = await import('./tuitionLedger');
+    expect(appendMemoLine('원장 확인', '퇴원 당월 취소: 2026-11-19')).toBe('원장 확인\n퇴원 당월 취소: 2026-11-19');
+    expect(appendMemoLine(null, '되살림: 2026-11-19')).toBe('되살림: 2026-11-19');
+  });
+  it('퇴원 당월 취소 날짜를 메모에서 읽는다', async () => {
+    const { manualWithdrawalCancelDate } = await import('./tuitionLedger');
+    expect(manualWithdrawalCancelDate('수집기\n퇴원 당월 취소: 2026-11-19')).toBe('2026-11-19');
+    expect(manualWithdrawalCancelDate('자동취소: 퇴원 2026-11-17')).toBeNull();
+  });
+});

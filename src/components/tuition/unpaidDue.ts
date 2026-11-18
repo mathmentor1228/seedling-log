@@ -92,8 +92,8 @@ export function monthsAround(from: string, to: string): { start: string; end: st
   return { start: start < LEDGER_START ? LEDGER_START : start, end: add(to.slice(0, 7), 1) };
 }
 
-export interface RangeBill { id: string; student_id: string; billing_month: string; due_date: string | null; status: string; final_amount: number | string; memo?: string | null; students: (WithdrawalInfo & { id: string; name: string; payment_due_day: number; school?: string | null; grade?: string | null; school_level?: string | null; grade_year?: number | null; parent_phone?: string | null; tuition_memo?: string | null }) | null }
-export interface RangeUnpaidRow { key: string; student: NonNullable<RangeBill['students']>; billing_month: string; due: string; required: number; paid: number; balance: number; state: '미납' | '부분납'; withdrawalCheck: boolean }
+export interface RangeBill { id: string; student_id: string; billing_month: string; due_date: string | null; status: string; final_amount: number | string; memo?: string | null; note?: string | null; students: (WithdrawalInfo & { id: string; name: string; payment_due_day: number; school?: string | null; grade?: string | null; school_level?: string | null; grade_year?: number | null; parent_phone?: string | null; tuition_memo?: string | null }) | null }
+export interface RangeUnpaidRow { key: string; student: NonNullable<RangeBill['students']>; billing_month: string; due: string; required: number; paid: number; balance: number; state: '미납' | '부분납'; withdrawalCheck: boolean; billId: string; billIds: string[]; billStatus: string; note: string | null }
 
 // Bills are grouped per student-month (one required total, earliest due), paid = that month's non-canceled payments.
 export function buildDueRangeRows(bills: RangeBill[], payments: LedgerPayment[], from: string, to: string): { due: RangeUnpaidRow[]; upcoming: RangeUnpaidRow[] } {
@@ -103,8 +103,8 @@ export function buildDueRangeRows(bills: RangeBill[], payments: LedgerPayment[],
     const key = `${b.student_id}|${b.billing_month}`;
     const due = effectiveDueDate(b, b.students.payment_due_day);
     const row = groups.get(key);
-    if (row) { row.required += Number(b.final_amount); if (due < row.due) row.due = due; continue; }
-    groups.set(key, { key, student: b.students, billing_month: b.billing_month, due, required: Number(b.final_amount), paid: 0, balance: 0, state: '미납', withdrawalCheck: needsWithdrawalMonthCheck(b.students, b.billing_month) });
+    if (row) { row.required += Number(b.final_amount); row.billIds.push(b.id); if (b.status !== 'pending') row.billStatus = b.status; if (!row.note && b.note) row.note = b.note; if (due < row.due) row.due = due; continue; }
+    groups.set(key, { key, student: b.students, billing_month: b.billing_month, due, required: Number(b.final_amount), paid: 0, balance: 0, state: '미납', withdrawalCheck: needsWithdrawalMonthCheck(b.students, b.billing_month), billId: b.id, billIds: [b.id], billStatus: b.status, note: b.note ?? null });
   }
   const rows = [...groups.values()].map(r => {
     const paid = paidForMonth(payments, r.student.id, r.billing_month);
@@ -119,4 +119,9 @@ export function buildDueRangeRows(bills: RangeBill[], payments: LedgerPayment[],
 }
 export function rangeSummary(rows: Pick<RangeUnpaidRow, 'state' | 'balance'>[]) {
   return { unpaid: rows.filter(r => r.state === '미납').length, partial: rows.filter(r => r.state === '부분납').length, count: rows.length, balance: rows.reduce((s, r) => s + r.balance, 0) };
+}
+
+// #35: the withdrawal-month bill can be cancelled from the list only while it is untouched (pending, no money for the month).
+export function canCancelWithdrawalMonth(bill: { status: string }, paid: number): boolean {
+  return bill.status === 'pending' && paid === 0;
 }

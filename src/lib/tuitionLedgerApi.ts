@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { LEDGER_START, billingDisplayStatus, dueDate, needsWithdrawalMonthCheck, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
+import { LEDGER_START, appendMemoLine, billingDisplayStatus, dueDate, needsWithdrawalMonthCheck, paidForMonth, paymentExcess, paymentMonth, type PaymentExcess } from './tuitionLedger';
 import { monthsAround, type RangeBill } from '@/components/tuition/unpaidDue';
 import { getTodayKST } from './utils';
 import { pendingRepriceChanges, type FeeOverride } from './tuitionFeeOverrides';
@@ -69,12 +69,12 @@ export async function loadMonthLedger(month:string) {
       });
       return payment;
     });
-    return { students: [...totals.values()], payments, schedules: [] as PaymentSchedule[] };
+    return { students: [...totals.values()], payments, schedules: [] as PaymentSchedule[], noteBills: [] as NoteBill[] }; // bills only exist from LEDGER_START
   }
   const [students,payments,schedules]=await Promise.all([
     allRows(()=>supabase.from('students').select('id,name,school,grade,school_level,grade_year,parent_phone,payment_due_day,tuition_memo,enrollment_status,withdrawal_last_class_date,withdrawn_at').order('id')),
     getMonthPayments(month),
-    allRows(()=>supabase.from('billing_schedules').select('id,student_id,billing_month,due_date,status,final_amount,discount_amount,extra_amount,memo').eq('billing_month',month).order('id')) as Promise<(PaymentSchedule & {id?:string;final_amount?:number;discount_amount?:number;extra_amount?:number|null;memo?:string|null})[]>,
+    allRows(()=>supabase.from('billing_schedules').select('id,student_id,billing_month,due_date,status,final_amount,discount_amount,extra_amount,memo,note').eq('billing_month',month).order('id')) as Promise<(PaymentSchedule & {id?:string;final_amount?:number;discount_amount?:number;extra_amount?:number|null;memo?:string|null;note?:string|null})[]>,
   ]);
   const fees=await monthlyFees(students.map(s=>s.id),month);
   // 퇴원/휴학 students have a 0 monthly fee; keep them only while a non-cancelled bill remains for the month (amount = that bill).
@@ -86,7 +86,7 @@ export async function loadMonthLedger(month:string) {
     // A saved bill due date (owner-editable) wins; the student's due day is the fallback.
     const scheduled=scheduledPaymentDate(s.id,month,schedules,s.payment_due_day);
     return {...s,totalFee:fee,paidAmount:paid,isPaid:paid>=fee,scheduledDueDate:scheduled.date,dueDateBasis:scheduled.basis,dueDate:scheduled.date||dueDate(month,s.payment_due_day),withdrawalCheck:inactive(s)&&needsWithdrawalMonthCheck(s,month)};
-  }),payments,schedules};
+  }),payments,schedules,noteBills:schedules.filter(b=>b.id&&b.status!=='cancelled').map(b=>({id:b.id as string,student_id:b.student_id,note:b.note??null}))};
 }
 export async function syncStudentBilling(studentId:string,month:string) {
   const [billings,payments]=await Promise.all([
@@ -132,7 +132,7 @@ const RANGE_STUDENT_COLUMNS='id,name,school,grade,school_level,grade_year,parent
 export async function loadUnpaidByDueRange(from:string,to:string):Promise<{bills:RangeBill[];payments:any[]}> {
   const {start,end}=monthsAround(from,to);
   const [bills,payments]=await Promise.all([
-    allRows(()=>supabase.from('billing_schedules').select(`id,student_id,billing_month,due_date,status,final_amount,memo,students(${RANGE_STUDENT_COLUMNS})`).gte('billing_month',start).lte('billing_month',end).neq('status','cancelled').order('id')),
+    allRows(()=>supabase.from('billing_schedules').select(`id,student_id,billing_month,due_date,status,final_amount,memo,note,students(${RANGE_STUDENT_COLUMNS})`).gte('billing_month',start).lte('billing_month',end).neq('status','cancelled').order('id')),
     allRows(()=>supabase.from('payment_records').select('id,student_id,amount,billing_month,canceled_at,billing_schedules(billing_month)').or(`and(billing_month.gte.${start},billing_month.lte.${end}),billing_month.is.null`).is('canceled_at',null).order('id')),
   ]);
   return {bills:bills as RangeBill[],payments};
@@ -153,4 +153,33 @@ export async function applyFeeChange(studentId:string,fromMonth:string,newTotal:
   const {data,error}=await supabase.rpc('apply_fee_change',{p_student_id:studentId,p_from_month:fromMonth,p_new_total:newTotal});
   if(error) throw new Error(error.message || '원비 변경을 청구에 반영하지 못했습니다');
   return Number(data ?? 0);
+}
+
+// ---- #35: per-bill owner note + withdrawal-month cancel/restore ----
+export interface NoteBill { id: string; student_id: string; note: string | null }
+// Only the note column is written; memo/extra_memo stay system-owned.
+export async function updateBillNote(billId:string,note:string|null) {
+  const {data,error}=await supabase.from('billing_schedules').update({note,updated_at:new Date().toISOString()}).eq('id',billId).select('id');
+  if(error) throw error;
+  if(!data?.length) throw new Error('비고를 저장하지 못했습니다');
+}
+export async function cancelWithdrawalMonthBill(billIds:string[]) {
+  const {data:linked,error:linkError}=await supabase.from('payment_records').select('id').in('billing_schedule_id',billIds).limit(1);
+  if(linkError) throw linkError;
+  if(linked?.length) throw new Error('결제 기록이 있어 취소할 수 없습니다');
+  const {data:bills,error}=await supabase.from('billing_schedules').select('id,memo').in('id',billIds).eq('status','pending');
+  if(error) throw error;
+  const line=`퇴원 당월 취소: ${getTodayKST()}`;
+  let n=0;
+  for(const b of bills||[]) {
+    const {data,error:e}=await supabase.from('billing_schedules').update({status:'cancelled',memo:appendMemoLine(b.memo,line),updated_at:new Date().toISOString()}).eq('id',b.id).eq('status','pending').select('id');
+    if(e) throw e; n+=data?.length||0;
+  }
+  if(!n) throw new Error('이미 처리됐거나 취소할 수 없는 청구입니다');
+  return n;
+}
+export async function restoreCancelledBill(bill:{id:string;memo?:string|null}) {
+  const {data,error}=await supabase.from('billing_schedules').update({status:'pending',memo:appendMemoLine(bill.memo,`되살림: ${getTodayKST()}`),updated_at:new Date().toISOString()}).eq('id',bill.id).eq('status','cancelled').select('id');
+  if(error) throw error;
+  if(!data?.length) throw new Error('이미 되살렸거나 되살릴 수 없는 청구입니다');
 }

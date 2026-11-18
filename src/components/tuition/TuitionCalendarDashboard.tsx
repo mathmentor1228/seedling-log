@@ -12,7 +12,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
-import { applyFeeChange, loadMonthLedger, recordManualPayment } from '@/lib/tuitionLedgerApi';
+import { applyFeeChange, loadMonthLedger, recordManualPayment, type NoteBill } from '@/lib/tuitionLedgerApi';
+import { BillNoteCell } from './BillNoteCell';
+import { WithdrawalCancelButton } from './WithdrawalCancelButton';
 import { LEDGER_START, feeSyncTargets } from '@/lib/tuitionLedger';
 import { useAuth } from '@/lib/auth';
 import { studentMonthPaymentDates, type PaymentSchedule } from '@/lib/tuitionPaymentDates';
@@ -62,6 +64,7 @@ export function TuitionCalendarDashboard() {
   const [students, setStudents] = useState<StudentDue[]>([]);
   const [payments, setPayments] = useState<TuitionListPayment[]>([]);
   const [schedules, setSchedules] = useState<PaymentSchedule[]>([]);
+  const [noteBills, setNoteBills] = useState<NoteBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -101,6 +104,7 @@ export function TuitionCalendarDashboard() {
       const ledger = await loadMonthLedger(monthStr);
       if (version !== loadVersion.current) return;
       setSchedules(ledger.schedules);
+      setNoteBills(ledger.noteBills);
       setStudents(ledger.students);
       setPayments(ledger.payments.filter(p => !p.canceled_at));
     } catch { if (version === loadVersion.current) setLoadError('수납 정보를 불러오지 못했습니다'); }
@@ -508,7 +512,7 @@ export function TuitionCalendarDashboard() {
                       <TableHead className="whitespace-nowrap text-right">월 수강료</TableHead>
                       <TableHead className="whitespace-nowrap text-right">월 누적 납부액</TableHead>
                       <TableHead className="min-w-20 whitespace-nowrap">상태</TableHead>
-                      <TableHead className="min-w-36 whitespace-nowrap">메모</TableHead>
+                      <TableHead className="min-w-36 whitespace-nowrap">비고</TableHead>
                       {!isHistorical && <TableHead className="min-w-20 whitespace-nowrap text-center">수납</TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -533,7 +537,7 @@ export function TuitionCalendarDashboard() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
                           {s.totalFee.toLocaleString()}원
-                          {s.withdrawalCheck && !s.isPaid && <Badge variant="outline" className="ml-1.5 border-warning/60 text-warning text-[10px]" title="퇴원(휴학) 당월 청구입니다. 받을지 확인해 주세요">퇴원 당월 · 확인</Badge>}
+                          {s.withdrawalCheck && !s.isPaid && (() => { const bills = (schedules as any[]).filter(b => b.student_id === s.id && b.id && b.status !== 'cancelled'); return <WithdrawalCancelButton name={s.name} month={monthStr} amount={s.totalFee} billIds={bills.map(b => b.id)} status={bills.some(b => b.status !== 'pending') ? 'paid' : 'pending'} paid={s.paidAmount} onCancelled={() => { setStudents(list => list.filter(x => x.id !== s.id)); changed(); }} />; })()}
                           {(() => { const m = feeMismatch(s); return m ? <Button size="sm" variant="outline" className="mt-1 flex h-6 ml-auto gap-1 px-2 text-[10px]" disabled={!!syncing} title={`청구 ${m.from.toLocaleString()}원 → ${m.to.toLocaleString()}원`} onClick={() => syncFee(s)}>{syncing === s.id && <Loader2 className="h-3 w-3 animate-spin" />}원비 변경 반영 <span className="text-muted-foreground">청구 {m.from.toLocaleString()}</span></Button> : null; })()}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right tabular-nums">
@@ -556,8 +560,9 @@ export function TuitionCalendarDashboard() {
                             <Badge variant="outline" className="text-[10px]">과정없음</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                          {s.tuition_memo || '-'}
+                        <TableCell>
+                          {(() => { const nb = noteBills.find(b => b.student_id === s.id); return <BillNoteCell billId={nb?.id ?? null} value={nb?.note ?? null} label={`${s.name} ${monthStr}`} studentMemo={s.tuition_memo}
+                            onSaved={next => setNoteBills(list => list.map(b => b.id === nb?.id ? { ...b, note: next } : b))} />; })()}
                         </TableCell>
                         {!isHistorical && <TableCell className="text-center">
                           {!s.isPaid && s.totalFee > 0 ? (

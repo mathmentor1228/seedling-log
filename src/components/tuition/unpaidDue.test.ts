@@ -72,3 +72,28 @@ describe('기간 선택 미납 (#32 V2)', () => {
     expect(due[0].withdrawalCheck).toBe(true);
   });
 });
+
+describe('퇴원 당월 청구 취소 버튼 (#35)', () => {
+  it('결제가 없는 대기 청구만 취소 버튼을 보인다', async () => {
+    const { canCancelWithdrawalMonth } = await import('./unpaidDue');
+    expect(canCancelWithdrawalMonth({ status: 'pending' }, 0)).toBe(true);
+  });
+  it('부분납이 있으면 취소하지 않는다', async () => {
+    const { canCancelWithdrawalMonth } = await import('./unpaidDue');
+    expect(canCancelWithdrawalMonth({ status: 'pending' }, 100000)).toBe(false);
+  });
+  it('완납·취소된 청구는 취소 버튼이 없다', async () => {
+    const { canCancelWithdrawalMonth } = await import('./unpaidDue');
+    expect(canCancelWithdrawalMonth({ status: 'paid' }, 0)).toBe(false);
+    expect(canCancelWithdrawalMonth({ status: 'cancelled' }, 0)).toBe(false);
+  });
+  it('같은 학생·달 청구를 묶을 때 첫 청구 번호와 비고를 그대로 싣는다', async () => {
+    const { buildDueRangeRows } = await import('./unpaidDue');
+    const st = { id: 's', name: '학생', payment_due_day: 5, enrollment_status: '재학' };
+    const { due } = buildDueRangeRows([
+      { id: 'b1', student_id: 's', billing_month: '2026-11', due_date: '2026-11-05', status: 'pending', final_amount: 300000, note: '2주만 다녀 반액', students: st },
+      { id: 'b2', student_id: 's', billing_month: '2026-11', due_date: '2026-11-05', status: 'pending', final_amount: 50000, students: st },
+    ], [], '2026-11-01', '2026-11-18');
+    expect(due[0]).toMatchObject({ billId: 'b1', billIds: ['b1', 'b2'], note: '2주만 다녀 반액', required: 350000 });
+  });
+});
