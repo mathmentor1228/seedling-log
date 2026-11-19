@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Plus, Loader2, BookMarked, Send, ChevronsUpDown, Check, Users, CheckCircle2, Package, Clock, Copy, ChevronDown, MessageCircle, ShoppingBag, ShoppingCart, Search, X, Trash2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { textbookChargePerCopy } from '@/lib/textbookPricing';
 
 interface TextbookOrder {
   id: string;
@@ -27,6 +28,7 @@ interface TextbookOrder {
   status: string;
   subject: string;
   textbook_type?: string;
+  is_inhouse?: boolean | null;
 }
 
 interface Distribution {
@@ -154,8 +156,7 @@ export function TextbookDistributionTab() {
     const order = orders.find(o => o.id === selectedOrder);
     if (!order) return;
     const qty = parseInt(distQty) || 1;
-    const discountedPrice = Math.round(order.unit_price * 0.9);
-    const totalAmount = discountedPrice * qty;
+    const totalAmount = textbookChargePerCopy(order) * qty;
     setCreating(true);
 
     const insertRows = selectedStudents.map(studentId => {
@@ -450,7 +451,7 @@ export function TextbookDistributionTab() {
               {selectedOrder && selectedStudents.length > 0 && (
                 <div className="p-3 rounded-md bg-muted/50 space-y-1">
                   <p className="text-sm font-medium text-foreground">{selectedStudents.length}명 × {distQty}권 = 총 {selectedStudents.length * (parseInt(distQty) || 1)}권</p>
-                  <p className="text-sm text-muted-foreground">1인당(10%할인): {Math.round((orders.find(o => o.id === selectedOrder)?.unit_price || 0) * 0.9 * (parseInt(distQty) || 1)).toLocaleString()}원</p>
+                  {(() => { const o = orders.find(o => o.id === selectedOrder); return o ? <p className="text-sm text-muted-foreground">1인당({o.is_inhouse ? '자체제작 · 입력 금액 그대로' : '시중 교재 · 10% 할인'}): {(textbookChargePerCopy(o) * (parseInt(distQty) || 1)).toLocaleString()}원</p> : null; })()}
                 </div>
               )}
               <Button onClick={handleAssign} disabled={creating} className="w-full">
