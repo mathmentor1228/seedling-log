@@ -239,6 +239,13 @@
       "when": 1795456103607,
       "tag": "0033_accept_payment_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795457752351,
+      "tag": "0034_restrict_staff_read_exam_tables",
+      "breakpoints": true
     }
   ]
 }
