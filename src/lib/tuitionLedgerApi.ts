@@ -183,3 +183,17 @@ export async function restoreCancelledBill(bill:{id:string;memo?:string|null}) {
   if(error) throw error;
   if(!data?.length) throw new Error('이미 되살렸거나 되살릴 수 없는 청구입니다');
 }
+
+// ---- #36: review payments whose amount differs from the month's bill ----
+export async function loadAmountMismatchReviews() {
+  const payments=await allRows(()=>supabase.from('payment_records').select('id,student_id,paid_date,amount,source,billing_month,memo,needs_review,billing_schedule_id,canceled_at,students(name)').eq('needs_review',true).is('billing_schedule_id',null).is('canceled_at',null).order('paid_date',{ascending:false}).order('id'));
+  const ids=[...new Set(payments.map(p=>p.student_id).filter(Boolean))] as string[];
+  const months=[...new Set(payments.map(p=>p.billing_month).filter(Boolean))] as string[];
+  const bills=ids.length&&months.length?await allRows(()=>supabase.from('billing_schedules').select('id,student_id,billing_month,status,final_amount').in('student_id',ids).in('billing_month',months).order('id')):[];
+  return {payments,bills};
+}
+export async function acceptPaymentAmount(paymentId:string):Promise<string> {
+  const {data,error}=await supabase.rpc('accept_payment_amount',{p_payment_id:paymentId});
+  if(error) throw new Error(error.message || '청구 금액을 수정하지 못했습니다');
+  return data as string;
+}

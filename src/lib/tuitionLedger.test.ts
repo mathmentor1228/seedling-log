@@ -63,3 +63,24 @@ describe('청구 메모 이어 붙이기 (#35)', () => {
     expect(manualWithdrawalCancelDate('자동취소: 퇴원 2026-11-17')).toBeNull();
   });
 });
+
+import {isAmountMismatchReview,pendingBillAmount} from './tuitionLedger';
+describe('#36 amount-mismatch review banner', () => {
+  it('counts only unlinked, uncancelled review payments', () => {
+    expect(isAmountMismatchReview({needs_review:true,billing_schedule_id:null,canceled_at:null})).toBe(true);
+    expect(isAmountMismatchReview({needs_review:true,billing_schedule_id:'b1',canceled_at:null})).toBe(false);
+    expect(isAmountMismatchReview({needs_review:false,billing_schedule_id:null,canceled_at:null})).toBe(false);
+    expect(isAmountMismatchReview({needs_review:true,billing_schedule_id:null,canceled_at:'2026-11-20T00:00:00Z'})).toBe(false);
+  });
+  it('shows the pending bill amount for that student-month, or none', () => {
+    const bills=[
+      {student_id:'s1',billing_month:'2026-11',status:'pending',final_amount:250000},
+      {student_id:'s1',billing_month:'2026-10',status:'paid',final_amount:250000},
+      {student_id:'s2',billing_month:'2026-11',status:'cancelled',final_amount:300000},
+    ];
+    expect(pendingBillAmount(bills,'s1','2026-11')).toBe(250000);
+    expect(pendingBillAmount(bills,'s1','2026-10')).toBeNull();
+    expect(pendingBillAmount(bills,'s2','2026-11')).toBeNull();
+    expect(pendingBillAmount(bills,null,'2026-11')).toBeNull();
+  });
+});

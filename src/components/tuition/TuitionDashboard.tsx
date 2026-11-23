@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { TuitionLedgerProvider } from './TuitionLedgerContext';
 import { PaymentReviewQueue } from './PaymentReviewQueue';
 import { DailyPaymentRecords } from './DailyPaymentRecords';
+import { AmountMismatchBanner } from './AmountMismatchBanner';
 
 export function TuitionDashboard() {
   const [tab, setTab] = useState('calendar');
@@ -21,6 +22,7 @@ export function TuitionDashboard() {
     <TuitionLedgerProvider>
       <div className="p-4 md:p-6 space-y-4">
         <h1 className="text-2xl font-bold">수강료 관리</h1>
+        <AmountMismatchBanner />
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="w-full flex h-auto flex-wrap justify-start gap-1">

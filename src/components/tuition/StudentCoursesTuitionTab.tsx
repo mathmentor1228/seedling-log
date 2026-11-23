@@ -26,6 +26,8 @@ import { StudentFeeOverrideSection } from './StudentFeeOverrideSection';
 interface Props {
   studentId: string;
   studentName: string;
+  /** #36: start the fee-change preview from this billing month instead of the default. */
+  initialSyncMonth?: string;
 }
 
 interface CoursePolicy {
@@ -44,7 +46,7 @@ const MULTI_SUBJECT_DISCOUNT: Record<number, number> = {
 };
 const SIBLING_DISCOUNT = 10000;
 
-export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
+export function StudentCoursesTuitionTab({ studentId, studentName, initialSyncMonth }: Props) {
   const [courses, setCourses] = useState<any[]>([]);
   const [billings, setBillings] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -309,7 +311,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
     setFeeSync(null); setFeeSyncError('');
     loadFeeSyncData(studentId).then(data => {
       setFeeSync(data);
-      setSyncMonth(defaultFeeSyncMonth(data.bills, data.payments, currentTuitionMonth()));
+      setSyncMonth(initialSyncMonth && initialSyncMonth >= LEDGER_START ? initialSyncMonth : defaultFeeSyncMonth(data.bills, data.payments, currentTuitionMonth()));
     }).catch(() => setFeeSyncError('미납 청구를 불러오지 못했습니다'));
   };
   const editedFee = feeEditValue.trim() === '' ? null : Number(feeEditValue.trim());

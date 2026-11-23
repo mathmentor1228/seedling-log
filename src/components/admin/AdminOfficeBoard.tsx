@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
 import { ParentAnnouncementTemplates } from './ParentAnnouncementTemplates';
+import { useTuitionLedger } from '@/components/tuition/TuitionLedgerContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 // OFFICE-TASK-STUDENT-SYNC-V1: 행정 업무 ↔ 학생 기록 자동 반영 규칙
@@ -59,6 +60,7 @@ interface Comment {
 
 export function AdminOfficeBoard() {
   const { user } = useAuth();
+  const { openStudent } = useTuitionLedger();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('active');
@@ -506,6 +508,9 @@ export function AdminOfficeBoard() {
                   <span>작성: {task.created_by_name}</span>
                   {task.assignee_name && <span>담당: {task.assignee_name}</span>}
                   <span>{format(new Date(task.created_at), 'MM/dd HH:mm')}</span>
+                  {task.category === '원비 수납' && task.student_id && (
+                    <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={(e) => { e.stopPropagation(); openStudent(task.student_id!); }}>수납 상세</button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1">

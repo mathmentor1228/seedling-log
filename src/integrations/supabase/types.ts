@@ -9693,6 +9693,7 @@ export type Database = {
       }
     }
     Functions: {
+      accept_payment_amount: { Args: { p_payment_id: string }; Returns: string }
       apply_due_office_task_student_sync: { Args: never; Returns: number }
       apply_fee_change: {
         Args: {

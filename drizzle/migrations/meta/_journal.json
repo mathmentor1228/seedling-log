@@ -232,6 +232,13 @@
       "when": 1795019869896,
       "tag": "0032_billing_note",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795456103607,
+      "tag": "0033_accept_payment_amount",
+      "breakpoints": true
     }
   ]
 }

@@ -108,3 +108,14 @@ export function defaultFeeSyncMonth(bills: FeeSyncBill[], payments: FeeSyncPayme
   const [y, m] = current.split('-').map(Number);
   return `${y + (m === 12 ? 1 : 0)}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
 }
+
+// ---- #36: unmatched review payments (paid amount ≠ that month's bill) ----
+export interface MismatchPayment { needs_review?: boolean | null; billing_schedule_id?: string | null; canceled_at?: string | null }
+export function isAmountMismatchReview(p: MismatchPayment): boolean { return !!p.needs_review && !p.billing_schedule_id && !p.canceled_at; }
+export interface MismatchBill { student_id: string; billing_month: string; status: string; final_amount: number | string }
+// Pending bill amount for a student-month; null means "청구 없음".
+export function pendingBillAmount(bills: MismatchBill[], studentId: string | null | undefined, month: string | null | undefined): number | null {
+  if (!studentId || !month) return null;
+  const rows = bills.filter(b => b.student_id === studentId && b.billing_month === month && (b.status === 'pending' || b.status === 'overdue'));
+  return rows.length ? rows.reduce((sum, b) => sum + Number(b.final_amount || 0), 0) : null;
+}
