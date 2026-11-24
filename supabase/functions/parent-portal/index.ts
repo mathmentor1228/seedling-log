@@ -20,8 +20,24 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Action: generate token for a student (POST, admin only)
+    // Action: generate token for a student (POST, staff only)
+    // 2026-11-24 보안: 학생 고유번호만으로 학부모 링크를 받을 수 없도록 직원(원장·교사·조교) 로그인을 확인한다.
     if (action === "generate" && req.method === "POST") {
+      const authToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+      let isStaff = false;
+      if (authToken) {
+        const { data: { user } } = await supabase.auth.getUser(authToken);
+        if (user) {
+          const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+          isStaff = (roles ?? []).some((r: { role: string }) => ["admin", "teacher", "assistant"].includes(r.role));
+        }
+      }
+      if (!isStaff) {
+        return new Response(JSON.stringify({ error: "직원 계정으로 로그인해야 학부모 링크를 발급할 수 있습니다." }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { student_id } = await req.json();
       if (!student_id) {
         return new Response(JSON.stringify({ error: "student_id required" }), {

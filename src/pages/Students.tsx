@@ -482,12 +482,15 @@ export default function Students() {
 
   const generateParentLink = async (studentId: string, mode: 'portal' | 'survey' | 'survey_message' = 'portal') => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('로그인이 필요합니다. 다시 로그인해 주세요.');
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parent-portal?action=generate`,
         {
           method: 'POST',
           headers: {
             'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ student_id: studentId }),

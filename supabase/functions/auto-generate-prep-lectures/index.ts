@@ -11,6 +11,35 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // 2026-11-24 보안: 정해진 자동 실행(CRON_SECRET + source=cron) 또는 직원 로그인만 허용한다.
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const apikeyHeader = req.headers.get("apikey") ?? "";
+  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+  let caller: "cron" | "staff" | null = null;
+  if (body?.source === "cron" && cronSecret &&
+      (bearer === cronSecret || apikeyHeader === cronSecret || body?.cron_secret === cronSecret)) {
+    caller = "cron";
+  } else if (bearer) {
+    const { data: { user } } = await supa.auth.getUser(bearer);
+    if (user) {
+      const { data: roles } = await supa.from("user_roles").select("role").eq("user_id", user.id);
+      if ((roles ?? []).some((r: { role: string }) => ["admin", "teacher", "assistant"].includes(r.role))) caller = "staff";
+    }
+  }
+  if (!caller) {
+    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  // 권한 확인만 하고 실제 생성은 하지 않는 점검용 호출
+  if (body?.auth_check === true) {
+    return new Response(JSON.stringify({ ok: true, caller }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
