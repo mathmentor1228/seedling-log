@@ -74,7 +74,52 @@ Deno.serve(async (req) => {
     const isTeacher = (roleRows ?? []).some((r) => r.role === 'teacher');
     if (!isAdmin && !isTeacher) return json({ error: 'forbidden' }, 403);
 
-    const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
+    const rawBody = await req.json().catch(() => ({}));
+    // 원장 전용: 출결 템플릿 카테고리 조회·등록·검수 요청 (일회성 관리 작업)
+    if (rawBody?.action === 'template_categories' || rawBody?.action === 'register_template') {
+      if (!isAdmin) return json({ error: 'forbidden' }, 403);
+      const apiKey = Deno.env.get('SOLAPI_API_KEY');
+      const apiSecret = Deno.env.get('SOLAPI_API_SECRET');
+      const pfId = Deno.env.get('SOLAPI_PFID');
+      if (!apiKey || !apiSecret || !pfId) return json({ error: 'solapi_not_configured' }, 500);
+      const base = 'https://api.solapi.com/kakao/v2/templates';
+      if (rawBody.action === 'template_categories') {
+        const r = await fetch(`${base}/categories`, { headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret) } });
+        return json({ status: r.status, data: await r.json().catch(() => null) });
+      }
+      const content = [
+        '[더멘토학원 출결 안내]',
+        '학생: #{학생명}',
+        '수업: #{과목} #{수업시간}',
+        '상태: #{출결상태}',
+        '',
+        '#{안내문구}',
+        '',
+        '담당 선생님: #{선생님명}',
+      ].join('\n');
+      const createRes = await fetch(base, {
+        method: 'POST',
+        headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: '출결 알림(지각·등원 전)',
+          content,
+          categoryCode: String(rawBody.category_code ?? ''),
+          channelId: pfId,
+          messageType: 'BA',
+          emphasizeType: 'NONE',
+        }),
+      });
+      const created = await createRes.json().catch(() => null);
+      if (!createRes.ok || !created?.templateId) return json({ step: 'create', status: createRes.status, data: created }, 502);
+      const inspRes = await fetch(`${base}/${created.templateId}/inspection`, {
+        method: 'PUT',
+        headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret) },
+      });
+      const insp = await inspRes.json().catch(() => null);
+      return json({ templateId: created.templateId, inspection_status: inspRes.status, inspection: insp });
+    }
+
+    const parsed = BodySchema.safeParse(rawBody);
     if (!parsed.success) {
       return json({ error: 'invalid_request', detail: parsed.error.flatten().fieldErrors }, 400);
     }
