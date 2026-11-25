@@ -4,7 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
 import { QuickLessonForm } from '@/components/lessons/QuickLessonForm';
-import { ChevronRight, NotebookPen } from 'lucide-react';
+import { AttendanceNotificationDialog } from '@/components/attendance/AttendanceNotificationDialog';
+import type { AttendanceNotificationType } from '@/lib/attendanceNotification';
+import { ChevronRight, MessageSquareText, NotebookPen } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,9 +67,10 @@ interface ScheduleSlot {
 }
 
 /* ------------------------------------------------------------------ */
-function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, onToggle, children }: {
+function StudentRow({ student, onStatusChange, onNotify, isLoading, expandable, expanded, onToggle, children }: {
   student: StudentAttendance;
   onStatusChange: (studentId: string, status: AttendanceStatus) => void;
+  onNotify: (student: StudentAttendance) => void;
   isLoading: boolean;
   /** QUICK-LESSON-V1: 정규 반이면 줄 아래에 일지 입력을 펼칠 수 있다 */
   expandable?: boolean;
@@ -159,6 +162,14 @@ function StudentRow({ student, onStatusChange, isLoading, expandable, expanded, 
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => onNotify(student)}
+          title="학부모에게 지각·등원 전 알림톡 전송"
+          className="ml-1 text-[11px] px-2 py-1.5 rounded-lg font-semibold border bg-primary/10 text-primary border-primary/30 hover:bg-primary/15 flex items-center gap-1"
+        >
+          <MessageSquareText className="w-3.5 h-3.5" /> 알림
+        </button>
         {expandable && (
           <button type="button" onClick={onToggle} title={expanded ? '일지 접기' : '이 자리에서 일지 쓰기'}
             className={cn("ml-1 text-[11px] px-2 py-1.5 rounded-lg font-semibold border flex items-center gap-0.5",
@@ -589,7 +600,11 @@ export function TeacherAttendanceView() {
   // QUICK-LESSON-V1: 정규 반(class_id 있음)만 줄 아래 일지 입력 가능. 내신특강·보충·선착순은 기존 화면에서.
   const quickLessonOk = !!activeSlot && !activeSlot.isExamPrep && !activeSlot.isSignup && (!!activeSlot.classId || !!activeSlot.isSupplementary);
   const [openLesson, setOpenLesson] = useState<Set<string>>(new Set());
-  useEffect(() => { setOpenLesson(new Set()); }, [activeSlotId]);
+  const [notificationStudent, setNotificationStudent] = useState<StudentAttendance | null>(null);
+  useEffect(() => {
+    setOpenLesson(new Set());
+    setNotificationStudent(null);
+  }, [activeSlotId]);
   const toggleLesson = (id: string) => setOpenLesson(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const statusCounts = useMemo(() => {
@@ -984,6 +999,7 @@ export function TeacherAttendanceView() {
               key={student.id}
               student={student}
               onStatusChange={handleStatusChange}
+              onNotify={setNotificationStudent}
               isLoading={actionLoading.has(student.id)}
               expandable={quickLessonOk}
               expanded={openLesson.has(student.id)}
@@ -1005,6 +1021,19 @@ export function TeacherAttendanceView() {
           ))
         )}
       </div>
+
+      {notificationStudent && activeSlot && (
+        <AttendanceNotificationDialog
+          open={!!notificationStudent}
+          onOpenChange={(open) => { if (!open) setNotificationStudent(null); }}
+          student={notificationStudent}
+          subject={activeSlot.subject}
+          startTime={activeSlot.startTime}
+          onSent={(_type: AttendanceNotificationType) => {
+            sonnerToast.success(`${notificationStudent.name} 학부모 알림톡 발송 접수`, { duration: 2000 });
+          }}
+        />
+      )}
 
       {/* 결석 처리 Dialog */}
       <Dialog open={absenceDialog.open} onOpenChange={open => !absenceDialog.submitting && setAbsenceDialog(d => ({ ...d, open }))}>
