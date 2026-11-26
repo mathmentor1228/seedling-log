@@ -3,6 +3,8 @@ import {
   buildAttendanceNotificationMessage,
   cleanStudentNameForParent,
   defaultAttendanceNotificationType,
+  formatMakeupText,
+  NO_MAKEUP_TEXT,
 } from './attendanceNotification';
 
 describe('attendance parent notifications', () => {
@@ -47,5 +49,17 @@ describe('attendance parent notifications', () => {
     expect(cleanStudentNameForParent('이승현_H')).toBe('이승현');
     expect(cleanStudentNameForParent('박채원_M')).toBe('박채원');
     expect(cleanStudentNameForParent('홍길동')).toBe('홍길동');
+  });
+
+  it('absence message carries the reason and the makeup date/time', () => {
+    const msg = buildAttendanceNotificationMessage({ type: 'absent', studentName: '홍길동_H', subject: '수학', startTime: '18:00', teacherName: '김담임', absenceReason: '병원 진료', makeupText: formatMakeupText('2026-11-28', '17:00') });
+    expect(msg).toContain('학생: 홍길동');
+    expect(msg).toContain('결석 사유: 병원 진료');
+    expect(msg).toContain('보강 일정: 11월 28일 17:00');
+  });
+
+  it('absence without makeup says it will be announced later', () => {
+    expect(formatMakeupText(null, null)).toBe(NO_MAKEUP_TEXT);
+    expect(formatMakeupText('2026-12-01', '미정')).toBe('12월 1일 (시간 추후 안내)');
   });
 });

@@ -6,12 +6,16 @@ import { z } from 'npm:zod@3.23.8';
 import {
   ATTENDANCE_NOTIFICATION_LABEL,
   buildAttendanceNotificationMessage,
+  formatMakeupText,
   type AttendanceNotificationType,
 } from '../_shared/attendanceNotification.ts';
 
 const BodySchema = z.object({
   student_id: z.string().uuid(),
-  notification_type: z.enum(['late', 'not_arrived']),
+  notification_type: z.enum(['late', 'not_arrived', 'absent']),
+  absence_reason: z.string().trim().max(100).optional(),
+  makeup_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  makeup_time: z.string().trim().max(20).nullable().optional(),
   subject: z.string().trim().min(1).max(30),
   start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   dry_run: z.boolean().optional().default(false),
@@ -52,13 +56,14 @@ async function solapiAuthHeader(apiKey: string, apiSecret: string) {
 }
 
 const ATTENDANCE_TEMPLATE_NAME = '출결 알림(지각·등원 전)';
-async function findApprovedAttendanceTemplate(apiKey: string, apiSecret: string, pfId?: string | null): Promise<string | null> {
+const ABSENCE_TEMPLATE_NAME = '출결 알림(결석·보강)';
+async function findApprovedAttendanceTemplate(apiKey: string, apiSecret: string, pfId?: string | null, name = ATTENDANCE_TEMPLATE_NAME): Promise<string | null> {
   try {
     const r = await fetch('https://api.solapi.com/kakao/v2/templates?limit=100', { headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret) } });
     if (!r.ok) return null;
     const d = await r.json();
     const hit = (d?.templateList ?? []).find((t: { name?: string; status?: string; channelId?: string }) =>
-      t.name === ATTENDANCE_TEMPLATE_NAME && t.status === 'APPROVED' && (!pfId || !t.channelId || t.channelId === pfId));
+      t.name === name && t.status === 'APPROVED' && (!pfId || !t.channelId || t.channelId === pfId));
     return hit?.templateId ?? null;
   } catch { return null; }
 }
@@ -92,8 +97,8 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: 'forbidden' }, 403);
       const r = await fetch('https://api.solapi.com/kakao/v2/templates?limit=100', { headers: { Authorization: await solapiAuthHeader(Deno.env.get('SOLAPI_API_KEY')!, Deno.env.get('SOLAPI_API_SECRET')!) } });
       const d = await r.json().catch(() => null);
-      const list = (d?.templateList ?? []).filter((t: { name?: string }) => t.name === ATTENDANCE_TEMPLATE_NAME)
-        .map((t: { templateId: string; status: string; dateUpdated?: string }) => ({ templateId: t.templateId, status: t.status, dateUpdated: t.dateUpdated }));
+      const list = (d?.templateList ?? []).filter((t: { name?: string }) => t.name === ATTENDANCE_TEMPLATE_NAME || t.name === ABSENCE_TEMPLATE_NAME)
+        .map((t: { name: string; templateId: string; status: string; dateUpdated?: string }) => ({ name: t.name, templateId: t.templateId, status: t.status, dateUpdated: t.dateUpdated }));
       return json({ status: r.status, templates: list });
     }
     if (rawBody?.action === 'template_categories' || rawBody?.action === 'register_template') {
@@ -107,7 +112,18 @@ Deno.serve(async (req) => {
         const r = await fetch(`${base}/categories`, { headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret) } });
         return json({ status: r.status, data: await r.json().catch(() => null) });
       }
-      const content = [
+      const isAbsenceTpl = rawBody.template_kind === 'absent';
+      const content = isAbsenceTpl ? [
+        '[더멘토학원 결석 안내]',
+        '학생: #{학생명}',
+        '수업: #{과목} #{수업시간}',
+        '결석 사유: #{결석사유}',
+        '보강 일정: #{보강안내}',
+        '',
+        '오늘 수업은 결석으로 처리되었습니다. 문의 사항은 학원으로 연락 부탁드립니다.',
+        '',
+        '담당 선생님: #{선생님명}',
+      ].join('\n') : [
         '[더멘토학원 출결 안내]',
         '학생: #{학생명}',
         '수업: #{과목} #{수업시간}',
@@ -121,7 +137,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret), 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: '출결 알림(지각·등원 전)',
+          name: isAbsenceTpl ? ABSENCE_TEMPLATE_NAME : ATTENDANCE_TEMPLATE_NAME,
           content,
           categoryCode: String(rawBody.category_code ?? ''),
           channelId: pfId,
@@ -144,6 +160,10 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_request', detail: parsed.error.flatten().fieldErrors }, 400);
     }
     const body = parsed.data;
+    if (body.notification_type === 'absent' && !body.absence_reason) {
+      return json({ error: 'invalid_request', detail: '결석 사유를 입력해 주세요.' }, 400);
+    }
+    const makeupText = formatMakeupText(body.makeup_date, body.makeup_time);
 
     if (!isAdmin) {
       const { data: ownsStudent, error: ownershipError } = await admin.rpc('teacher_owns_student', {
@@ -179,6 +199,8 @@ Deno.serve(async (req) => {
       subject: body.subject,
       startTime: body.start_time,
       teacherName,
+      absenceReason: body.absence_reason,
+      makeupText,
     });
 
     const bounds = kstDayBounds();
@@ -204,7 +226,28 @@ Deno.serve(async (req) => {
     if (!cfg.ALIMTALK_TEMPLATE_ATTENDANCE && cfg.SOLAPI_API_KEY && cfg.SOLAPI_API_SECRET) {
       cfg.ALIMTALK_TEMPLATE_ATTENDANCE = await findApprovedAttendanceTemplate(cfg.SOLAPI_API_KEY, cfg.SOLAPI_API_SECRET, cfg.SOLAPI_PFID);
     }
+    if (type === 'absent') {
+      cfg.ALIMTALK_TEMPLATE_ATTENDANCE = cfg.SOLAPI_API_KEY && cfg.SOLAPI_API_SECRET
+        ? await findApprovedAttendanceTemplate(cfg.SOLAPI_API_KEY, cfg.SOLAPI_API_SECRET, cfg.SOLAPI_PFID, ABSENCE_TEMPLATE_NAME)
+        : null;
+    }
     const missing = Object.entries(cfg).filter(([, value]) => !value).map(([key]) => key);
+
+    const variables: Record<string, string> = type === 'absent' ? {
+      '#{학생명}': student.name.replace(/_[A-Z]$/, ''),
+      '#{과목}': body.subject,
+      '#{수업시간}': body.start_time,
+      '#{결석사유}': body.absence_reason!,
+      '#{보강안내}': makeupText,
+      '#{선생님명}': teacherName,
+    } : {
+      '#{학생명}': student.name.replace(/_[A-Z]$/, ''),
+      '#{과목}': body.subject,
+      '#{수업시간}': body.start_time,
+      '#{출결상태}': notificationLabel,
+      '#{안내문구}': message.split('\n\n')[1],
+      '#{선생님명}': teacherName,
+    };
 
     if (body.dry_run) {
       return json({
@@ -216,14 +259,7 @@ Deno.serve(async (req) => {
           teacher_name: teacherName,
           type,
           message,
-          variables: {
-            '#{학생명}': student.name.replace(/_[A-Z]$/, ''),
-            '#{과목}': body.subject,
-            '#{수업시간}': body.start_time,
-            '#{출결상태}': notificationLabel,
-            '#{안내문구}': message.split('\n\n')[1],
-            '#{선생님명}': teacherName,
-          },
+          variables: variables,
           duplicate: !!previous,
           previous_sent_at: previous?.timestamp ?? null,
           missing,
@@ -236,14 +272,6 @@ Deno.serve(async (req) => {
       return json({ error: 'already_sent', notification_id: previous.id, timestamp: previous.timestamp }, 409);
     }
 
-    const variables = {
-      '#{학생명}': student.name.replace(/_[A-Z]$/, ''),
-      '#{과목}': body.subject,
-      '#{수업시간}': body.start_time,
-      '#{출결상태}': notificationLabel,
-      '#{안내문구}': message.split('\n\n')[1],
-      '#{선생님명}': teacherName,
-    };
 
     const authorization = await solapiAuthHeader(cfg.SOLAPI_API_KEY!, cfg.SOLAPI_API_SECRET!);
     const providerResponse = await fetch('https://api.solapi.com/messages/v4/send-many/detail', {

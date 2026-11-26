@@ -5,7 +5,6 @@ import { isAbsent, isLate, isPresent } from '@/lib/attendance';
 import { safeUpsertLessonRecord } from '@/lib/lessonRecordUpsert';
 import { QuickLessonForm } from '@/components/lessons/QuickLessonForm';
 import { AttendanceNotificationDialog } from '@/components/attendance/AttendanceNotificationDialog';
-import type { AttendanceNotificationType } from '@/lib/attendanceNotification';
 import { ChevronRight, MessageSquareText, NotebookPen } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -601,6 +600,7 @@ export function TeacherAttendanceView() {
   const quickLessonOk = !!activeSlot && !activeSlot.isExamPrep && !activeSlot.isSignup && (!!activeSlot.classId || !!activeSlot.isSupplementary);
   const [openLesson, setOpenLesson] = useState<Set<string>>(new Set());
   const [notificationStudent, setNotificationStudent] = useState<StudentAttendance | null>(null);
+  const [notificationAbsence, setNotificationAbsence] = useState<{ reason: string; makeupDate: string | null; makeupTime: string | null } | null>(null);
   useEffect(() => {
     setOpenLesson(new Set());
     setNotificationStudent(null);
@@ -880,6 +880,9 @@ export function TeacherAttendanceView() {
 
       sonnerToast.success(`${student.name} → 결석 처리 완료`, { duration: 1500 });
       setAbsenceDialog(d => ({ ...d, open: false, submitting: false }));
+      // 결석 처리 직후 학부모 결석 안내(사유·보강 일정) 알림톡 확인 창을 연다
+      setNotificationAbsence({ reason: reason.trim(), makeupDate: hasSupplementary && supplementaryDate ? supplementaryDate : null, makeupTime: hasSupplementary ? supplementaryTime : null });
+      setNotificationStudent({ ...student, status: '결석' as AttendanceStatus });
     } catch (err) {
       console.error('handleAbsenceConfirm error:', err);
       await fetchStudents();
@@ -1024,12 +1027,14 @@ export function TeacherAttendanceView() {
 
       {notificationStudent && activeSlot && (
         <AttendanceNotificationDialog
+          key={`${notificationStudent.id}-${notificationAbsence ? 'absent' : 'status'}`}
           open={!!notificationStudent}
-          onOpenChange={(open) => { if (!open) setNotificationStudent(null); }}
+          onOpenChange={(open) => { if (!open) { setNotificationStudent(null); setNotificationAbsence(null); } }}
+          absence={notificationAbsence ?? undefined}
           student={notificationStudent}
           subject={activeSlot.subject}
           startTime={activeSlot.startTime}
-          onSent={(_type: AttendanceNotificationType) => {
+          onSent={() => {
             sonnerToast.success(`${notificationStudent.name} 학부모 알림톡 발송 접수`, { duration: 2000 });
           }}
         />

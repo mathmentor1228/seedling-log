@@ -7,6 +7,7 @@ import {
   type AttendanceNotificationType,
   buildAttendanceNotificationMessage,
   defaultAttendanceNotificationType,
+  formatMakeupText,
 } from '@/lib/attendanceNotification';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,6 +21,8 @@ interface AttendanceNotificationDialogProps {
   subject: string;
   startTime: string;
   onSent: (type: AttendanceNotificationType) => void;
+  /** 결석 처리 직후 열 때: 사유와 보강 일정을 함께 보낸다 */
+  absence?: { reason: string; makeupDate: string | null; makeupTime: string | null };
 }
 
 interface Preview {
@@ -48,8 +51,9 @@ export function AttendanceNotificationDialog({
   subject,
   startTime,
   onSent,
+  absence,
 }: AttendanceNotificationDialogProps) {
-  const [type, setType] = useState<AttendanceNotificationType>(() => defaultAttendanceNotificationType(student.status));
+  const [type, setType] = useState<AttendanceNotificationType>(() => absence ? 'absent' : defaultAttendanceNotificationType(student.status));
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -62,6 +66,8 @@ export function AttendanceNotificationDialog({
     subject,
     startTime,
     teacherName: '담당 선생님',
+    absenceReason: absence?.reason,
+    makeupText: absence ? formatMakeupText(absence.makeupDate, absence.makeupTime) : undefined,
   });
 
   const invoke = useCallback(async (dryRun: boolean, allowResend = false): Promise<FunctionPayload> => {
@@ -73,6 +79,7 @@ export function AttendanceNotificationDialog({
         start_time: startTime,
         dry_run: dryRun,
         allow_resend: allowResend,
+        ...(absence && type === 'absent' ? { absence_reason: absence.reason, makeup_date: absence.makeupDate, makeup_time: absence.makeupTime } : {}),
       },
     });
 
@@ -89,7 +96,7 @@ export function AttendanceNotificationDialog({
       throw new Error(message);
     }
     return (data || {}) as FunctionPayload;
-  }, [student.id, type, subject, startTime]);
+  }, [student.id, type, subject, startTime, absence]);
 
   useEffect(() => {
     if (!open) return;
@@ -146,7 +153,7 @@ export function AttendanceNotificationDialog({
             학부모 출결 알림 — {student.name}
           </DialogTitle>
           <DialogDescription>
-            {subject} {startTime} 수업 · 카카오 알림톡으로 볼 내용을 확인해 주세요.
+            {subject} {startTime} 수업 · 학부모님께 보낼 카카오 알림톡 내용을 확인해 주세요.
           </DialogDescription>
         </DialogHeader>
 
@@ -159,7 +166,7 @@ export function AttendanceNotificationDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2" role="group" aria-label="알림 종류">
+            {!absence && <div className="grid grid-cols-2 gap-2" role="group" aria-label="알림 종류">
               {(['late', 'not_arrived'] as AttendanceNotificationType[]).map((option) => (
                 <button
                   key={option}
@@ -183,7 +190,7 @@ export function AttendanceNotificationDialog({
                   </span>
                 </button>
               ))}
-            </div>
+            </div>}
 
             <div className="rounded-xl border bg-muted/30 p-3 space-y-3">
               <div className="flex items-center justify-between gap-3 text-xs">
@@ -207,7 +214,7 @@ export function AttendanceNotificationDialog({
               <Alert variant="default" className="border-warning/40 bg-warning/10">
                 <AlertTitle>아직 실제 발송은 할 수 없습니다</AlertTitle>
                 <AlertDescription>
-                  출결 알림용 솔라피 템플릿이 연결되지 않았습니다. 문구 미리보기는 가능하며, 템플릿이 승인되면 바로 발송할 수 있습니다.
+                  {type === 'absent' ? '결석 안내' : '출결 알림'}용 템플릿이 아직 카카오 검수 중이거나 연결되지 않았습니다. 문구 미리보기는 가능하며, 승인되면 바로 발송할 수 있습니다.
                 </AlertDescription>
               </Alert>
             )}
