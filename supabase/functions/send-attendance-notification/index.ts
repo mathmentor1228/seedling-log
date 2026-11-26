@@ -51,6 +51,18 @@ async function solapiAuthHeader(apiKey: string, apiSecret: string) {
   return `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
+const ATTENDANCE_TEMPLATE_NAME = '출결 알림(지각·등원 전)';
+async function findApprovedAttendanceTemplate(apiKey: string, apiSecret: string, pfId?: string | null): Promise<string | null> {
+  try {
+    const r = await fetch('https://api.solapi.com/kakao/v2/templates?limit=100', { headers: { Authorization: await solapiAuthHeader(apiKey, apiSecret) } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const hit = (d?.templateList ?? []).find((t: { name?: string; status?: string; channelId?: string }) =>
+      t.name === ATTENDANCE_TEMPLATE_NAME && t.status === 'APPROVED' && (!pfId || !t.channelId || t.channelId === pfId));
+    return hit?.templateId ?? null;
+  } catch { return null; }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -76,6 +88,14 @@ Deno.serve(async (req) => {
 
     const rawBody = await req.json().catch(() => ({}));
     // 원장 전용: 출결 템플릿 카테고리 조회·등록·검수 요청 (일회성 관리 작업)
+    if (rawBody?.action === 'template_status') {
+      if (!isAdmin) return json({ error: 'forbidden' }, 403);
+      const r = await fetch('https://api.solapi.com/kakao/v2/templates?limit=100', { headers: { Authorization: await solapiAuthHeader(Deno.env.get('SOLAPI_API_KEY')!, Deno.env.get('SOLAPI_API_SECRET')!) } });
+      const d = await r.json().catch(() => null);
+      const list = (d?.templateList ?? []).filter((t: { name?: string }) => t.name === ATTENDANCE_TEMPLATE_NAME)
+        .map((t: { templateId: string; status: string; dateUpdated?: string }) => ({ templateId: t.templateId, status: t.status, dateUpdated: t.dateUpdated }));
+      return json({ status: r.status, templates: list });
+    }
     if (rawBody?.action === 'template_categories' || rawBody?.action === 'register_template') {
       if (!isAdmin) return json({ error: 'forbidden' }, 403);
       const apiKey = Deno.env.get('SOLAPI_API_KEY');
@@ -179,8 +199,11 @@ Deno.serve(async (req) => {
       SOLAPI_API_SECRET: Deno.env.get('SOLAPI_API_SECRET'),
       SOLAPI_PFID: Deno.env.get('SOLAPI_PFID'),
       SOLAPI_SENDER: Deno.env.get('SOLAPI_SENDER'),
-      ALIMTALK_TEMPLATE_ATTENDANCE: Deno.env.get('ALIMTALK_TEMPLATE_ATTENDANCE'),
+      ALIMTALK_TEMPLATE_ATTENDANCE: Deno.env.get('ALIMTALK_TEMPLATE_ATTENDANCE') as string | undefined | null,
     };
+    if (!cfg.ALIMTALK_TEMPLATE_ATTENDANCE && cfg.SOLAPI_API_KEY && cfg.SOLAPI_API_SECRET) {
+      cfg.ALIMTALK_TEMPLATE_ATTENDANCE = await findApprovedAttendanceTemplate(cfg.SOLAPI_API_KEY, cfg.SOLAPI_API_SECRET, cfg.SOLAPI_PFID);
+    }
     const missing = Object.entries(cfg).filter(([, value]) => !value).map(([key]) => key);
 
     if (body.dry_run) {
